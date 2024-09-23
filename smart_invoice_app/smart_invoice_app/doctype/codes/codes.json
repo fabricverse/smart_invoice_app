@@ -1,0 +1,154 @@
+{
+ "actions": [],
+ "allow_copy": 1,
+ "autoname": "field:cd",
+ "creation": "2024-09-23 17:20:01.632563",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cd",
+  "cd_cls",
+  "column_break_kftq",
+  "cd_nm",
+  "user_dfn_cd1"
+ ],
+ "fields": [
+  {
+   "fieldname": "cd_cls",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Code Class",
+   "options": "Code Class",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "column_break_kftq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cd",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "cd_nm",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Code Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "user_dfn_cd1",
+   "fieldtype": "Data",
+   "label": "User Defined Code"
+  }
+ ],
+ "hide_toolbar": 1,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2024-09-23 17:23:37.855232",
+ "modified_by": "Administrator",
+ "module": "Smart Invoice App",
+ "name": "Codes",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase Manager",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase Master Manager",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Item Manager",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1
+  }
+ ],
+ "show_preview_popup": 1,
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "cd_nm",
+ "track_changes": 1,
+ "track_seen": 1
+}
