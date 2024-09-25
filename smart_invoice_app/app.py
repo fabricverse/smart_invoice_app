@@ -41,9 +41,6 @@ def get_codes():
     data = response_json.get("message", response_json)
     if r.status_code != 200:
         frappe.msgprint(data)
-    else:
-        frappe.msgprint("Success")
-    # frappe.errprint(data)
         
 
     return data
@@ -56,5 +53,6 @@ def run_test():
     codes = get_codes()
 
     frappe.errprint(codes)
+    frappe.msgprint("Connection Successful")
     
     return codes
