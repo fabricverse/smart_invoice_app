@@ -10,6 +10,12 @@ frappe.ui.form.on("Smart Invoice Settings", {
                     method: "smart_invoice_app.app.test_connection"
                 })
             });
+
+            frm.add_custom_button(__("Next Feature Test"), function() {
+                frappe.call({
+                    method: "smart_invoice_app.app.next_feature_test"
+                })
+            });
         }
 	},
 

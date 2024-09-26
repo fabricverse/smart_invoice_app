@@ -33,12 +33,13 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "http://89.28.236.159:8000",
+   "default": "https://smart-invoice-api.bantoo.app",
    "fieldname": "base_url",
    "fieldtype": "Data",
    "label": "API Server URL",
    "options": "URL",
-   "read_only_depends_on": "eval:doc.default_server==0",
+   "read_only": 1,
+   "read_only_depends_on": "eval:doc.default_server==1",
    "reqd": 1
   },
   {
@@ -48,6 +49,8 @@
    "label": "Default Server"
   },
   {
+   "collapsible": 1,
+   "collapsible_depends_on": "eval: doc.api_secret",
    "fieldname": "api_credentials_section",
    "fieldtype": "Section Break",
    "label": "API Credentials"
@@ -64,7 +67,7 @@
   },
   {
    "fieldname": "api_secret",
-   "fieldtype": "Password",
+   "fieldtype": "Data",
    "label": "API Secret",
    "reqd": 1
   },
@@ -98,7 +101,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2024-09-25 06:45:32.202787",
+ "modified": "2024-09-26 13:31:42.761265",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Smart Invoice Settings",

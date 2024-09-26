@@ -206,6 +206,16 @@ app_license = "mit"
 
 # User Data Protection
 # --------------------
+fixtures = [
+    {
+        "doctype": "Role",
+        "filters": [
+            {
+                "role_name": "API User"
+            }
+        ]
+    }
+]
 
 # user_data_fields = [
 # 	{

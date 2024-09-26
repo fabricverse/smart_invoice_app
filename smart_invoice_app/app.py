@@ -5,6 +5,7 @@ from frappe.exceptions import AuthenticationError
 from requests.exceptions import JSONDecodeError
 from frappe.utils import cstr
 import inspect
+from frappe.utils.password import get_decrypted_password, get_encryption_key
 
 frappe.whitelist()
 def get_settings():
@@ -43,14 +44,15 @@ def error_handler(error):
             msg = message
         else:
             msg = response
-        frappe.msgprint(msg=str(msg), title=f"Something went wrong: {error.get('status_code')}", indicator='red')
+        if not error.get('suppress_msgprint'):
+            frappe.msgprint(msg=str(msg), title=f"Something went wrong: {error.get('status_code')}", indicator='red')
     
-    return {"error": message, "status_code": status_code}
+    return {"error": message, "status_code": status_code, "response": response}
 
 def api_call(endpoint, data): 
     settings = get_settings()
     base_url = settings.base_url
-    secret = settings.get_password("api_secret")
+    secret = settings.api_secret
 
     error_messages = {
         400: "Bad Request",
@@ -64,6 +66,11 @@ def api_call(endpoint, data):
     }
 
     try:
+        data.update({
+            "default_server": settings.default_server,
+            "vsdc_serial": settings.vsdc_serial,
+            "tpin": settings.tpin
+        })
         # Convert data to JSON string
         # Convert input data to a JSON string
         if isinstance(data, str):
@@ -135,7 +142,6 @@ def api_call(endpoint, data):
         }
         return error_handler(error_info)
     except Exception as e:
-        frappe.throw(e)
         error_info = {
             'status_code': 'UnexpectedError',
             'message': f"An unexpected error occurred: {str(e)}",
@@ -143,6 +149,10 @@ def api_call(endpoint, data):
             'environment': settings.environment
         }
         return error_handler(error_info)
+
+@frappe.whitelist()
+def next_feature_test():
+    update_codes()
 
 def update_codes():
     """ 
@@ -157,34 +167,113 @@ def update_codes():
         if code not saved, insert
         if code saved, update if anything is different
     """
-    fetched_code_classes = get_codes()
-    frappe.errprint(str(fetched_code_classes))
-    # saved_code_classes = frappe.get_all("Code Class", fields=[])
-    # codes = frappe.get_all("Code", fields=[])
+    fetched_data = get_codes()
+    # Check if the API call was successful
+    
+    if fetched_data.get('response_data', None):
+        fetched_data = fetched_data.get('response_data')
+    else:
+        result_cd = fetched_data.get('resultCd', None)
+        error = fetched_data.get('error', None)
 
-    # for code_class in fetched_code_classes:
-    #     if code_class not in saved_code_classes:
-    #         frappe.get_doc({
-    #             "doctype": "Code Class",
-    #         }).insert()
-    #     else:
-    #         # update any changes
-    #         pass
-
-    #     for code in fetched_codes:
+        if not result_cd:
+            
+            if error:
+                error_info = {
+                    'status_code': fetched_data.get('status_code', 'ERR'),
+                    'message': error,
+                    'response': fetched_data.get('response', 'No details provided.'),
+                    'environment': get_settings().environment,
+                    'suppress_msgprint': True
+                }
+            else:
+                error_info = {
+                    'status_code': 'No Result Code',
+                    'message': 'API response did not include a result code',
+                    'response': str(fetched_data),
+                    'environment': get_settings().environment,
+                    'suppress_msgprint': True
+                }
+        elif result_cd != '000':
+            error_info = {
+                'status_code': result_cd,
+                'message': fetched_data.get('resultMsg', 'API call was not successful'),
+                'response': str(fetched_data),
+                'environment': get_settings().environment,
+                'suppress_mssgprint': False
+            }
         
+        if 'error_info' in locals():
+            error_handler(error_info)
+            return
+
+    # If we've reached here, we have a successful response
+    # Proceed with processing the data
+    print(fetched_data)
+
+    fetched_data = json.loads(fetched_data)
+    
+    cls_list = fetched_data['data'].get('clsList', [])
+
+    # Fetch all existing code classes and codes
+    existing_classes = {d.name: d for d in frappe.get_all("Code Class", fields=["name", "cd_cls_nm"])}
+    existing_codes = {d.name: d for d in frappe.get_all("Code", fields=["name", "cd", "cd_cls", "cd_nm", "user_dfn_cd1"])}
+
+    # print(existing_codes)
+    # Update Code Classes
+    for class_data in cls_list:
+        if class_data['cdCls'] not in existing_classes:
+            frappe.get_doc({
+                "doctype": "Code Class",
+                "cd_cls": class_data['cdCls'],
+                "cd_cls_nm": class_data['cdClsNm'],
+                "usr_dfn_cd1": class_data.get('usrDfnCd1', '')
+            }).insert(ignore_permissions=True, ignore_mandatory=True)
+        else:
+            existing_class = existing_classes[class_data['cdCls']]
+            if existing_class.cd_cls_nm != class_data['cdClsNm']:
+                doc = frappe.get_doc("Code Class", class_data['cdCls'])
+                doc.cd_cls_nm = class_data['cdClsNm']
+                doc.save(ignore_permissions=True, ignore_mandatory=True)
+
+        # Update Codes
+        for code_data in class_data.get('dtlList', []):
+            name = f'{class_data["cdCls"]}-{code_data["cd"]}-{code_data["cdNm"]}'
+
+            if name not in existing_codes:
+
+                frappe.get_doc({
+                    "doctype": "Code",
+                    "cd": code_data['cd'],
+                    "cd_cls": class_data['cdCls'],
+                    "cd_nm": code_data['cdNm'],
+                    "user_dfn_cd1": code_data.get('userDfnCd1', None)
+                }).insert(ignore_permissions=True, ignore_mandatory=True)
+
+            else:
+                existing_code = existing_codes[name]
+
+                if (existing_code.cd_cls != class_data['cdCls'] or
+                    existing_code.cd_nm != code_data['cdNm'] or
+                    existing_code.user_dfn_cd1 != code_data.get('userDfnCd1', None)):
+
+                    doc = frappe.get_doc("Code", existing_codes['name'])
+                    doc.cd_cls = class_data['cdCls']
+                    doc.cd_nm = code_data['cdNm']
+                    doc.user_dfn_cd1 = code_data.get('userDfnCd1', None)
+                    doc.save(ignore_permissions=True, ignore_mandatory=True)
+
+    frappe.db.commit()
+    frappe.msgprint("Codes updated successfully", alert=True)
 
 def get_codes():
-    settings = get_settings()
-
     return api_call("/api/method/smart_invoice_api.api.select_codes", {
-        "tpin": settings.tpin,
         "bhf_id": "000"
-    })    
-    
+    })
 
 @frappe.whitelist()
 def test_connection():   
+    # verify_site_encryption()
 
     codes = get_codes()
         
@@ -192,4 +281,5 @@ def test_connection():
         frappe.msgprint("Connection Successful", indicator='green', alert=True)
     else:
         frappe.msgprint("Connection Failure", indicator='red', alert=True)
+    print(str(codes)[:500])
     return codes

@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_copy": 1,
- "autoname": "field:cd",
+ "autoname": "format:{cd_cls}-{cd}-{cd_nm}",
  "creation": "2024-09-23 17:20:01.632563",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -16,11 +16,13 @@
   {
    "fieldname": "cd_cls",
    "fieldtype": "Link",
+   "in_filter": 1,
    "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
    "label": "Code Class",
    "options": "Code Class",
-   "reqd": 1,
-   "unique": 1
+   "reqd": 1
   },
   {
    "fieldname": "column_break_kftq",
@@ -29,15 +31,20 @@
   {
    "fieldname": "cd",
    "fieldtype": "Data",
+   "in_filter": 1,
    "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
    "label": "Code",
-   "reqd": 1,
-   "unique": 1
+   "reqd": 1
   },
   {
    "fieldname": "cd_nm",
    "fieldtype": "Data",
+   "in_filter": 1,
    "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
    "label": "Code Name",
    "reqd": 1
   },
@@ -50,11 +57,11 @@
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-09-23 17:23:37.855232",
+ "modified": "2024-09-26 18:04:44.951384",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
- "name": "Codes",
- "naming_rule": "By fieldname",
+ "name": "Code",
+ "naming_rule": "Expression",
  "owner": "Administrator",
  "permissions": [
   {
