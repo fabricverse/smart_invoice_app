@@ -4,6 +4,7 @@ import requests, json
 from frappe.exceptions import AuthenticationError
 from requests.exceptions import JSONDecodeError
 from frappe.utils import cstr
+import inspect
 
 frappe.whitelist()
 def get_settings():
@@ -17,53 +18,66 @@ def api_date_format(date):
         frappe.throw("Invalid date type")
     return date.strftime("%Y%m%d%H%M%S")
 
-def error_handler(error_info):
+def error_handler(error):
     """
     Generic error handler function.
-    Shows msgprint only if env = sandbox.
+    Shows msgprint only if env = sandbox or if called from test_connection.
     Returns an error dictionary.
     """
-    status_code = error_info.get('status_code', 'ERR')
-    message = error_info.get('message', 'An unexpected error occurred.')
+    status_code = error.get('status_code', 'ERR')
+    message = error.get('message', 'Unexpected error occurred while connecting to VSDC app.')
+    response = error.get('response', 'No details provided.')
     
     # Log the error
     frappe.log_error(
         message=f"Error: {status_code} - {message}",
         title="API Call Error"
     )
+
+    # Check if the function is called from test_connection
+    called_from_test = any('test_connection' in frame.function for frame in inspect.stack())
     
-    # Show msgprint only if env is sandbox
-    if error_info.get('environment') == 'Sandbox': # frappe.conf.get('developer_mode') or
-        frappe.msgprint(f"Error {status_code}: {message}", indicator='red', alert=True)
+    # Show msgprint if env is sandbox or if called from test_connection
+    if error.get('environment') == 'Sandbox' or called_from_test:
+        if isinstance(status_code, int):
+            msg = message
+        else:
+            msg = response
+        frappe.msgprint(msg=str(msg), title=f"Something went wrong: {error.get('status_code')}", indicator='red')
     
     return {"error": message, "status_code": status_code}
 
-def api_call(end_point, data): 
-    
+def api_call(endpoint, data): 
     settings = get_settings()
     base_url = settings.base_url
     secret = settings.get_password("api_secret")
-    frappe.errprint(data)
 
     error_messages = {
         400: "Bad Request",
         401: "Authentication failed. Please check your API credentials.",
         403: "Forbidden. Please check your API credentials.",
         404: "API endpoint not found.",
-        415: "Unsupported Media Type.",
+        415: "Make sure <strong>API Server URL</strong> is correct. Verify whether the site uses https or http.\nIf using https, make sure the server has a valid SSL certificate.",
+        417: "Invalid request arguments",
         422: "Unprocessable Entity.",
         500: "Internal Server Error."
     }
 
     try:
-        r = requests.post(
-            base_url + end_point,
-            data=data,
-            headers={
+        # Convert data to JSON string
+        # Convert input data to a JSON string
+        if isinstance(data, str):
+            # If data is a string, parse it as JSON and then re-serialize
+            # This ensures the string is valid JSON
+            json_data = json.dumps(json.loads(data))
+        else:
+            # If data is not a string (e.g., dict or list), serialize to JSON
+            json_data = json.dumps(data)
+        
+        r = requests.post(base_url + endpoint, data=json_data, headers={
                 "Authorization": f'token {settings.api_key}:{secret}',
                 "Content-Type": "application/json"
-            }
-        )
+            })
         
         if r.status_code == 200:
             response_json = r.json()
@@ -72,28 +86,60 @@ def api_call(end_point, data):
             error_info = {
                 'status_code': r.status_code,
                 'message': error_messages.get(r.status_code, cstr(r.text)),
+                'response': r.text,
                 'environment': settings.environment
             }
             return error_handler(error_info)
 
-    except AuthenticationError as e:
+    except json.JSONDecodeError as e:
         error_info = {
-            'status_code': getattr(e.response, 'status_code', 'AuthenticationError'),
-            'message': str(e),
+            'status_code': 'JSONDecodeError',
+            'message': f"Invalid JSON data: {str(e)}",
+            'response': e,
             'environment': settings.environment
         }
         return error_handler(error_info)
-    except JSONDecodeError as e:
+    except frappe.exceptions.AuthenticationError as e:
         error_info = {
-            'status_code': 'AuthenticationError',
-            'message': f"JSONDecodeError: {str(e)}",
+            'status_code': "Authentication Error",
+            'message': "Verify your API credentials",
+            'response': e,
+            'environment': settings.environment
+        }
+        return error_handler(error_info)
+    except requests.exceptions.SSLError as e:
+        msg = "Make sure the <strong>API Server URL</strong> is correct. Verify whether the site uses https or http.\nIf using https, make sure the server has a valid SSL certificate."
+        error_info = {
+            'status_code': 'SSL Error',
+            'message': msg,
+            'response': msg,
+            'environment': settings.environment
+        }
+        return error_handler(error_info)
+    except requests.exceptions.InvalidURL as e:
+        msg = "Failed to establish a new connection. Make sure the <strong>API Server URL</strong> is correct and your site is reachable."
+        error_info = {
+            'status_code': 'Connection Error',
+            'message': msg,
+            'response': msg,
+            'environment': settings.environment
+        }
+        return error_handler(error_info)
+    except requests.exceptions.ConnectionError as e:
+        msg = "Failed to establish a new connection. Make sure the <strong>API Server URL</strong> is correct and your site is reachable."
+        error_info = {
+            'status_code': 'Connection Error',
+            'message': msg,
+            'response': msg,
             'environment': settings.environment
         }
         return error_handler(error_info)
     except Exception as e:
+        frappe.throw(e)
         error_info = {
-            'status_code': 'AuthenticationError',
+            'status_code': 'UnexpectedError',
             'message': f"An unexpected error occurred: {str(e)}",
+            'response': e,
             'environment': settings.environment
         }
         return error_handler(error_info)
@@ -131,22 +177,19 @@ def update_codes():
 def get_codes():
     settings = get_settings()
 
-    data = json.dumps({
+    return api_call("/api/method/smart_invoice_api.api.select_codes", {
         "tpin": settings.tpin,
         "bhf_id": "000"
-    })
-
-    codes = api_call("/api/method/smart_invoice_api.api.select_codes", data=data)    
-    return codes
+    })    
+    
 
 @frappe.whitelist()
-def run_test():   
-    print("run_test")
-    
+def test_connection():   
 
     codes = get_codes()
-
-    frappe.errprint(codes)
-    frappe.msgprint("Connection Successful")
-    
+        
+    if not codes.get('error'):
+        frappe.msgprint("Connection Successful", indicator='green', alert=True)
+    else:
+        frappe.msgprint("Connection Failure", indicator='red', alert=True)
     return codes

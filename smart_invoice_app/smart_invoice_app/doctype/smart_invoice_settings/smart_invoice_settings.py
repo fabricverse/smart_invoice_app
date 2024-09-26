@@ -3,12 +3,12 @@
 
 import frappe
 from frappe.model.document import Document
-from smart_invoice_app.app import update_codes
+from smart_invoice_app.app import update_codes, test_connection
 
 
 class SmartInvoiceSettings(Document):
 	def on_update(self):
-		update_codes()
+		test_connection()
 	"""
 	run test
 	update codes
