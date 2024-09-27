@@ -5,5 +5,5 @@
 from frappe.model.document import Document
 
 
-class BranchUsers(Document):
+class BranchUser(Document):
 	pass

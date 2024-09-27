@@ -73,7 +73,7 @@
  "modified": "2024-09-27 08:08:27.961896",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
- "name": "Branch Users",
+ "name": "Branch User",
  "owner": "Administrator",
  "permissions": [],
  "sort_field": "modified",
