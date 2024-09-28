@@ -1,0 +1,71 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2024-09-26 08:20:51.409006",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "bhf_id",
+  "use_yn",
+  "column_break_fmod",
+  "user_id",
+  "user_name",
+  "address"
+ ],
+ "fields": [
+  {
+   "fieldname": "bhf_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_preview": 1,
+   "label": "Bhf ID",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "use_yn",
+   "fieldtype": "Check",
+   "label": "Use Yn"
+  },
+  {
+   "fieldname": "column_break_fmod",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "user_id",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_preview": 1,
+   "label": "User Id",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "user_id.full_name",
+   "fieldname": "user_name",
+   "fieldtype": "Data",
+   "in_preview": 1,
+   "label": "User Name"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Link",
+   "in_preview": 1,
+   "label": "Address",
+   "options": "Address"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2024-09-26 19:44:53.042861",
+ "modified_by": "Administrator",
+ "module": "Smart Invoice App",
+ "name": "Branch Users",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
