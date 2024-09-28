@@ -214,6 +214,9 @@ fixtures = [
                 "role_name": "API User"
             }
         ]
+    },
+    {
+        "doctype": "Custom Field"
     }
 ]
 
