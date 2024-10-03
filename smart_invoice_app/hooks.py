@@ -145,6 +145,12 @@ app_license = "mit"
 # 	}
 # }
 
+doc_events = {
+    "Branch": {
+        # "on_update": "smart_invoice_app.app.update_api_users"
+    }
+}
+
 # Scheduled Tasks
 # ---------------
 
@@ -208,6 +214,14 @@ app_license = "mit"
 # --------------------
 fixtures = [
     {
+        "doctype": "Client Script",
+        "filters": [
+            {
+                "module": "Smart Invoice App"
+            }
+        ]
+    },
+    {
         "doctype": "Role",
         "filters": [
             {
@@ -216,9 +230,68 @@ fixtures = [
         ]
     },
     {
-        "doctype": "Custom Field"
+        "doctype": "Province", 
+    },
+    {
+        "doctype": "District", 
+    },
+    {
+        "doctype": "Code Class", 
+    },
+    {
+        "doctype": "Item Class", 
+    },
+    {
+        "doctype": "Tax Category", 
+    },
+    {
+        "doctype": "Code", 
+    },
+    {
+        "doctype": "Custom Field",
+        "filters": [
+            ["dt", "in", [
+                "Manufacturer",
+                "Item",
+                "Item Price",
+                "Item Group",
+                "Tax Category",
+                "Sales Taxes and Charges",
+                "Purchase Taxes and Charges",
+                "Contact"
+                "Branch",
+                "Customer",
+                "Customer Branch",
+                "Supplier",
+                "Sales Invoice",
+                "Purchase Invoice",
+                "Stock Ledger Entry",
+                "Mode of Payment",
+                "Stock Entry",
+                "UOM"
+            ]],
+            ["modified", ">", "2024-09-26"]
+        ]
     }
 ]
+
+"""
+
+"custom_column_break_o8y3c",
+"custom_pkg_unit_cd",
+"custom_pkg_unit",
+"custom_column_break_jspfa",
+"custom_item_cls_cd",
+"custom_item_cls",
+"custom_smart_invoice",
+"custom_rental_yn",
+"custom_svc_charge_yn",
+"custom_manufacture_item_cd",
+"default_manufacturer_part_no",
+"custom_smart_invoice_manufacturer_details",
+"custom_manufacturer_tpin",
+"country_of_origin",
+"""
 
 # user_data_fields = [
 # 	{

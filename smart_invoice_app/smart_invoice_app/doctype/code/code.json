@@ -10,7 +10,10 @@
   "cd_cls",
   "column_break_kftq",
   "cd_nm",
-  "user_dfn_cd1"
+  "user_dfn_cd1",
+  "section_break_ynkc",
+  "mapped_doctype",
+  "mapped_entry"
  ],
  "fields": [
   {
@@ -22,6 +25,7 @@
    "in_standard_filter": 1,
    "label": "Code Class",
    "options": "Code Class",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -36,6 +40,7 @@
    "in_preview": 1,
    "in_standard_filter": 1,
    "label": "Code",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -46,18 +51,37 @@
    "in_preview": 1,
    "in_standard_filter": 1,
    "label": "Code Name",
+   "read_only": 1,
    "reqd": 1
   },
   {
    "fieldname": "user_dfn_cd1",
    "fieldtype": "Data",
    "label": "User Defined Code"
+  },
+  {
+   "fieldname": "section_break_ynkc",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Set from Code Class",
+   "fetch_from": "cd_cls.mapped_doctype",
+   "fieldname": "mapped_doctype",
+   "fieldtype": "Link",
+   "label": "Mapped Doctype",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "mapped_entry",
+   "fieldtype": "Dynamic Link",
+   "label": "Link",
+   "options": "mapped_doctype"
   }
  ],
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-09-26 18:04:44.951384",
+ "modified": "2024-09-29 18:54:26.882858",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Code",

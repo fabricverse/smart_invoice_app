@@ -5,15 +5,15 @@ frappe.ui.form.on("Smart Invoice Settings", {
 	refresh(frm) {
         // add button to test connection
         if (frm.doc.environment == "Sandbox"){
-            frm.add_custom_button(__("Test Server Connection"), function() {
+            frm.add_custom_button(__("Test Connection"), function() {
                 frappe.call({
                     method: "smart_invoice_app.app.test_connection"
                 })
             });
 
-            frm.add_custom_button(__("Next Feature Test"), function() {
+            frm.add_custom_button(__("Sync"), function() {
                 frappe.call({
-                    method: "smart_invoice_app.app.next_feature_test"
+                    method: "smart_invoice_app.app.sync_dependancies"
                 })
             });
         }
