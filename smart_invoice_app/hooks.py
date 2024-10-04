@@ -146,8 +146,9 @@ required_apps = ["erpnext", "frappe"]
 # }
 
 doc_events = {
-    "Branch": {
-        # "on_update": "smart_invoice_app.app.update_api_users"
+    "Item": {
+        "after_insert": "smart_invoice_app.app.save_item_api",
+        "on_update": "smart_invoice_app.app.update_item_api"
     }
 }
 

@@ -9,15 +9,7 @@ from frappe.utils.password import get_decrypted_password, get_encryption_key
 
 frappe.whitelist()
 def get_settings():
-    return frappe.get_doc("Smart Invoice Settings", "Smart Invoice Settings")
-
-"""global method to convert date to yyyymmddmmss"""
-def api_date_format(date):
-    if type(date) == str:
-        date = datetime.strptime(date.split('.')[0], "%Y-%m-%d %H:%M:%S")
-    elif type(date) != datetime:
-        frappe.throw("Invalid date type")
-    return date.strftime("%Y%m%d%H%M%S")
+    return frappe.get_cached_doc("Smart Invoice Settings", "Smart Invoice Settings")
 
 def error_handler(error):
     """
@@ -56,7 +48,7 @@ def error_handler(error):
         "environment": error.get('environment')
     }
 
-def api_call(endpoint, data, initialize=False): 
+def api(endpoint, data, initialize=False): 
     settings = get_settings()
     base_url = settings.base_url
     secret = settings.api_secret
@@ -77,9 +69,23 @@ def api_call(endpoint, data, initialize=False):
     try:
         data.update({
             "default_server": settings.default_server,
-            "vsdc_serial": settings.vsdc_serial,
-            "tpin": settings.tpin
+            "vsdc_serial": settings.vsdc_serial
         })
+        branches = []
+
+        if not data.get("bhfId"):
+            branches = get_user_branches()
+            data.update({
+                "bhfId": branches[0].get("custom_bhf_id")
+            })
+        
+        if not data.get("tpin"):
+            if not branches:
+                branches = get_user_branches()
+            data.update({
+                "tpin": branches[0].get("custom_tpin")
+            })
+        
         if initialize:
             data.update({
                 "initialize": True
@@ -184,7 +190,7 @@ def get_saved_branches():
 def get_branches(initialize=False):
     saved_branches = get_saved_branches()
 
-    response = api_call("/api/method/smart_invoice_api.api.select_branches", {
+    response = api("/api/method/smart_invoice_api.api.select_branches", {
         "bhf_id": saved_branches[0].custom_bhf_id
     }, initialize)
 
@@ -242,12 +248,12 @@ def get_unit_code(item, company):
     defaults = []
     company_doc = None
     if not unit_cd:
-        company_doc = frappe.get_doc("Company", company)
+        company_doc = frappe.get_cached_doc("Company", company)
         unit_cd = company_doc.custom_unit_code
         defaults.append(company_doc.custom_unit_code)
     if not pkg_unit:
         if not company_doc:
-            company_doc = frappe.get_doc("Company", company)
+            company_doc = frappe.get_cached_doc("Company", company)
         pkg_unit = company_doc.custom_packaging_unit_code
         defaults.append(company_doc.custom_packaging_unit_code)
     
@@ -264,14 +270,108 @@ def create_codes_if_needed(item=None):
         update_codes(initialize=True)
         frappe.msgprint("Updated UOM and Packaging Unit codes", indicator='green', alert=True)
 
-from erpnext.utilities.product import get_price
+
 def get_item_price(item_code, company, price_list="Standard Selling", customer_group="All Customer Groups", qty=1, party=None):
-    return get_price(item_code, price_list, customer_group, company, qty=1, party=None)
+    from erpnext.utilities.product import get_price
+    price = get_price(item_code, price_list, customer_group, company, qty=1, party=None)
+    return price.price_list_rate if price else 0
 
-def prepare_item_data(item_name, branch=None):
 
-    if type(item_name) == str:
-        item = frappe.get_doc("Item", item_name)
+@frappe.whitelist()
+def update_item_api(item, method=None, branch=None):
+    if not item:
+        return
+
+    if type(item) == str:
+        item = frappe.get_cached_doc("Item", item)
+    data = prepare_item_data(item, branch=branch)
+
+    item_data = []
+    for item in data:
+        response = api("/api/method/smart_invoice_api.api.update_item", item)
+        item_data.append(validate_api_response(response))
+
+    print(item_data)        
+    return item_data
+
+def get_items_api(initialize=False):    
+    data = {}
+    if initialize:
+        data.update({"initialize": True})
+
+    response = api("/api/method/smart_invoice_api.api.select_items", data)
+    return validate_api_response(response)
+
+
+def get_item_api(item_code):    
+    data = {
+        "itemCd": item_code
+    }
+    response = api("/api/method/smart_invoice_api.api.select_item", data)
+    return validate_api_response(response)
+
+def create_or_update_item(item, saved_items):
+    # use the code in prepare_item_data for this function
+    pass
+
+
+@frappe.whitelist()
+def sync_items(initialize=False):
+    r = get_items_api(initialize=True)
+    print(r)
+    if not r.get("resultCd") == "000": 
+        return
+    
+    data = r['data']['itemList']
+    
+    # Use itemNm as a fallback if itemCd is None
+    si_items = {d.get("itemNm") or d for d in data}
+
+    # Get local items for comparison
+    local_items = set(frappe.get_all("Item", pluck="name", filters={"disabled": 0}, limit=0))
+
+    # Compare Smart Invoice items with local items
+    # missing_in_local = si_items - local_items
+    missing_in_si = local_items - si_items
+    # Calculate items present in both Smart Invoice and local system
+    items_in_both = si_items.intersection(local_items)
+    
+    count = 0
+    failed = 0
+    item = None
+    frappe.flags.skip_failing = True
+
+    if initialize:
+        # update items already in smart invoice
+        for item in items_in_both:
+            try:
+                if update_item_api(item):
+                    count += 1
+                else:
+                    failed += 1
+            except frappe.exceptions.ValidationError as e:
+                continue
+
+    # create items not in smart invoice
+    for item in missing_in_si:
+        try:    
+            if save_item_api(item):
+                count += 1
+            else:
+                failed += 1
+        except frappe.exceptions.ValidationError as e:
+            continue
+    
+    frappe.flags.skip_failing = False
+    if failed != 0:
+        frappe.msgprint(f"{failed} items failed to sync to Smart Invoice due to missing data", indicator='red', alert=True)
+    else:
+        frappe.msgprint(f"{count} items synched to Smart Invoice", indicator='green', alert=True)
+    return True
+        
+
+def prepare_item_data(item, branch=None):
+
     branches = []
     if branch:
         branches = [branch]
@@ -280,39 +380,38 @@ def prepare_item_data(item_name, branch=None):
 
     users = {d.name: d for d in frappe.get_all("User", fields=["name", "full_name"])}
     
-    
     tax_code = item.taxes[0].tax_category if item.taxes else None
     batch = None # skipping batch for now
     barcode = item.barcodes[0].barcode if item.barcodes else None
     item_type = frappe.get_cached_value("Item Group", item.item_group, "custom_item_ty_cd")
+
     if not item_type:
+        if frappe.flags.skip_failing:
+            return False
         frappe.throw("Smart Invoice requires an Item Type for <strong>Item Group {0}</strong>.".format(frappe.bold(item.item_group)))
 
-    
     item_data = []
-
     # check if item has a unit_code
     if item.custom_qty_unit_cd and item.custom_pkg_unit_cd:
         unit = item.custom_qty_unit_cd
-        pkg_unit = item.custom_pkg_unit_cd    
+        pkg_unit = item.custom_pkg_unit_cd
     elif not item.stock_uom or not item.custom_pkg_unit:
+        if frappe.flags.skip_failing:
+            return False
         frappe.throw("Smart Invoice requires a UOM and Package UOM for Item {0}".format(frappe.bold(item.item_code)))
     else:
-        for branch in branches:
-            
-            default_price = 0
-            price = get_item_price(item.item_code, branch.get("custom_company"))
-            if price:
-                default_price = price.price_list_rate
+        for branch in branches:            
+            default_price = get_item_price(item.item_code, branch.get("custom_company"))
             unit, pkg_unit = get_unit_code(item, branch.get("custom_company"))
             data = {        
                 "tpin": branch.get("custom_tpin"),
                 "bhfId": branch.get("custom_bhf_id"),
+                "useYn": "Y" if item.disabled == 0 else "N",
                 "itemCd": item.item_code,
+                "itemNm": item.item_code,
+                "itemStdNm": item.item_name,
                 "itemClsCd": item.custom_item_cls_cd,
                 "itemTyCd": item_type,
-                "itemNm": item.item_name,
-                "itemStdNm": item.item_name,
                 "orgnNatCd": frappe.get_cached_value("Country", item.country_of_origin, "code").upper(),
                 "pkgUnitCd": pkg_unit,
                 "qtyUnitCd": unit,
@@ -339,17 +438,21 @@ def prepare_item_data(item_name, branch=None):
             }
             item_data.append(data)
     return item_data
-            
 
 @frappe.whitelist()
-def save_item_api(item, branch=None):
+def save_item_api(item, method=None, branch=None):
     if not item:
         return
-    data = prepare_item_data(item_name=item, branch=branch)
+
+    if type(item) == str:
+        item = frappe.get_cached_doc("Item", item)
+    data = prepare_item_data(item, branch=branch)
+    if not data:
+        return False
 
     item_data = []
     for item in data:
-        response = api_call("/api/method/smart_invoice_api.api.save_item", item)
+        response = api("/api/method/smart_invoice_api.api.save_item", item)
         item_data.append(validate_api_response(response))
         
     return item_data
@@ -432,7 +535,7 @@ def sync_customer_api(customer):
     return True
 
 def save_branch_customer_api(data):
-    response = api_call("/api/method/smart_invoice_api.api.save_branche_customer", data)
+    response = api("/api/method/smart_invoice_api.api.save_branche_customer", data)
     return validate_api_response(response)
 
 @frappe.whitelist()
@@ -451,9 +554,9 @@ def get_customer_api(customer, branch="Headquarter"):  # incomplete
         "bhfId": branches[0].get("custom_bhf_id"),
         "custmTpin": customer.tax_id
     }
-    print(data)
+    # print(data)
     return
-    response = api_call("/api/method/smart_invoice_api.api.select_customer", data)
+    response = api("/api/method/smart_invoice_api.api.select_customer", data)
     return validate_api_response(response)
 
 
@@ -468,7 +571,7 @@ def save_customer_api(customer, company=None, branch=None):
     custom_tpin = company.tax_id if company else "000"
     users = {d.name: d for d in frappe.get_all("User", fields=["name", "full_name"])}
     address = ""
-    contact = frappe.get_doc("Contact", customer.contact_person)
+    contact = frappe.get_cached_doc("Contact", customer.contact_person)
     mobile_no = customer.mobile_no
     email = customer.email_id
     data={
@@ -486,7 +589,7 @@ def save_customer_api(customer, company=None, branch=None):
         "modrNm": users[frappe.session.user].full_name,
         "modrId": frappe.session.user
     }
-    response = api_call("/api/method/smart_invoice_api.api.save_branche_customer", data)
+    response = api("/api/method/smart_invoice_api.api.save_branche_customer", data)
     return validate_api_response(response)
 
 
@@ -505,14 +608,14 @@ def update_user_api(branch, user, use_yn):
         "modrId": frappe.session.user
         }
 
-    response = api_call("/api/method/smart_invoice_api.api.save_branche_user", data)
+    response = api("/api/method/smart_invoice_api.api.save_branche_user", data)
     return validate_api_response(response)
 
 
 @frappe.whitelist()
 def update_api_users(branch):
 
-    doc = frappe.get_doc("Branch", branch)
+    doc = frappe.get_cached_doc("Branch", branch)
     user_list = [user.user_id for user in doc.custom_branch_users]
 
     user_string = ", ".join(user_list)
@@ -708,8 +811,6 @@ def update_branches(initialize=False):
     return True
 
 
-    
-
 def update_item_classes(initialize=False):
     """
     1. Fetch item classes from API
@@ -775,7 +876,7 @@ def update_item_classes(initialize=False):
 
    
 def get_item_classes(initialize=False):
-    response = api_call("/api/method/smart_invoice_api.api.select_item_classes", {
+    response = api("/api/method/smart_invoice_api.api.select_item_classes", {
         "bhf_id": "000"
     }, initialize)
     return validate_api_response(response)
@@ -916,7 +1017,7 @@ def update_code(name, code_data, class_data, existing_codes, mapped_doctype=None
         doc.save(ignore_permissions=True)
         
 def get_codes(initialize=False):
-    response = api_call("/api/method/smart_invoice_api.api.select_codes", {
+    response = api("/api/method/smart_invoice_api.api.select_codes", {
         "bhf_id": "000"
     }, initialize)
 
@@ -943,7 +1044,8 @@ def validate_api_response(fetched_data):
 
         error_messages = {
             '894': "Unable to connect to the Smart Invoice Server",
-            '899': "Smart Invoice device error"
+            '899': "Smart Invoice device error",
+            '10000': result_msg
         }
         
         error_info = {
@@ -951,7 +1053,7 @@ def validate_api_response(fetched_data):
             'message': error_messages.get(result_cd, f'API call was not successful: {result_msg}') + f" ({result_cd})",
             'response': str(response_json),
             'environment': get_settings().environment,
-            'suppress_msgprint': result_cd not in ('894', '899')
+            'suppress_msgprint': result_cd not in ('894', '899', '10000')
         }
         error_handler(error_info)
         return None
@@ -975,7 +1077,9 @@ def validate_api_response(fetched_data):
             'suppress_msgprint': False
         }
         error_handler(error_info)
-        # frappe.throw(str(e))
+        # import traceback
+        # error_traceback = traceback.format_exc()
+        # print(f"{str(e)}\n\nTraceback:\n{error_traceback}")
         return None
 
 @frappe.whitelist()
