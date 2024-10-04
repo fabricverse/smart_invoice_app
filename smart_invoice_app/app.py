@@ -191,7 +191,7 @@ def get_branches(initialize=False):
     return validate_api_response(response)
 
 def get_user_branches():
-    branches = frappe.get_all("Branch", fields=["branch", "custom_bhf_id", "custom_tpin"], limit=0)
+    branches = frappe.get_all("Branch", fields=["branch", "custom_bhf_id", "custom_tpin", "custom_company"], limit=0)
     branch_users = frappe.get_all("Branch User", fields=["*"], filters={"user_id": ("in", [frappe.session.user])}, limit=0)
 
     branch_data = []
@@ -201,100 +201,159 @@ def get_user_branches():
                 "branch": branch.branch,
                 "custom_bhf_id": branch.custom_bhf_id,
                 "custom_tpin": branch.custom_tpin,
-                "user_id": bu.user_id
+                "user_id": bu.user_id,
+                "custom_company": branch.custom_company
             })
         branch_data.append({
             "branch": branch.branch,
             "custom_bhf_id": branch.custom_bhf_id,
             "custom_tpin": branch.custom_tpin,
-            "user_id": "Administrator"
+            "user_id": "Administrator",
+            "custom_company": branch.custom_company
         })
+    return branch_data
 
-
-    print(branch_data)
-        
-
-    # return branches[0] if branches else None
 
 def is_migration():
     stack = inspect.stack()
     return any(frame.function == 'migrate' for frame in stack)
 
-@frappe.whitelist()
-def save_item_api(item, unit=None, pkg_unit=None, branch=None):
-    if not item:
-        return
-    if type(item) == str:
-        frappe.get_doc("Item", item)
+def get_unit_code(item, company):
+    """
+    - search codes for matching UOM
+    - use fallback UOMs if nothting is found
+        - smart_invoice_settings.default_uom : suggest each
+        - smart_invoice_settings.default_pkg_uom : suggest pack
+    """
+    codes = frappe.get_all("Code", fields=["name", "cd", "cd_nm", "cd_cls"], filters={"cd_cls": ["in", ["10", "17"]]})
 
+    unit_cd = None
+    pkg_unit = None
+    for code in codes:
+        if (code.cd_nm.lower() == item.stock_uom.lower() or 
+                item.stock_uom.lower() in code.cd_nm.lower() or 
+                code.cd_nm.lower() in item.stock_uom.lower()):
+            unit_cd = code.cd
+        if (code.cd_nm.lower() == item.custom_pkg_unit.lower() or 
+                item.custom_pkg_unit.lower() in code.cd_nm.lower() or 
+                code.cd_nm.lower() in item.custom_pkg_unit.lower()):
+            pkg_unit = code.cd
+    
+    defaults = []
+    company_doc = None
+    if not unit_cd:
+        company_doc = frappe.get_doc("Company", company)
+        unit_cd = company_doc.custom_unit_code
+        defaults.append(company_doc.custom_unit_code)
+    if not pkg_unit:
+        if not company_doc:
+            company_doc = frappe.get_doc("Company", company)
+        pkg_unit = company_doc.custom_packaging_unit_code
+        defaults.append(company_doc.custom_packaging_unit_code)
+    
+    if defaults:
+        frappe.msgprint(f"Using default unit codes: {', '.join(defaults)} for Item {item.item_code}", indicator='yellow', alert=True)
+
+    return unit_cd, pkg_unit
+
+
+@frappe.whitelist()
+def create_codes_if_needed(item=None):
+    count = frappe.get_all("Code", limit=0)    
+    if len(count) < 100:
+        update_codes(initialize=True)
+        frappe.msgprint("Updated UOM and Packaging Unit codes", indicator='green', alert=True)
+
+from erpnext.utilities.product import get_price
+def get_item_price(item_code, company, price_list="Standard Selling", customer_group="All Customer Groups", qty=1, party=None):
+    return get_price(item_code, price_list, customer_group, company, qty=1, party=None)
+
+def prepare_item_data(item_name, branch=None):
+
+    if type(item_name) == str:
+        item = frappe.get_doc("Item", item_name)
     branches = []
     if branch:
         branches = [branch]
     else:
         branches = get_user_branches()
-    
-    if not unit or not pkg_unit:
-        # check if item has a unit_code
-        if item.custom_unit_code and item.custom_pkg_unit_code:
-            unit = item.custom_unit_code
-            pkg_unit = item.custom_pkg_unit_code    
-        elif not item.uom or not item.custom_pkg_unit:
-            frappe.throw("Smart Invoice requires a UOM and Package UOM for Item {0}".format(frappe.bold(item.item_code)))
-        else:
-            unit, pkg_unit = get_unit_code(item)
 
-    return
-
-    tax_code = get_tax_code(item)
-    batch = get_batch_no(item)
-    barcode = get_barcode(item)
-    default_price = get_item_price(item)
-    
     users = {d.name: d for d in frappe.get_all("User", fields=["name", "full_name"])}
-    for branch in branches:
-        data = {        
-            "tpin": branch.custom_tpin,
-            "bhfId": branch.custom_bhf_id,
-            "itemCd": item.item_code,
-            "itemClsCd": item.custom_item_cls_cd,
-            "itemTyCd": item.item_ty,
-            "itemNm": item.item_name,
-            "itemStdNm": item.item_name,
-            "orgnNatCd": item.custom_orgn_nat,
-            "pkgUnitCd": item.custom_pkg_unit,
-            "qtyUnitCd": unit,
-            "vatCatCd": tax_code,
-            "iplCatCd": tax_code,
-            "tlCatCd": tax_code,
-            "exciseTxCatCd": item.custom_excise_tx_cat_cd,
-            "btchNo": batch,
-            "bcd": barcode,
-            "dftPrc": default_price,
-            "manufacturerTpin": item.custom_manufacturer_tpin,
-            "manufactureritemCd": item.custom_manufacture_item_cd,
-            "rrp": item.default_sell_price, #
-            "svcChargeYn": "N" if item.custom_svc_charge_yn == 0 else "Y",
-            "rentalYn": "N" if item.custom_rental_yn == 0 else "Y",
-            "addInfo":item.description,
-            "sftyQty": item.safety_stock,
-            "isrcAplcbYn": "N" if item.custom_isrc_aplc_b_yn == 0 else "Y",
-            "useYn": "Y" if item.disabled == 1 else "N",        
-            "regrNm": users[item.owner].full_name,
-            "regrId": item.owner,
-            "modrNm": users[frappe.session.user].full_name,
-            "modrId": frappe.session.user
-        }
-        print(data)
-        return
-    response = save_branch_customer_api(data)
-    if response.get("resultCd") == "000":
-        frappe.set_value("Customer Branch", branch.get("name"), "custom_synchronized", 1)      
-        frappe.msgprint(f"Synchronized branch details on Smart Invoice", indicator='green', alert=True)
-    else:
-        frappe.msgprint(f"Failed to synchronize branch details on Smart Invoice, try again in a few minutes.", indicator='red', alert=True)
+    
+    
+    tax_code = item.taxes[0].tax_category if item.taxes else None
+    batch = None # skipping batch for now
+    barcode = item.barcodes[0].barcode if item.barcodes else None
+    item_type = frappe.get_cached_value("Item Group", item.item_group, "custom_item_ty_cd")
+    if not item_type:
+        frappe.throw("Smart Invoice requires an Item Type for <strong>Item Group {0}</strong>.".format(frappe.bold(item.item_group)))
 
-    response = api_call("/api/method/smart_invoice_api.api.save_item", item)
-    return validate_api_response(response)
+    
+    item_data = []
+
+    # check if item has a unit_code
+    if item.custom_qty_unit_cd and item.custom_pkg_unit_cd:
+        unit = item.custom_qty_unit_cd
+        pkg_unit = item.custom_pkg_unit_cd    
+    elif not item.stock_uom or not item.custom_pkg_unit:
+        frappe.throw("Smart Invoice requires a UOM and Package UOM for Item {0}".format(frappe.bold(item.item_code)))
+    else:
+        for branch in branches:
+            
+            default_price = 0
+            price = get_item_price(item.item_code, branch.get("custom_company"))
+            if price:
+                default_price = price.price_list_rate
+            unit, pkg_unit = get_unit_code(item, branch.get("custom_company"))
+            data = {        
+                "tpin": branch.get("custom_tpin"),
+                "bhfId": branch.get("custom_bhf_id"),
+                "itemCd": item.item_code,
+                "itemClsCd": item.custom_item_cls_cd,
+                "itemTyCd": item_type,
+                "itemNm": item.item_name,
+                "itemStdNm": item.item_name,
+                "orgnNatCd": frappe.get_cached_value("Country", item.country_of_origin, "code").upper(),
+                "pkgUnitCd": pkg_unit,
+                "qtyUnitCd": unit,
+                "vatCatCd": tax_code,
+                "iplCatCd": item.custom_ipl_cat_cd if item.custom_insurance_premium_levy_applicable == 1 else None,
+                "tlCatCd": item.custom_tl_cat_cd if item.custom_tourism_levy_applicable == 1 else None,
+                "exciseTxCatCd": item.custom_excise_code if item.custom_excise_duty_applicable == 1 else None,
+                "btchNo": batch,
+                "bcd": barcode,
+                "dftPrc": default_price,
+                "manufacturerTpin": item.custom_manufacturer_tpin,
+                "manufactureritemCd": item.custom_manufacture_item_cd,
+                "rrp": default_price, #
+                "svcChargeYn": "N" if item.custom_svc_charge_yn == 0 else "Y",
+                "rentalYn": "N" if item.custom_rental_yn == 0 else "Y",
+                "addInfo":item.description,
+                "sftyQty": item.safety_stock,
+                "isrcAplcbYn": "N" if item.custom_isrc_aplc_b_yn == 0 else "Y",
+                "useYn": "Y" if item.disabled == 0 else "N",        
+                "regrNm": users[item.owner].full_name,
+                "regrId": item.owner,
+                "modrNm": users[frappe.session.user].full_name,
+                "modrId": frappe.session.user
+            }
+            item_data.append(data)
+    return item_data
+            
+
+@frappe.whitelist()
+def save_item_api(item, branch=None):
+    if not item:
+        return
+    data = prepare_item_data(item_name=item, branch=branch)
+
+    item_data = []
+    for item in data:
+        response = api_call("/api/method/smart_invoice_api.api.save_item", item)
+        item_data.append(validate_api_response(response))
+        
+    return item_data
+
 
 def validate_customer(customer):
     customer = json.loads(customer)
@@ -379,7 +438,7 @@ def save_branch_customer_api(data):
 @frappe.whitelist()
 def get_customer_api(customer, branch="Headquarter"):  # incomplete
     customer = validate_customer(customer)
-    frappe.throw(f"Incomplete")
+    frappe.throw(f"Function is incomplete")
 
     branches = [d.branch for d in customer.get("custom_customer_branches")]
     if not branches:
