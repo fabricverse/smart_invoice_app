@@ -253,17 +253,6 @@
   "user_dfn_nm1": null
  },
  {
-  "cd_cls": "09",
-  "cd_cls_nm": "Branch Status",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": "Branch",
-  "modified": "2024-09-29 21:51:45.996398",
-  "name": "09",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
   "cd_cls": "12",
   "cd_cls_nm": "Stock I/O Type",
   "docstatus": 0,
@@ -271,6 +260,17 @@
   "mapped_doctype": null,
   "modified": "2024-09-29 18:47:25.997270",
   "name": "12",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "09",
+  "cd_cls_nm": "Branch Status",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": "Branch",
+  "modified": "2024-09-29 21:51:45.996398",
+  "name": "09",
   "result_dt": null,
   "user_dfn_nm1": null
  },

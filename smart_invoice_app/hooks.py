@@ -149,6 +149,10 @@ doc_events = {
     "Item": {
         "after_insert": "smart_invoice_app.app.save_item_api",
         "on_update": "smart_invoice_app.app.update_item_api"
+    },
+    "Sales Invoice": {
+        "on_update": "smart_invoice_app.app.save_invoice_api",
+        "on_submit": "smart_invoice_app.app.prepare_invoice_data"
     }
 }
 
@@ -213,6 +217,41 @@ doc_events = {
 
 # User Data Protection
 # --------------------
+standard_doctypes = [
+    "Sales Invoice",
+    "Item",
+    "Item Price",
+    "Item Group",
+    "Tax Category",
+    "Sales Taxes and Charges",
+    "Purchase Taxes and Charges",
+    "Contact",
+    "Customer",
+    "Mode of Payment",
+    "Supplier",
+    "Country",
+    "Mode of Payment Account",
+    "Sales Invoice Item",
+    "Purchase Invoice Item",
+    "Stock Entry Item",
+    "Stock Ledger Entry Item",
+    "Item Price",
+    "Item Group"    
+]
+
+# {
+#     "doctype": "DocType Layout",
+#     "filters": {
+#         "name": ["in", standard_doctypes]
+# }
+# },
+# {
+#     "doctype": "Property Setter",
+#     "filters": {
+#         "name": ["in", standard_doctypes]
+#     }
+# },
+
 fixtures = [
     {
         "doctype": "Client Script",
@@ -269,7 +308,19 @@ fixtures = [
                 "Stock Ledger Entry",
                 "Mode of Payment",
                 "Stock Entry",
-                "UOM"
+                "UOM",
+                "Company",
+                "Mode of Payment",
+                "Country",
+                "Mode of Payment Account",
+                "Sales Invoice Item",
+                "Purchase Invoice Item",
+                "Stock Entry Item",
+                "Stock Ledger Entry Item",
+                "Item Price",
+                "Item Group",
+                "Item Class",
+                "Manufacturer"
             ]],
             ["modified", ">", "2024-09-26"]
         ]

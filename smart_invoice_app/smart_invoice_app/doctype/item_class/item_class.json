@@ -53,8 +53,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Tax Type",
-   "options": "Tax Category",
-   "reqd": 1
+   "options": "Tax Category"
   },
   {
    "fieldname": "column_break_sojx",
@@ -85,7 +84,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-09-30 10:39:09.779040",
+ "modified": "2024-10-05 17:12:53.172472",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Item Class",

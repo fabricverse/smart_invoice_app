@@ -12989,19 +12989,6 @@
  {
   "docstatus": 0,
   "doctype": "Item Class",
-  "item_cls_cd": "23101500",
-  "item_cls_lvl": "3",
-  "item_cls_nm": "Machinery for working wood and stone and ceramic and the like",
-  "mjr_tg_yn": 0,
-  "modified": "2024-10-03 15:18:47.112480",
-  "name": "23101500",
-  "tax_ty_cd": null,
-  "tax_type": null,
-  "use_yn": 1
- },
- {
-  "docstatus": 0,
-  "doctype": "Item Class",
   "item_cls_cd": "43322555",
   "item_cls_lvl": "4",
   "item_cls_nm": "Unclassified Product",
@@ -38996,6 +38983,19 @@
   "modified": "2024-10-03 15:05:42.372518",
   "name": "2511160300",
   "tax_ty_cd": "Standard Rated(16%)",
+  "tax_type": null,
+  "use_yn": 1
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Item Class",
+  "item_cls_cd": "23101500",
+  "item_cls_lvl": "3",
+  "item_cls_nm": "Machinery for working wood and stone and ceramic and the like",
+  "mjr_tg_yn": 0,
+  "modified": "2024-10-03 15:18:47.112480",
+  "name": "23101500",
+  "tax_ty_cd": null,
   "tax_type": null,
   "use_yn": 1
  }
