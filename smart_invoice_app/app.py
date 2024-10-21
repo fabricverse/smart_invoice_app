@@ -403,60 +403,89 @@ def get_country_code(doc):
 
 
 
-def prepare_tax_data(invoice):
+def ensure_tax_accounts(codes, company_name, abbr):
+    code_names = {d.cd: d for d in codes}
+
+    tax_accounts = frappe.get_all("Account", 
+                                filters={"account_type": "Tax", 
+                                    "company": company_name, 
+                                    "is_group": 0, 
+                                    "parent_account": ("like", f"%Duties and Taxes - {abbr}")
+                                }, 
+                                fields=["account_name", "parent_account"], 
+                                limit=0)
+    tax_account_names = {d.account_name: d.parent_account for d in tax_accounts}
+    for code_name in code_names:
+        if code_name not in tax_account_names.keys():
+            account = frappe.new_doc("Account")
+            account.account_type = "Tax"
+            account.company = company_name
+            account.account_name = code_name
+            account.tax_rate = code_names[code_name].user_dfn_cd1
+            account.parent_account = tax_accounts[0].parent_account
+            account.insert(ignore_permissions=True)
+
+def create_item_taxes(company, tax_codes):
+    abbr = company.abbr
+    codes = frappe.get_all("Code", filters={"cd_cls": "04" }, fields=["name", "cd", "cd_nm", "cd_cls", "mapped_entry", "user_dfn_cd1"], limit=0)
+    ensure_tax_accounts(codes, company.name, abbr)
+
+    for tax_code in codes:
+        if tax_code.cd not in tax_codes.keys():
+            item_tax = frappe.new_doc("Item Tax Template")
+            item_tax.title = tax_code.cd_nm
+            item_tax.custom_smart_invoice_tax_code = tax_code.name
+            item_tax.company = company.name
+            
+            # Create a child table row for taxes
+            item_tax.append("taxes", {
+                "tax_type": f"{tax_code.cd} - {abbr}",
+                "tax_rate": flt(tax_code.user_dfn_cd1 or 0.0)
+            })
+
+            item_tax.flags.ignore_permissions = True
+            item_tax.flags.ignore_mandatory = True
+            
+            item_tax.insert()
+
+            if item_tax.name:
+
+                title = f"{tax_code.cd_nm} - {abbr}"
+                tax_codes[tax_code.cd] = title
+    return tax_codes
+
+@frappe.whitelist()
+def set_item_taxes(invoice, auto_tax=None):
+    """sets default item taxe for invoice items if nothing is set
+        called on save
+    """
+
+    if isinstance(invoice, str):
+        invoice = frappe.get_doc("Sales Invoice", invoice)
+    else:
+        auto_tax = invoice.custom_automatically_set_item_taxes
+
+    if auto_tax == 0:
+        return
+        
+    item_tax_templates = frappe.get_all("Item Tax Template", filters={"company": invoice.company, "disabled": 0, "custom_code": ("is", "set")}, fields=["name", "custom_code"], limit=0)
     
-    taxes = {}
-    taxable_amounts = {
-        "A": {"taxblAmtA": flt(invoice.net_total, 3)},
-        "B": {"taxblAmtB": flt(invoice.net_total, 3)}, 
-        "C1": {"taxblAmtC1": flt(invoice.net_total, 3)},
-        "C2": {"taxblAmtC2": flt(invoice.net_total, 3)},
-        "C3": {"taxblAmtC3": flt(invoice.net_total, 3)},
-        "D": {"taxblAmtD": flt(invoice.net_total, 3)},
-        "Rvat": {"taxblAmtRvat": flt(invoice.net_total, 3)},
-        "E": {"taxblAmtE": flt(invoice.net_total, 3)},
-        "F": {"taxblAmtF": flt(invoice.net_total, 3)},
-        "Ipl1": {"taxblAmtIpl1": flt(invoice.net_total, 3)},
-        "Ipl2": {"taxblAmtIpl2": flt(invoice.net_total, 3)},
-        "Tl": {"taxblAmtTl": flt(invoice.net_total, 3)},
-        "Ecm": {"taxblAmtEcm": flt(invoice.net_total, 3)},
-        "Exeeg": {"taxblAmtExeeg": flt(invoice.net_total, 3)},
-    }
-    tax_amounts = {
-        "A": {"taxAmtA": flt(invoice.net_total, 3)},
-        "B": {"taxAmtB": flt(invoice.net_total, 3)},
-        "C1": {"taxAmtC1": flt(invoice.net_total, 3)},
-        "C2": {"taxAmtC2": flt(invoice.net_total, 3)},
-        "C3": {"taxAmtC3": flt(invoice.net_total, 3)},
-        "D": {"taxAmtD": flt(invoice.net_total, 3)},
-        "Rvat": {"taxAmtRvat": flt(invoice.net_total, 3)},
-        "E": {"taxAmtE": 0.0},
-        "F": {"taxAmtF": 0.0},
-        "Ipl1": {"taxAmtIpl1": 0.0},
-        "Ipl2": {"taxAmtIpl2": 0.0},
-        "Tl": {"taxAmtTl": 0.0},
-        "Ecm": {"taxAmtEcm": 0.0},
-        "Exeeg": {"taxAmtExeeg": 0.0},
-    }
-    tax_rates = {
-        "A": {"taxRtA": 16},
-        "B": {"taxRtB": 16},
-        "C1": {"taxRtC1": 0},
-        "C2": {"taxRtC2": 0},
-        "C3": {"taxRtC3": 0},
-        "D": {"taxRtD": 0},
-        "Rvat": {"taxRtRvat": 16},
-        "E": {"taxRtE": 0},
-        "F": {"taxRtF": 10},
-        "Ipl1": {"taxRtIpl1": 5},
-        "Ipl2": {"taxRtIpl2": 0},
-        "Tl": {"taxRtTl": 1.5},
-        "Ecm": {"taxRtEcm": 5},
-        "Exeeg": {"taxRtExeeg": 3},
-    }
+    tax_templates_by_code = {d.custom_code: d.name for d in item_tax_templates}    
+    company = frappe.get_cached_doc("Company", invoice.company)
 
-    return taxes
+    default_item_tax = tax_templates_by_code.get(company.custom_tax_code, None)
 
+    if not default_item_tax:
+        tax_templates_by_code = create_item_taxes(company, tax_templates_by_code)
+    
+    default_item_tax = tax_templates_by_code.get(company.custom_tax_code, None)
+        
+    for item in invoice.items:
+        if item.item_tax_template:
+            continue
+        elif default_item_tax:
+            item.item_tax_template = default_item_tax
+    return invoice
 
 def prepare_invoice_data(invoice, branch=None):
         
@@ -488,7 +517,7 @@ def prepare_invoice_data(invoice, branch=None):
     else:
         rcpt_ty_cd = "S"
         sales_stts_cd = "02"
-        org_invc_no = None
+        org_invc_no = 0
         rfd_dt = None
         rfd_rsn_cd = ""
         cancel_date = None
@@ -498,6 +527,9 @@ def prepare_invoice_data(invoice, branch=None):
     posting_date_only = api_date_format(posting_date, date_only=True)
 
     country_code = get_country_code(invoice)
+
+    # exlusive of taxes
+    # inclusive of taxes
     
 
     data = {
@@ -518,12 +550,12 @@ def prepare_invoice_data(invoice, branch=None):
         "cnclDt": cancel_date,
         "rfdDt": rfd_dt,
         "rfdRsnCd": rfd_rsn_cd,
-        "saleCtyCd": "1",
         "totItemCnt": len(invoice.items),
-        # "prchrAcptcYn": "Y",
+        "prchrAcptcYn": "Y",
         "remark": invoice.remarks or "",
-        "lpoNumber": invoice.po_no,
-        "destnCountryCd": country_code,
+        "saleCtyCd": "1",
+        "lpoNumber": invoice.po_no or None,
+        "destnCountryCd": country_code if not "ZM" else None,
         "currencyTyCd": invoice.currency or "XXX",
         "exchangeRt": invoice.conversion_rate,
         "dbtRsnCd": None,
@@ -531,62 +563,342 @@ def prepare_invoice_data(invoice, branch=None):
         "cashDcAmt": flt(invoice.discount_amount, 3),
         "cashDcRt": flt(invoice.additional_discount_percentage, 3),
 
-        "totAmt": flt(invoice.grand_total, 3),
+        "taxRtA": 16,
+        "taxblAmtA": 0.0,
+        "taxAmtA": 0.0,
+        "taxRtB": 16,
+        "taxblAmtB": 0.0,
+        "taxAmtB": 0.0,
+        "taxRtC1": 0,
+        "taxblAmtC1": 0.0,
+        "taxAmtC1": 0.0,
+        "taxRtC2": 0,
+        "taxblAmtC2": 0.0,
+        "taxAmtC2": 0.0,
+        "taxRtC3": 0,
+        "taxblAmtC3": 0.0,
+        "taxAmtC3": 0.0,
+        "taxRtD": 0,
+        "taxblAmtD": 0.0,
+        "taxAmtD": 0.0,
+        "taxRtRvat": 0,
+        "taxblAmtRvat": 0.0,
+        "taxAmtRvat": 0.0,
+        "taxRtE": 0,
+        "taxblAmtE": 0.0,
+        "taxAmtE": 0.0,
+        "taxRtF": 10,
+        "taxblAmtF": 0.0,
+        "taxAmtF": 0.0,
+        "taxRtTot": 0,
+        "taxblAmtTot": 0.0,
+        "taxAmtTot": 0.0,
+
+        "taxRtIpl1": 5,
+        "taxblAmtIpl1": 0.0,
+        "taxAmtIpl1": 0.0,
+        "taxRtIpl2": 0,
+        "taxblAmtIpl2": 0.0,
+        "taxAmtIpl2": 0.0,
+        "taxRtTl": 1.5,
+        "taxblAmtTl": 0.0,
+        "taxAmtTl": 0.0,
+        "taxRtEcm": 5,
+        "taxblAmtEcm": 0.0,
+        "taxAmtEcm": 0.0,
+        "taxRtExeeg": 3,
+        "taxblAmtExeeg": 0.0,
+        "taxAmtExeeg": 0.0,
+
+        "tlAmt": 0.0,
+        "totTaxblAmt": 0.0,
+        "totTaxAmt": 0.0,
+        "totAmt": 0.0,
+        "itemList": []
     }
     
     for idx, item in enumerate(invoice.items, start=1):
+
         item_doc = frappe.get_doc("Item", item.item_code)
         unit_cd, pkg_unit = get_unit_code(item_doc, invoice.company)
         
         item_data = {
             "itemSeq": idx,
             "itemCd": item.item_code,
-            "   ": item_doc.custom_item_cls_cd, # add default in company
+            "itemClsCd": item_doc.custom_item_cls_cd or company.custom_default_item_class,
             "itemNm": item.item_code,
             "bcd": "",
             "pkgUnitCd": pkg_unit or "PACK",
             "pkg": flt(item.qty, 3),
             "qtyUnitCd": unit_cd or "U",
             "qty": flt(item.qty, 3),
-            "prc": flt(item.rate, 3), #
+            "prc": flt(item.rate, 3),
             "splyAmt": flt(item.amount, 3),
             "dcRt": flt(item.discount_percentage, 3) if item.discount_percentage else 0.0,
             "dcAmt": flt(item.discount_amount, 3) if item.discount_amount else 0.0,
-            "isrccCd": "", # todo
-            "isrccNm": "", # todo
-            "isrcRt": 0.0, # todo
-            "isrcAmt": 0.0, # todo
-
-            "vatCatCd": "A",  # add default in company for each item type / item group
-            "exciseTxCatCd": None, # todo
-            "vatTaxblAmt": flt(item.net_amount, 3),
-            "exciseTaxblAmt": 0.0,
-            "vatAmt": 0, # flt(item.tax_amount, 3) if item.tax_amount else 0.0,
-            "exciseTxAmt": 0.0,
-            "totAmt": flt(item.amount, 3)
+            "isrccCd": None,
+            "isrccNm": None,
+            "isrcRt": 0.0,
+            "isrcAmt": 0.0,
+            "tlAmt": 0.0,
+            "totAmt": flt(item.amount, 3),
+            "vatTaxblAmt": flt(item.amount, 3),
+            "vatAmt": 0.0
         }
-        data.update({"itemList": [item_data]})
 
-    return data
-    tax_data = {        
-        "tlAmt": 0.0,
+        # Calculate taxes for the item
+        if item_doc.custom_excise_duty_applicable == 1:
+            if item_doc.custom_excise_tax_category:
+                code = None
+                code = frappe.get_doc("Code", item_doc.custom_excise_tax_category)
+                amt = flt(item.amount, 4)
 
-        "taxRtTot": 0,
-        "taxblAmtTot": flt(invoice.net_total, 3),
+                tax_rate = (flt(code.user_dfn_cd1 or 0, 4)/100) + 1 if code.user_dfn_cd1 else 0.0 # 
+                excise_tax_amt = flt(amt * tax_rate, 4)
+                excise_taxbl_amt = flt(amt - excise_tax_amt, 4)
 
-        "taxAmtTot": flt(invoice.total_taxes_and_charges, 3),
-        "totTaxblAmt": flt(invoice.net_total, 3),
-        "totTaxAmt": flt(invoice.total_taxes_and_charges, 3),
-        
-        "itemList": []
-    }
+                item_data.update({
+                    "exciseTxCatCd": code.cd,
+                    "exciseTaxblAmt": flt(excise_taxbl_amt, 4),
+                    "exciseTxAmt": flt(excise_tax_amt, 4)
+                })
+
+                excise_code = code.cd.title()
+                data[f"taxblAmt{excise_code}"] += excise_taxbl_amt
+                data[f"taxAmt{excise_code}"] += flt(excise_tax_amt, 4)  
+                data[f"taxRt{excise_code}"] = code.user_dfn_cd1 or 0.0
+                
+        elif item_doc.custom_tourism_levy_applicable == 1:
+            if item_doc.custom_tourism_levy_type:
+                code = None
+                code = frappe.get_doc("Code", item_doc.custom_tourism_levy_type)
+                amt = flt(item.amount, 4)
+
+                tax_rate = (flt(code.user_dfn_cd1 or 0, 4)/100) + 1 if code.user_dfn_cd1 else 0.0 # 
+                tourism_taxbl_amt = flt(amt/tax_rate, 4)
+                tourism_tax_amt = flt(amt - tourism_taxbl_amt, 4)
+
+                item_data.update({
+                    "tlCatCd": code.cd,
+                    "tlTaxblAmt": tourism_taxbl_amt,
+                    "tlAmt": tourism_tax_amt
+                })
+
+                tl_code = code.cd.title()
+                data[f"taxblAmt{tl_code}"] += tourism_taxbl_amt
+                data[f"taxAmt{tl_code}"] += tourism_tax_amt  
+                data[f"taxRt{tl_code}"] = code.user_dfn_cd1 or 0.0
+
+        elif item_doc.custom_insurance_premium_levy_applicable == 1:
+            if item_doc.custom_insurance_premium_levy_category:
+                code = None
+                code = frappe.get_doc("Code", item_doc.custom_insurance_premium_levy_category)
+                amt = flt(item.amount, 4)
+
+                tax_rate = (flt(code.user_dfn_cd1 or 0, 4)/100) + 1 if code.user_dfn_cd1 else 0.0 # 
+                insurance_taxbl_amt = flt(amt/tax_rate, 4)
+                insurance_tax_amt = flt(amt - insurance_taxbl_amt, 4)
+
+                item_data.update({
+                    "iplCatCd": code.cd,
+                    "iplTaxblAmt": insurance_taxbl_amt,
+                    "iplAmt": insurance_tax_amt
+                })
+
+                ipl_code = code.cd.title()
+                data[f"taxblAmt{ipl_code}"] += insurance_taxbl_amt
+                data[f"taxAmt{ipl_code}"] += insurance_tax_amt  
+                data[f"taxRt{ipl_code}"] = code.user_dfn_cd1 or 0.0
+
+        tax_code = item.custom_tax_code.title() if item.custom_tax_code else None
+        item_taxes = get_item_taxes(item, tax_code)
+        item_data.update(item_taxes)
+
+        print("item_taxes", item_taxes)
+        data.update({
+            # update each tax item being calculated
+
+            # f"taxRt{item.custom_tax_code}": item_taxes["taxRt"],
+            # if item.custom_tax_code:
+            f"taxAmt{tax_code}": data[f"taxAmt{tax_code}"] + item_taxes.get("vatAmt", 0),
+            f"taxblAmt{tax_code}": data[f"taxblAmt{tax_code}"] + item_taxes.get("vatTaxblAmt", 0),
+
+            #  "taxRtTot": 0, TOT
+            # "taxblAmtTot": flt(invoice.net_total, 3),
+
+            # "taxAmtTot": flt(invoice.total_taxes_and_charges, 3),
+            # "taxRtA": 16,  # Assuming fixed tax rate, adjust if needed
+            
+
+            "taxblAmtTot": 0,
+            "taxAmtTot": 0,
+            "totTaxblAmt": data["totTaxblAmt"] + item_taxes.get("vatTaxblAmt", 0),
+            "totTaxAmt": data["totTaxAmt"] + item_taxes.get("vatAmt", 0),
+            "totAmt": data["totAmt"] + item_taxes.get("totAmt", 0)
+        })
+    data.update({"itemList": [item_data]})
 
     # add user info
     data.update(get_doc_user_data(invoice))
-    print(data)
-    return
     
+    return json.dumps(data)
     return data
+
+
+
+def get_item_taxes(item, tax_code):
+    tax_rate = (flt(item.custom_tax_rate, 4)/100) + 1 if item.custom_tax_rate else 0.0 # 
+    amt = flt(item.amount, 4)
+    
+    taxable_amount = flt((amt/tax_rate) if tax_rate != 0 else 0, 4)
+    tax_amt = flt(amt - taxable_amount, 4)
+    print("tax_rate", tax_rate, "amt", amt, "taxable_amount", taxable_amount, "tax_amt", tax_amt)
+    print("")
+    taxes = {
+        "totAmt": amt,
+        "vatTaxblAmt": taxable_amount,
+        "vatAmt": tax_amt
+    }
+    if tax_code in ["A", "B", "C1", "C2", "C3", "D", "Rvat"]:    
+        taxes.update({
+            "vatCatCd": tax_code.upper(),
+        })
+
+    return taxes
+
+
+
+        # taxable_amounts = {
+        #     "Rvat": "taxblAmtRvat",
+        #     "E": "taxblAmtE",
+        #     "F": "taxblAmtF",
+        #     "Ipl1": "taxblAmtIpl1",
+        #     "Ipl2": "taxblAmtIpl2",
+        #     "Tl": "taxblAmtTl",
+        #     "Ecm": "taxblAmtEcm",
+        #     "Exeeg": "taxblAmtExeeg"
+        # }
+        # tax_rates = {
+        #     "A": "taxRtA",
+        #     "B": "taxRtB",
+        #     "C1": "taxRtC1",
+        #     "C2": "taxRtC2",
+        #     "C3": "taxRtC3",
+        #     "D": "taxRtD",
+        #     "Rvat": "taxRtRvat",
+        #     "E": "taxRtE",
+        #     "F": "taxRtF",
+        #     "Ipl1": "taxRtIpl1",
+        #     "Ipl2": "taxRtIpl2",
+        #     "Tl": "taxRtTl",
+        #     "Ecm": "taxRtEcm",
+        #     "Exeeg": "taxRtExeeg"
+        # }
+        #     tax_amounts = {
+        #         "A": "taxAmt",
+        #         "B": "taxAmt",
+        #         "C1": "taxAmt",
+        #         "C2": "taxAmt",
+        #         "C3": "taxAmt",
+        #         "D": "taxAmt",
+        #         "Rvat": "taxAmt",
+        #         "E": "taxAmt",
+        #         "F": "taxAmt",
+        #         "Ipl1": "taxAmtIpl1",
+        #         "Ipl2": "taxAmtIpl2",
+        #         "Tl": "taxAmtTl",
+        #         "Ecm": "taxAmtEcm",
+        #         "Exeeg": "taxAmtExeeg"
+        # }
+    
+        # tax_keys = [
+        #     "taxblAmtRvat",
+        #     "taxblAmtE",
+        #     "taxblAmtF",
+        #     "taxblAmtIpl1",
+        #     "taxblAmtIpl2",
+        #     "taxblAmtTl",
+        #     "taxblAmtEcm",
+        #     "taxblAmtExeeg",
+        #     "taxAmtRvat",
+        #     "taxAmtE",
+        #     "taxAmtF",
+        #     "taxAmtIpl1",
+        #     "taxAmtIpl2",
+        #     "taxAmtTl",
+        #     "taxAmtEcm",
+        #     "taxAmtExeeg",
+        #     "taxRtA",
+        #     "taxRtB",
+        #     "taxRtC1",
+        #     "taxRtC2",
+        #     "taxRtC3",
+        #     "taxRtD",
+        #     "taxRtRvat",
+        #     "taxRtE",
+        #     "taxRtF",
+        #     "taxRtIpl1",
+        #     "taxRtIpl2",
+        #     "taxRtTl",
+        #     "taxRtEcm",
+        #     "taxRtExeeg"
+        # ]
+        # for tax_key in tax_keys:
+            
+
+        # # tax_totals.update({
+        # #     item["vatCatCd"]: {
+        # #         f"taxRt{item['vatCatCd']}": item["taxRt"],
+        # #         f"taxblAmt{item['vatCatCd']}": taxable_amount += item["vatTaxblAmt"],
+        # #         f"taxAmt{item['vatCatCd']}": tax_amount += item["vatAmt"]
+        # #     }
+        # # })
+
+        # data.update({"itemList": [item_data]})
+    
+
+
+def prepare_tax_data(invoice):
+    
+    taxes = {}
+    taxable_amounts = {
+        "Rvat": {"taxblAmtRvat": flt(invoice.net_total, 3)},
+        "E": {"taxblAmtE": flt(invoice.net_total, 3)},
+        "F": {"taxblAmtF": flt(invoice.net_total, 3)},
+        "Ipl1": {"taxblAmtIpl1": flt(invoice.net_total, 3)},
+        "Ipl2": {"taxblAmtIpl2": flt(invoice.net_total, 3)},
+        "Tl": {"taxblAmtTl": flt(invoice.net_total, 3)},
+        "Ecm": {"taxblAmtEcm": flt(invoice.net_total, 3)},
+        "Exeeg": {"taxblAmtExeeg": flt(invoice.net_total, 3)},
+    }
+    tax_amounts = {
+        "Rvat": {"taxAmtRvat": flt(invoice.net_total, 3)},
+        "E": {"taxAmtE": 0.0},
+        "F": {"taxAmtF": 0.0},
+        "Ipl1": {"taxAmtIpl1": 0.0},
+        "Ipl2": {"taxAmtIpl2": 0.0},
+        "Tl": {"taxAmtTl": 0.0},
+        "Ecm": {"taxAmtEcm": 0.0},
+        "Exeeg": {"taxAmtExeeg": 0.0},
+    }
+    tax_rates = {
+        "A": {"taxRtA": 16},
+        "B": {"taxRtB": 16},
+        "C1": {"taxRtC1": 0},
+        "C2": {"taxRtC2": 0},
+        "C3": {"taxRtC3": 0},
+        "D": {"taxRtD": 0},
+        "Rvat": {"taxRtRvat": 16},
+        "E": {"taxRtE": 0},
+        "F": {"taxRtF": 10},
+        "Ipl1": {"taxRtIpl1": 5},
+        "Ipl2": {"taxRtIpl2": 0},
+        "Tl": {"taxRtTl": 1.5},
+        "Ecm": {"taxRtEcm": 5},
+        "Exeeg": {"taxRtExeeg": 3},
+    }
+
+    return taxes
 
 def get_doc_user_data(doc):
     owner_name = frappe.get_cached_value('User', doc.owner, 'full_name')
