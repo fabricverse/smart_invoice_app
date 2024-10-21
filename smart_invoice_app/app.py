@@ -763,6 +763,13 @@ def get_item_taxes(item, tax_code):
         taxes.update({
             "vatCatCd": tax_code.upper(),
         })
+    elif tax_code == "TOT":
+        taxes.update({
+            "taxCatCd": tax_code.upper(),
+            "vatTaxblAmt": amt,
+            "vatAmt": 0
+
+        })
 
     return taxes
 
