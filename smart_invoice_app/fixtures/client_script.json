@@ -1,0 +1,90 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Mode of Payment",
+  "enabled": 1,
+  "modified": "2024-09-29 22:01:26.624310",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Mode of Payment",
+  "script": "frappe.ui.form.on('Mode of Payment', {\n\trefresh(frm) {\n\t    // Set up field filter for custom_zra_payment_type\n        frm.set_query(\"custom_zra_payment_type\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"Payment Type\", \"07\"]]\n                }\n            };\n        });\n\t\t\n\t}\n});",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Branch",
+  "enabled": 1,
+  "modified": "2024-10-03 03:02:41.423274",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Branch",
+  "script": "frappe.ui.form.on('Branch', {\n\trefresh(frm) {\n        frm.add_custom_button(__(\"Sync from Smart Invoice\"), function() {\n            frappe.call({\n                method: \"smart_invoice_app.app.sync_branches\",\n        \t\tfreeze: true,\n        \t\tfreeze_message: __(\"Updating all branches from Smart Invoice ...\"),\n                callback: (r)=>{\n                    frm.reload_doc();\n                }\n            });\n        });\n    \n        // Custom filter function to exclude existing users\n        frm.set_query(\"user_id\", \"custom_branch_users\", function(doc) {\n            existing_users = frm.doc.custom_branch_users.map(row => row.user_id);\n            return{\n                filters: {\n                    \"name\": [\"not in\", existing_users]\n                }\n            };\n        });\n\t\t\n\t},\n\tafter_save(frm){\n\t    frappe.call({\n\t        method: \"smart_invoice_app.app.update_api_users\",\n\t        args: {\n\t            branch: frm.doc.branch\n\t        },\n    \t\tfreeze: true,\n    \t\tfreeze_message: __(\"Updating the branch and its users ...\"),\n\t        callback: (r)=>{\n                if(r.message){\n                    console.log(\"r\", r.message || r.message === \"\");\n    \t            frm.set_value(\"custom_previous_branch_users\", r.message);\n    \t            frm.refresh_fields(\"custom_previous_branch_users\");\n    \t            frm.save();\n    \t            frm.refresh();\n                }\n                else if(!r.message && frm.doc.custom_branch_users.length === 0){\n    \t            frm.set_value(\"custom_previous_branch_users\", \"\");\n                }\n                else{\n                    console.log('none');\n                }\n\t        }\n\t    });\n\t    \n\t}\n});",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Item Group",
+  "enabled": 1,
+  "modified": "2024-09-30 12:04:37.084152",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Item Group",
+  "script": "frappe.ui.form.on('Item Group', {\n\trefresh(frm) {\n        // Set up field filter for custom_branch_status\n        frm.set_query(\"custom_item_ty\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"Item Type\", \"24\"]]\n                }\n            };\n        });\n\t}\n})",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Item",
+  "enabled": 1,
+  "modified": "2024-10-04 11:04:03.949703",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Item",
+  "script": "frappe.ui.form.on('Item', {\n\trefresh(frm) {\n\t    \n        frm.add_custom_button(__(\"Sync with Smart Invoice\"), function() {\n            call_api(frm);\n        });\n        \n        create_codes_if_needed(frm);\n        \n        // Set up field filters\n        frm.set_query(\"custom_pkg_unit\", function() {\n            return {\n                filters: {\n                    \"custom_code_class_name\": [\"in\", [\"17\"]]\n                }\n            };\n        });\n        \n        frm.set_query(\"tax_category\", \"taxes\", function() {\n            return {\n                filters: {\n                    \"custom_cd\": [\"not in\", [\"TOT\"]]\n                }\n            };\n        });\n        \n        frm.set_query(\"stock_uom\", function() {\n            return {\n                filters: {\n                    \"custom_code_class_name\": [\"in\", [\"10\"]]\n                }\n            };\n        });\n        frm.set_query(\"custom_excise_tax_category\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"60\"]]\n                }\n            };\n        });\n        frm.set_query(\"custom_insurance_premium_levy_category\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"61\"]]\n                }\n            };\n        });\n        frm.set_query(\"custom_tourism_levy_type\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"62\"]]\n                }\n            };\n        });\n\t}\n});\nfunction create_codes_if_needed(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.create_codes_if_needed\",\n        args: {\n            item: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Updating Smart Invoice item codes ...\"),\n        callback: (r)=>{\n        }\n    });\n    \n}\n\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.sync_items\",\n        args: {\n            initialize: true\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Running Smart Invoice item sync ...\"),\n        callback: (r)=>{\n            frm.reload_doc();\n        }\n    });\n}",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Customer",
+  "enabled": 1,
+  "modified": "2024-10-03 11:42:07.528630",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Customer",
+  "script": "frappe.ui.form.on('Customer', {\n\trefresh(frm) {\n        // frm.add_custom_button(__(\"Sync with Smart Invoice\"), function() {\n        //     call_api(frm);\n        // });\n    \n        // Custom filter function to exclude already selected entries\n        frm.set_query(\"branch\", \"custom_customer_branches\", function(doc) {\n            selected = frm.doc.custom_customer_branches.map(row => row.branch);\n            return{\n                filters: {\n                    \"name\": [\"not in\", selected]\n                }\n            };\n        });\n\t\t\n\t},\n\tafter_save(frm){\n\t    call_api(frm);\n\t}\n});\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.sync_customer_api\",\n        args: {\n            customer: frm.doc\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Updating Smart Invoice customer data ...\"),\n        callback: (r)=>{\n            frm.reload_doc();\n        }\n    });\n}",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "UOM",
+  "enabled": 1,
+  "modified": "2024-10-03 13:21:34.629522",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - UOM",
+  "script": "frappe.ui.form.on('UOM', {\n\trefresh(frm) {\n        \n        // Set up field filter for custom_cd\n        frm.set_query(\"custom_cd\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"17\", \"10\"]]\n                }\n            };\n        });\n\t}\n});\n",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Company",
+  "enabled": 1,
+  "modified": "2024-10-04 07:59:57.552006",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Company",
+  "script": "frappe.ui.form.on('Company', {\n\trefresh(frm) {\n\t    \n        // frm.add_custom_button(__(\"Sync with Smart Invoice\"), function() {\n        //     call_api(frm);\n        // });\n        \n        // Set up field filters\n        frm.set_query(\"custom_default_unit_of_measure\", function() {\n            return {\n                filters: [\n                    [\"custom_code_class_name\", \"=\", \"10\"],\n                    [\"custom_code_class_name\", \"!=\", undefined]\n                ]\n            };\n        });\n        \n        frm.set_query(\"custom_packaging_unit\", function() {\n            return {\n                filters: [\n                    [\"custom_code_class_name\", \"=\", \"17\"],\n                    [\"custom_code_class_name\", \"!=\", null]\n                ]\n            };\n        });\n\t},\n\tcustom_update_codes(frm){\n\t    create_codes_if_needed(frm);\n\t}\n\t\n});\n\n\nfunction create_codes_if_needed(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.create_codes_if_needed\",\n        args: {\n            item: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Updating Smart Invoice item codes ...\"),\n        callback: (r)=>{\n        }\n    });\n    \n}\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.save_item_api\",\n        args: {\n            item: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Updating Smart Invoice item data ...\"),\n        callback: (r)=>{\n            frm.reload_doc();\n        }\n    });\n}",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Sales Invoice",
+  "enabled": 1,
+  "modified": "2024-10-05 20:24:13.287404",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Sales Invoice",
+  "script": "frappe.ui.form.on('Sales Invoice', {\n\trefresh(frm) {\n\t    \n        // frm.add_custom_button(__(\"Sync with Smart Invoice\"), function() {\n        //     call_api(frm);\n        // });\n        \n        // create_codes_if_needed(frm);\n        \n        // Set up field filters\n        frm.set_query(\"custom_refund_reason\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"32\"]]\n                }\n            };\n        });\n        frm.set_query(\"custom_stock_adjustment_reason\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"35\"]]\n                }\n            };\n        });\n        // Reason for Debit note 67\n        // frm.set_query(\"custom_pkg_unit\", function() {\n        //     return {\n        //         filters: {\n        //             \"custom_code_class_name\": [\"in\", [\"17\"]]\n        //         }\n        //     };\n        // });\n        \n        // frm.set_query(\"tax_category\", \"taxes\", function() {\n        //     return {\n        //         filters: {\n        //             \"custom_cd\": [\"not in\", [\"TOT\"]]\n        //         }\n        //     };\n        // });\n\t}\n});\n// function create_codes_if_needed(frm){\n//     frappe.call({\n//         method: \"smart_invoice_app.app.create_codes_if_needed\",\n//         args: {\n//             item: frm.doc.name\n//         },\n// \t\tfreeze: true,\n// \t\tfreeze_message: __(\"Updating Smart Invoice item codes ...\"),\n//         callback: (r)=>{\n//         }\n//     });\n    \n// }\n\n\n// function call_api(frm){\n//     frappe.call({\n//         method: \"smart_invoice_app.app.sync_items\",\n//         args: {\n//             initialize: true\n//         },\n// \t\tfreeze: true,\n// \t\tfreeze_message: __(\"Running Smart Invoice item sync ...\"),\n//         callback: (r)=>{\n//             frm.reload_doc();\n//         }\n//     });\n// }",
+  "view": "Form"
+ }
+]

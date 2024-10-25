@@ -1,0 +1,72 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:05.456760",
+  "name": "Copperbelt",
+  "province": "Copperbelt"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:05.512842",
+  "name": "Eastern",
+  "province": "Eastern"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:05.534131",
+  "name": "Luapula",
+  "province": "Luapula"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:05.568968",
+  "name": "Muchinga",
+  "province": "Muchinga"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:05.600859",
+  "name": "Northern",
+  "province": "Northern"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:05.619961",
+  "name": "North-Western",
+  "province": "North-Western"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:05.633417",
+  "name": "Southern",
+  "province": "Southern"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:05.646470",
+  "name": "Western",
+  "province": "Western"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:43.710832",
+  "name": "Central",
+  "province": "Central"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Province",
+  "modified": "2024-10-01 00:42:05.554654",
+  "name": "Lusaka",
+  "province": "Lusaka"
+ }
+]

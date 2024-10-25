@@ -1,0 +1,122 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:item_cls_cd",
+ "creation": "2024-09-30 08:55:18.203566",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "item_cls_nm",
+  "item_cls_cd",
+  "column_break_ybnk",
+  "use_yn",
+  "mjr_tg_yn",
+  "item_cls_lvl",
+  "tax_type_section",
+  "tax_type",
+  "column_break_sojx",
+  "tax_ty_cd"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_cls_cd",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Code",
+   "read_only": 1,
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "column_break_ybnk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "use_yn",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "default": "0",
+   "fieldname": "mjr_tg_yn",
+   "fieldtype": "Check",
+   "label": "Major Target"
+  },
+  {
+   "fieldname": "tax_type_section",
+   "fieldtype": "Section Break",
+   "label": "Tax Type"
+  },
+  {
+   "fieldname": "tax_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Tax Type",
+   "options": "Tax Category"
+  },
+  {
+   "fieldname": "column_break_sojx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "tax_type.custom_cd",
+   "fieldname": "tax_ty_cd",
+   "fieldtype": "Data",
+   "label": "Tax Type Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item_cls_nm",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Class Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_cls_lvl",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Class Level",
+   "read_only": 1,
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2024-10-05 17:12:53.172472",
+ "modified_by": "Administrator",
+ "module": "Smart Invoice App",
+ "name": "Item Class",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "All",
+   "share": 1
+  }
+ ],
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "item_cls_nm",
+ "track_changes": 1
+}

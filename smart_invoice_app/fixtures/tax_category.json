@@ -1,0 +1,83 @@
+[
+ {
+  "custom_cd": "C2",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-30 11:20:43.773116",
+  "name": "Zero-rating LPO",
+  "title": "Zero-rating LPO"
+ },
+ {
+  "custom_cd": "C1",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-30 11:20:03.638622",
+  "name": "Exports(0%)",
+  "title": "Exports(0%)"
+ },
+ {
+  "custom_cd": "TOT",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-30 11:21:52.057266",
+  "name": "TOT",
+  "title": "TOT"
+ },
+ {
+  "custom_cd": "RVAT",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-28 18:34:42.176406",
+  "name": "Reverse VAT",
+  "title": "Reverse VAT"
+ },
+ {
+  "custom_cd": "B",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-28 17:58:54.069761",
+  "name": "Minimum Taxable Value (MTV-16%)",
+  "title": "Minimum Taxable Value (MTV-16%)"
+ },
+ {
+  "custom_cd": "C3",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-28 18:34:42.078179",
+  "name": "Zero-rated by nature",
+  "title": "Zero-rated by nature"
+ },
+ {
+  "custom_cd": "D",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-28 18:34:42.130850",
+  "name": "Exempt",
+  "title": "Exempt"
+ },
+ {
+  "custom_cd": "A",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-28 18:34:41.864432",
+  "name": "Standard Rated(16%)",
+  "title": "Standard Rated(16%)"
+ },
+ {
+  "custom_cd": "E",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-28 16:44:12.608280",
+  "name": "Disbursement",
+  "title": "Disbursement"
+ }
+]

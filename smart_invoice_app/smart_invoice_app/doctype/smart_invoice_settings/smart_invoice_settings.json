@@ -1,0 +1,132 @@
+{
+ "actions": [
+  {
+   "action": "smart_invoice_app.app.initialize",
+   "action_type": "Server Action",
+   "group": "Menu",
+   "label": "Update ZRA Data"
+  }
+ ],
+ "allow_copy": 1,
+ "allow_rename": 1,
+ "creation": "2024-09-23 15:11:31.280574",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "environment",
+  "column_break_ofch",
+  "base_url",
+  "default_server",
+  "section_break_ctyz",
+  "tpin",
+  "column_break_btac",
+  "vsdc_serial",
+  "api_credentials_section",
+  "api_key",
+  "column_break_gmiy",
+  "api_secret"
+ ],
+ "fields": [
+  {
+   "fieldname": "environment",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Environment",
+   "options": "\nSandbox\nProduction",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ofch",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "https://smart-invoice-api.bantoo.app",
+   "fieldname": "base_url",
+   "fieldtype": "Data",
+   "label": "API Server URL",
+   "options": "URL",
+   "read_only": 1,
+   "read_only_depends_on": "eval:doc.default_server==1",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "default_server",
+   "fieldtype": "Check",
+   "label": "Default Server"
+  },
+  {
+   "collapsible": 1,
+   "collapsible_depends_on": "eval: doc.api_secret",
+   "fieldname": "api_credentials_section",
+   "fieldtype": "Section Break",
+   "label": "API Credentials"
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Data",
+   "label": "API Key",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_gmiy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "api_secret",
+   "fieldtype": "Data",
+   "label": "API Secret",
+   "reqd": 1
+  },
+  {
+   "fieldname": "tpin",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "TPIN",
+   "length": 10,
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_ctyz",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_btac",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.default_server==0",
+   "fieldname": "vsdc_serial",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "VSDC Serial",
+   "length": 15,
+   "mandatory_depends_on": "eval:doc.default_server==0"
+  }
+ ],
+ "hide_toolbar": 1,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2024-09-30 10:14:41.947600",
+ "modified_by": "Administrator",
+ "module": "Smart Invoice App",
+ "name": "Smart Invoice Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

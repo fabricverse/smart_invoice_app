@@ -1,0 +1,75 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:IIR-{YYYY}-{#####}",
+ "creation": "2024-09-28 12:14:47.285428",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "branch",
+  "tpin",
+  "column_break_juug",
+  "bhf_id",
+  "last_req_dt",
+  "dcl_ref_num"
+ ],
+ "fields": [
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "label": "Branch",
+   "options": "Branch"
+  },
+  {
+   "fetch_from": "branch.custom_tpin",
+   "fieldname": "tpin",
+   "fieldtype": "Data",
+   "label": "TPIN"
+  },
+  {
+   "fieldname": "column_break_juug",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "branch.custom_bhf_id",
+   "fieldname": "bhf_id",
+   "fieldtype": "Data",
+   "label": "Branch Id"
+  },
+  {
+   "fieldname": "last_req_dt",
+   "fieldtype": "Date",
+   "label": "Last Request Date"
+  },
+  {
+   "fieldname": "dcl_ref_num",
+   "fieldtype": "Data",
+   "label": "Declaration Reference Number"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2024-09-28 12:24:35.692626",
+ "modified_by": "Administrator",
+ "module": "Smart Invoice App",
+ "name": "Import Item Request",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

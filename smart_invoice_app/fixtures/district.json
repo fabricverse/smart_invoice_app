@@ -1,0 +1,762 @@
+[
+ {
+  "district": "Chilanga",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.693505",
+  "name": "Chilanga",
+  "province": "Lusaka"
+ },
+ {
+  "district": "Kafue",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.749932",
+  "name": "Kafue",
+  "province": "Lusaka"
+ },
+ {
+  "district": "Lusaka",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.769301",
+  "name": "Lusaka",
+  "province": "Lusaka"
+ },
+ {
+  "district": "Chongwe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.790420",
+  "name": "Chongwe",
+  "province": "Lusaka"
+ },
+ {
+  "district": "Rufunsa",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.812003",
+  "name": "Rufunsa",
+  "province": "Lusaka"
+ },
+ {
+  "district": "Shibuyunji",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.836393",
+  "name": "Shibuyunji",
+  "province": "Lusaka"
+ },
+ {
+  "district": "Choma",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.857402",
+  "name": "Choma",
+  "province": "Southern"
+ },
+ {
+  "district": "Kalomo",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.880564",
+  "name": "Kalomo",
+  "province": "Southern"
+ },
+ {
+  "district": "Livingstone",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.911293",
+  "name": "Livingstone",
+  "province": "Southern"
+ },
+ {
+  "district": "Kazungula",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.934376",
+  "name": "Kazungula",
+  "province": "Southern"
+ },
+ {
+  "district": "Namwala",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.963757",
+  "name": "Namwala",
+  "province": "Southern"
+ },
+ {
+  "district": "Gwembe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:09.988500",
+  "name": "Gwembe",
+  "province": "Southern"
+ },
+ {
+  "district": "Zimba",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.015376",
+  "name": "Zimba",
+  "province": "Southern"
+ },
+ {
+  "district": "Sinazongwe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.042955",
+  "name": "Sinazongwe",
+  "province": "Southern"
+ },
+ {
+  "district": "Monze",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.073694",
+  "name": "Monze",
+  "province": "Southern"
+ },
+ {
+  "district": "Mazabuka",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.105233",
+  "name": "Mazabuka",
+  "province": "Southern"
+ },
+ {
+  "district": "Pemba",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.131163",
+  "name": "Pemba",
+  "province": "Southern"
+ },
+ {
+  "district": "Siavonga",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.165694",
+  "name": "Siavonga",
+  "province": "Southern"
+ },
+ {
+  "district": "Chipata",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.192339",
+  "name": "Chipata",
+  "province": "Eastern"
+ },
+ {
+  "district": "Katete",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.242603",
+  "name": "Katete",
+  "province": "Eastern"
+ },
+ {
+  "district": "Lundazi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.268912",
+  "name": "Lundazi",
+  "province": "Eastern"
+ },
+ {
+  "district": "Mambwe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.290803",
+  "name": "Mambwe",
+  "province": "Eastern"
+ },
+ {
+  "district": "Nyimba",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.326906",
+  "name": "Nyimba",
+  "province": "Eastern"
+ },
+ {
+  "district": "Petauke",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.351045",
+  "name": "Petauke",
+  "province": "Eastern"
+ },
+ {
+  "district": "Sinda",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.387762",
+  "name": "Sinda",
+  "province": "Eastern"
+ },
+ {
+  "district": "Vubwi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.415333",
+  "name": "Vubwi",
+  "province": "Eastern"
+ },
+ {
+  "district": "Kasama",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.435090",
+  "name": "Kasama",
+  "province": "Northern"
+ },
+ {
+  "district": "Mbala",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.460085",
+  "name": "Mbala",
+  "province": "Northern"
+ },
+ {
+  "district": "Mpulungu",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.510644",
+  "name": "Mpulungu",
+  "province": "Northern"
+ },
+ {
+  "district": "Mporokoso",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.566757",
+  "name": "Mporokoso",
+  "province": "Northern"
+ },
+ {
+  "district": "Mungwi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.585698",
+  "name": "Mungwi",
+  "province": "Northern"
+ },
+ {
+  "district": "Lunte",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.600386",
+  "name": "Lunte",
+  "province": "Northern"
+ },
+ {
+  "district": "Luwingu",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.627438",
+  "name": "Luwingu",
+  "province": "Northern"
+ },
+ {
+  "district": "Chilubi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.651990",
+  "name": "Chilubi",
+  "province": "Northern"
+ },
+ {
+  "district": "Senga Hill",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.672158",
+  "name": "Senga Hill",
+  "province": "Northern"
+ },
+ {
+  "district": "Lupososhi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.688452",
+  "name": "Lupososhi",
+  "province": "Northern"
+ },
+ {
+  "district": "Chinsali",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.705256",
+  "name": "Chinsali",
+  "province": "Muchinga"
+ },
+ {
+  "district": "Isoka",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.730439",
+  "name": "Isoka",
+  "province": "Muchinga"
+ },
+ {
+  "district": "Mpika",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.753559",
+  "name": "Mpika",
+  "province": "Muchinga"
+ },
+ {
+  "district": "Mafinga",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.786081",
+  "name": "Mafinga",
+  "province": "Muchinga"
+ },
+ {
+  "district": "Nakonde",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.805264",
+  "name": "Nakonde",
+  "province": "Muchinga"
+ },
+ {
+  "district": "Shiwang'andu",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.826083",
+  "name": "Shiwang'andu",
+  "province": "Muchinga"
+ },
+ {
+  "district": "Kanchibiya",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.840801",
+  "name": "Kanchibiya",
+  "province": "Muchinga"
+ },
+ {
+  "district": "Solwezi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.863929",
+  "name": "Solwezi",
+  "province": "North-Western"
+ },
+ {
+  "district": "Mushindamo",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.890348",
+  "name": "Mushindamo",
+  "province": "North-Western"
+ },
+ {
+  "district": "Kalumbila",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.908050",
+  "name": "Kalumbila",
+  "province": "North-Western"
+ },
+ {
+  "district": "Mwinilunga",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.925705",
+  "name": "Mwinilunga",
+  "province": "North-Western"
+ },
+ {
+  "district": "Kasempa",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.952097",
+  "name": "Kasempa",
+  "province": "North-Western"
+ },
+ {
+  "district": "Kabompo",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.972785",
+  "name": "Kabompo",
+  "province": "North-Western"
+ },
+ {
+  "district": "Zambezi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:10.998776",
+  "name": "Zambezi",
+  "province": "North-Western"
+ },
+ {
+  "district": "Mufumbwe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.037351",
+  "name": "Mufumbwe",
+  "province": "North-Western"
+ },
+ {
+  "district": "Manyinga",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.070781",
+  "name": "Manyinga",
+  "province": "North-Western"
+ },
+ {
+  "district": "Mansa",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.093041",
+  "name": "Mansa",
+  "province": "Luapula"
+ },
+ {
+  "district": "Samfya",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.108865",
+  "name": "Samfya",
+  "province": "Luapula"
+ },
+ {
+  "district": "Chembe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.125129",
+  "name": "Chembe",
+  "province": "Luapula"
+ },
+ {
+  "district": "Kawambwa",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.145781",
+  "name": "Kawambwa",
+  "province": "Luapula"
+ },
+ {
+  "district": "Mwense",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.171066",
+  "name": "Mwense",
+  "province": "Luapula"
+ },
+ {
+  "district": "Nchelenge",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.196656",
+  "name": "Nchelenge",
+  "province": "Luapula"
+ },
+ {
+  "district": "Chienge",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.247141",
+  "name": "Chienge",
+  "province": "Luapula"
+ },
+ {
+  "district": "Milenge",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.272295",
+  "name": "Milenge",
+  "province": "Luapula"
+ },
+ {
+  "district": "Chipili",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.299191",
+  "name": "Chipili",
+  "province": "Luapula"
+ },
+ {
+  "district": "Lunga",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.350137",
+  "name": "Lunga",
+  "province": "Luapula"
+ },
+ {
+  "district": "Kitwe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.386645",
+  "name": "Kitwe",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Ndola",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.406846",
+  "name": "Ndola",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Luanshya",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.429916",
+  "name": "Luanshya",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Kalulushi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.451656",
+  "name": "Kalulushi",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Chililabombwe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.471433",
+  "name": "Chililabombwe",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Chingola",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.492954",
+  "name": "Chingola",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Mufulira",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.521295",
+  "name": "Mufulira",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Lufwanyama",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.544187",
+  "name": "Lufwanyama",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Mpongwe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.566568",
+  "name": "Mpongwe",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Masaiti",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.589024",
+  "name": "Masaiti",
+  "province": "Copperbelt"
+ },
+ {
+  "district": "Mongu",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.606941",
+  "name": "Mongu",
+  "province": "Western"
+ },
+ {
+  "district": "Kalabo",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.623712",
+  "name": "Kalabo",
+  "province": "Western"
+ },
+ {
+  "district": "Kaoma",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.641387",
+  "name": "Kaoma",
+  "province": "Western"
+ },
+ {
+  "district": "Senanga",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.664396",
+  "name": "Senanga",
+  "province": "Western"
+ },
+ {
+  "district": "Shangombo",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.727116",
+  "name": "Shangombo",
+  "province": "Western"
+ },
+ {
+  "district": "Sioma",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.762612",
+  "name": "Sioma",
+  "province": "Western"
+ },
+ {
+  "district": "Sesheke",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.788084",
+  "name": "Sesheke",
+  "province": "Western"
+ },
+ {
+  "district": "Nalolo",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.810755",
+  "name": "Nalolo",
+  "province": "Western"
+ },
+ {
+  "district": "Limulunga",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.835380",
+  "name": "Limulunga",
+  "province": "Western"
+ },
+ {
+  "district": "Mitete",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.883201",
+  "name": "Mitete",
+  "province": "Western"
+ },
+ {
+  "district": "Nkeyema",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.900418",
+  "name": "Nkeyema",
+  "province": "Western"
+ },
+ {
+  "district": "Kapiri Mposhi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.920910",
+  "name": "Kapiri Mposhi",
+  "province": "Central"
+ },
+ {
+  "district": "Mkushi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.938195",
+  "name": "Mkushi",
+  "province": "Central"
+ },
+ {
+  "district": "Kabwe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.958152",
+  "name": "Kabwe",
+  "province": "Central"
+ },
+ {
+  "district": "Chisamba",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.976348",
+  "name": "Chisamba",
+  "province": "Central"
+ },
+ {
+  "district": "Chibombo",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:11.993473",
+  "name": "Chibombo",
+  "province": "Central"
+ },
+ {
+  "district": "Ngabwe",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:12.016735",
+  "name": "Ngabwe",
+  "province": "Central"
+ },
+ {
+  "district": "Mumbwa",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:12.046338",
+  "name": "Mumbwa",
+  "province": "Central"
+ },
+ {
+  "district": "Itezhi-Tezhi",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:12.089708",
+  "name": "Itezhi-Tezhi",
+  "province": "Central"
+ },
+ {
+  "district": "Chadiza",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:12.124194",
+  "name": "Chadiza",
+  "province": "Eastern"
+ },
+ {
+  "district": "Chama",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:12.146536",
+  "name": "Chama",
+  "province": "Eastern"
+ },
+ {
+  "district": "Serenje",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:12.183736",
+  "name": "Serenje",
+  "province": "Muchinga"
+ },
+ {
+  "district": "Chitambo",
+  "docstatus": 0,
+  "doctype": "District",
+  "modified": "2024-10-01 00:44:12.235764",
+  "name": "Chitambo",
+  "province": "Muchinga"
+ }
+]

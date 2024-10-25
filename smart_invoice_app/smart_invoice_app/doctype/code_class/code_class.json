@@ -1,0 +1,180 @@
+{
+ "actions": [],
+ "allow_copy": 1,
+ "autoname": "field:cd_cls",
+ "creation": "2024-09-23 16:57:14.395615",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cd_cls",
+  "section_break_icnv",
+  "cd_cls_nm",
+  "column_break_kftq",
+  "user_dfn_nm1",
+  "section_break_skdz",
+  "mapped_doctype",
+  "column_break_kymj",
+  "section_break_bozr",
+  "result_dt"
+ ],
+ "fields": [
+  {
+   "fieldname": "column_break_kftq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_skdz",
+   "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "eval:!doc.mapped_doctype",
+   "fieldname": "mapped_doctype",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Mapped Doctype",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "cd_cls",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Code Class",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "cd_cls_nm",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Code Class Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "user_dfn_nm1",
+   "fieldtype": "Data",
+   "label": "User Defined Name"
+  },
+  {
+   "fieldname": "section_break_icnv",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_kymj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_bozr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "result_dt",
+   "fieldtype": "Data",
+   "label": "Last Update",
+   "read_only": 1
+  }
+ ],
+ "hide_toolbar": 1,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2024-10-05 20:00:37.333383",
+ "modified_by": "Administrator",
+ "module": "Smart Invoice App",
+ "name": "Code Class",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase Manager",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase Master Manager",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Item Manager",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1
+  }
+ ],
+ "show_preview_popup": 1,
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "cd_cls_nm",
+ "track_changes": 1,
+ "track_seen": 1
+}
