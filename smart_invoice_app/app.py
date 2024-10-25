@@ -747,7 +747,7 @@ def prepare_invoice_data(invoice, branch=None):
 
 
 def get_item_taxes(item, tax_code):
-    tax_rate = (flt(item.custom_tax_rate, 4)/100) + 1 if item.custom_tax_rate else 0.0 # 
+    tax_rate = (flt(item.custom_tax_rate, 4)/100) + 1 if item.custom_tax_rate else 0.0 # pass and use system default
     amt = flt(item.amount, 4)
     
     taxable_amount = flt((amt/tax_rate) if tax_rate != 0 else 0, 4)
