@@ -4,8 +4,8 @@
   "cd_cls_nm": "Tourism levy",
   "docstatus": 0,
   "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:33.707493",
+  "mapped_doctype": "Item Tax Template",
+  "modified": "2024-10-31 00:03:23.760761",
   "name": "62",
   "result_dt": null,
   "user_dfn_nm1": null
@@ -37,8 +37,8 @@
   "cd_cls_nm": "Excise duties",
   "docstatus": 0,
   "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:33.595629",
+  "mapped_doctype": "Item Tax Template",
+  "modified": "2024-10-31 00:01:41.302604",
   "name": "60",
   "result_dt": null,
   "user_dfn_nm1": null
@@ -48,8 +48,8 @@
   "cd_cls_nm": "Insurance Premium Levy[IPL]",
   "docstatus": 0,
   "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:33.650259",
+  "mapped_doctype": "Item Tax Template",
+  "modified": "2024-10-30 23:48:58.019062",
   "name": "61",
   "result_dt": null,
   "user_dfn_nm1": null
