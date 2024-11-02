@@ -152,7 +152,14 @@ doc_events = {
     },
     "Sales Invoice": {
         "on_update": "smart_invoice_app.app.save_invoice_api",
-        "on_submit": "smart_invoice_app.app.prepare_invoice_data"
+        "on_submit": "smart_invoice_app.app.save_invoice_api",
+        "on_cancel": "smart_invoice_app.app.delete_qr_code_file"
+    },
+    "POS Invoice": {
+        "on_submit": "smart_invoice_app.app.save_invoice_api"
+    },
+    "Company": {
+        "on_trash": "smart_invoice_app.app.delete_vat_settings_for_company"
     }
 }
 

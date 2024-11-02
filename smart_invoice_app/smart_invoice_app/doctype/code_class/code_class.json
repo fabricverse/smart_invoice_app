@@ -27,7 +27,6 @@
    "fieldtype": "Section Break"
   },
   {
-   "depends_on": "eval:!doc.mapped_doctype",
    "fieldname": "mapped_doctype",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -76,7 +75,7 @@
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-10-05 20:00:37.333383",
+ "modified": "2024-10-30 23:59:40.589874",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Code Class",
