@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe.utils import flt
 from frappe.model.document import Document
 
 
@@ -73,6 +74,12 @@ class Code(Document):
 				return tax_category[0]['title']
 			else:
 				return self.create_tax_category_entry().title
+		if self.mapped_doctype in ['Item Tax Template']:
+			item_tax_template = self.find_db_entry('title', 'custom_code')
+			if item_tax_template:
+				return item_tax_template[0]['title']
+			else:
+				return self.create_item_tax_template_entry()
 		if self.mapped_doctype in ['Country']:
 			country = self.find_db_entry('country_name', 'code')
 			if country:
@@ -86,6 +93,42 @@ class Code(Document):
 			return None
 		else:
 			frappe.msgprint(f"No mapping found for {self.mapped_doctype}. You have to map it manually", alert=True)
+
+	def create_item_tax_template_entry(self):
+		
+		company = frappe.get_cached_doc("Company", frappe.defaults.get_user_default('company'))
+		self.create_item_taxes(company)
+		last_doc = frappe.get_last_doc("Item Tax Template")
+		return last_doc.name
+
+	def create_item_taxes(self, company):
+		from smart_invoice_app.app import ensure_tax_accounts
+
+		abbr = company.abbr
+		template = frappe.get_all("Item Tax Template", filters={"custom_code": self.cd})
+		if template:	
+			return template[0]['name']
+
+		ensure_tax_accounts([self], company.name, abbr)
+
+		item_tax = frappe.new_doc("Item Tax Template")
+		item_tax.title = self.cd_nm
+		item_tax.custom_smart_invoice_tax_code = self.name
+		item_tax.company = company.name
+		
+		# Create a child table row for taxes
+		item_tax.append("taxes", {
+			"tax_type": f"{self.cd} - {abbr}",
+			"tax_rate": flt(self.user_dfn_cd1 or 0.0)
+		})
+
+		item_tax.flags.ignore_permissions = True
+		item_tax.flags.ignore_mandatory = True		
+		item_tax.insert()
+		
+		title = f"{self.cd_nm} - {abbr}"
+
+		return title
 
 	def create_uom_entry(self):
 		# If no match found, create a new document

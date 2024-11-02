@@ -25,7 +25,6 @@ class CodeClass(Document):
 				})
 				code_doc.flags.ignore_mandatory = True
 				code_doc.save(ignore_permissions=True)
-				break
 
 
 			
