@@ -152,8 +152,20 @@ doc_events = {
     },
     "Sales Invoice": {
         "on_update": "smart_invoice_app.app.save_invoice_api",
-        "on_submit": "smart_invoice_app.app.save_invoice_api",
+        # "on_submit": "smart_invoice_app.app.save_invoice_api",
         "on_cancel": "smart_invoice_app.app.delete_qr_code_file"
+    },
+    "Purchase Invoice": {
+        "on_update": "smart_invoice_app.app.save_invoice_api",
+        # "on_submit": "smart_invoice_app.app.save_invoice_api",
+        "on_cancel": "smart_invoice_app.app.delete_qr_code_file"
+    },
+    "Delivery Note": {
+        # "on_submit": "smart_invoice_app.app.save_delivery_note_api",
+        # "on_update": "smart_invoice_app.app.smart_invoice_delivery"
+    },
+    "Stock Ledger Entry": {
+        "on_submit": "smart_invoice_app.app.update_stock_movement"
     },
     "POS Invoice": {
         "on_submit": "smart_invoice_app.app.save_invoice_api"
