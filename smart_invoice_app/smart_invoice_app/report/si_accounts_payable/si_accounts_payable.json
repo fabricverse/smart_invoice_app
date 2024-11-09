@@ -1,0 +1,37 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2024-11-04 15:43:26.124897",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 7,
+ "is_standard": "Yes",
+ "json": "{\"columns\":[{\"label\":\"Posting Date\",\"fieldname\":\"posting_date\",\"fieldtype\":\"Date\",\"options\":null,\"width\":90,\"id\":\"posting_date\",\"name\":\"Posting Date\",\"editable\":false},{\"label\":\"Party Type\",\"fieldname\":\"party_type\",\"fieldtype\":\"Data\",\"options\":null,\"width\":100,\"id\":\"party_type\",\"name\":\"Party Type\",\"editable\":false,\"compareValue\":null},{\"label\":\"Party\",\"fieldname\":\"party\",\"fieldtype\":\"Dynamic Link\",\"options\":\"party_type\",\"width\":180,\"id\":\"party\",\"name\":\"Party\",\"editable\":false,\"compareValue\":null},{\"label\":\"Payable Account\",\"fieldname\":\"party_account\",\"fieldtype\":\"Link\",\"options\":\"Account\",\"width\":180,\"id\":\"party_account\",\"name\":\"Payable Account\",\"editable\":false,\"compareValue\":null},{\"label\":\"Voucher Type\",\"fieldname\":\"voucher_type\",\"fieldtype\":\"Data\",\"options\":null,\"width\":120,\"id\":\"voucher_type\",\"name\":\"Voucher Type\",\"editable\":false,\"compareValue\":null},{\"label\":\"Voucher No\",\"fieldname\":\"voucher_no\",\"fieldtype\":\"Dynamic Link\",\"options\":\"voucher_type\",\"width\":180,\"id\":\"voucher_no\",\"name\":\"Voucher No\",\"editable\":false,\"compareValue\":null},{\"label\":\"Due Date\",\"fieldname\":\"due_date\",\"fieldtype\":\"Date\",\"options\":null,\"width\":90,\"id\":\"due_date\",\"name\":\"Due Date\",\"editable\":false},{\"label\":\"Invoiced Amount\",\"fieldname\":\"invoiced\",\"fieldtype\":\"Currency\",\"options\":\"currency\",\"width\":120,\"id\":\"invoiced\",\"name\":\"Invoiced Amount\",\"editable\":false,\"compareValue\":null},{\"label\":\"Paid Amount\",\"fieldname\":\"paid\",\"fieldtype\":\"Currency\",\"options\":\"currency\",\"width\":120,\"id\":\"paid\",\"name\":\"Paid Amount\",\"editable\":false,\"compareValue\":null},{\"label\":\"Debit Note\",\"fieldname\":\"credit_note\",\"fieldtype\":\"Currency\",\"options\":\"currency\",\"width\":120,\"id\":\"credit_note\",\"name\":\"Debit Note\",\"editable\":false,\"compareValue\":null},{\"label\":\"Outstanding Amount\",\"fieldname\":\"outstanding\",\"fieldtype\":\"Currency\",\"options\":\"currency\",\"width\":120,\"id\":\"outstanding\",\"name\":\"Outstanding Amount\",\"editable\":false,\"compareValue\":null},{\"label\":\"Age (Days)\",\"fieldname\":\"age\",\"fieldtype\":\"Int\",\"options\":null,\"width\":80,\"id\":\"age\",\"name\":\"Age (Days)\",\"editable\":false,\"compareValue\":null},{\"label\":\"0-30\",\"fieldname\":\"range1\",\"fieldtype\":\"Currency\",\"options\":\"currency\",\"width\":120,\"id\":\"range1\",\"name\":\"0-30\",\"editable\":false,\"compareValue\":null},{\"label\":\"31-60\",\"fieldname\":\"range2\",\"fieldtype\":\"Currency\",\"options\":\"currency\",\"width\":120,\"id\":\"range2\",\"name\":\"31-60\",\"editable\":false,\"compareValue\":null},{\"label\":\"61-90\",\"fieldname\":\"range3\",\"fieldtype\":\"Currency\",\"options\":\"currency\",\"width\":120,\"id\":\"range3\",\"name\":\"61-90\",\"editable\":false,\"compareValue\":null},{\"label\":\"91-120\",\"fieldname\":\"range4\",\"fieldtype\":\"Currency\",\"options\":\"currency\",\"width\":120,\"id\":\"range4\",\"name\":\"91-120\",\"editable\":false,\"compareValue\":null},{\"label\":\"121-Above\",\"fieldname\":\"range5\",\"fieldtype\":\"Currency\",\"options\":\"currency\",\"width\":120,\"id\":\"range5\",\"name\":\"121-Above\",\"editable\":false,\"compareValue\":null},{\"label\":\"Currency\",\"fieldname\":\"currency\",\"fieldtype\":\"Link\",\"options\":\"Currency\",\"width\":80,\"id\":\"currency\",\"name\":\"Currency\",\"editable\":false,\"compareValue\":null}],\"filters\":{\"company\":\"Crunk\",\"report_date\":\"2024-11-04\",\"ageing_based_on\":\"Due Date\",\"range1\":30,\"range2\":60,\"range3\":90,\"range4\":120,\"party\":[]}}",
+ "letterhead": null,
+ "modified": "2024-11-06 09:42:53.901493",
+ "modified_by": "Administrator",
+ "module": "Smart Invoice App",
+ "name": "SI Accounts Payable",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Purchase Invoice",
+ "reference_report": "Accounts Payable",
+ "report_name": "SI Accounts Payable",
+ "report_type": "Custom Report",
+ "roles": [
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "Purchase User"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Auditor"
+  }
+ ]
+}
