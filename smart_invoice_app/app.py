@@ -37,7 +37,7 @@ def get_settings():
     return frappe.get_cached_doc("Smart Invoice Settings", "Smart Invoice Settings")
 
 
-def create_qr_code(doc, invoice_url=None):
+def create_qr_code(doc, data):
     region = get_region(doc.company)
     if region not in ['Zambia']:
         return
@@ -51,24 +51,25 @@ def create_qr_code(doc, invoice_url=None):
                     label='Smart Invoice QR',
                     fieldtype='Attach Image',
                     read_only=1, no_copy=1, hidden=1,
-                    # allow_on_submit=1
+                    allow_on_submit=1
                 )
             ]
         })
 
     # Don't create QR Code if it already exists
-    qr_code = doc.get("invoice_qr_code")
-    if qr_code and frappe.db.exists({"doctype": "File", "file_url": qr_code}):
+    if doc.invoice_qr_code:
         return
+    
+    # qr_code = doc.get("invoice_qr_code")
+    # if qr_code and frappe.db.exists({"doctype": "File", "file_url": qr_code}):
+    #     return
 
     meta = frappe.get_meta(doc.doctype)
 
     if "invoice_qr_code" in [d.fieldname for d in meta.get_image_fields()]:
 
-        # invoice_url = "https://sandboxportal.zra.org.zm/common/link/ebm/receipt/indexEbmReceiptData?Data=2295829289000NHYNHV6VNX7UN77I"
-
         qr_image = io.BytesIO()
-        url = qr_create(invoice_url, error='L')
+        url = qr_create(data.get("qrCodeUrl"), error='L')
         url.png(qr_image, scale=2, quiet_zone=1)
 
         name = frappe.generate_hash(doc.name, 5)
@@ -89,6 +90,9 @@ def create_qr_code(doc, invoice_url=None):
 
         # assigning to document
         doc.db_set('invoice_qr_code', _file.file_url)
+        doc.db_set('custom_sdc_id', data.get("sdcId"))
+        doc.db_set('custom_receipt_no', data.get("rcptNo"))
+        
         doc.notify_update()
 
 
@@ -293,27 +297,631 @@ def get_branches(initialize=False): # review
 
     return validate_api_response(response)
 
+
 @frappe.whitelist()
 def save_invoice_api(invoice, method=None, branch=None):
     
     invoice_data = prepare_invoice_data(invoice, branch=branch)    
     endpoint = "/api/method/smart_invoice_api.api.save_sales"
 
-    response = api(endpoint, invoice_data)
-    data = response.get("response_data")
-    json_data = json.loads(data)
+    save_sales = api(endpoint, invoice_data)
+    save_sales_data = save_sales.get("response_data")
+    json_data = json.loads(save_sales_data)
 
     if json_data.get("resultCd") == "000":
-        create_qr_code(invoice, invoice_url=json_data.get("data").get("qrCodeUrl"))
+        msg = json_data.get("data")
+        create_qr_code(invoice, data=msg)
     else:
         frappe.msgprint(_(f"Message: {json_data.get('resultMsg')}"), title="Smart Invoice Failure")
 
-        frappe.msgprint(data)
-        frappe.msgprint(json.dumps(invoice_data))
+    stock_item_data = None
+    saved_stock_master = None
+    stock_master_data = None
+
+    # re-implemented on stock entry ledger submission hook
+    # if invoice.update_stock == 0: # TODO: update stock to 1
+    #     if stock_item_data := create_stock_item_data(invoice, invoice_data):
+    #         endpoint = "/api/method/smart_invoice_api.api.save_stock_items"
+    #         response = api(endpoint, stock_item_data)
+    #         saved_stock_items = json.loads(response.get("response_data"))
+    #         print("saved_stock_items", saved_stock_items)
+
+    #         if saved_stock_items.get("resultCd") == "000":
+    #             stock_master_data = create_stock_master_data(stock_item_data, invoice)
+
+    #             endpoint = "/api/method/smart_invoice_api.api.save_stock_master"
+    #             saved_stock_master = api(endpoint, stock_master_data)
+
+    #             if saved_stock_master.get("resultCd") != "000":
+    #                 frappe.msgprint(_(f"Message: {saved_stock_master.get('resultMsg')}"), title="Smart Invoice Failure")
+    #         else:
+    #             frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
+        
+            
+    frappe.msgprint(save_sales_data)
+    frappe.msgprint(json.dumps(invoice_data))
+
+@frappe.whitelist()
+def save_invoice_api(invoice, method=None, branch=None):
+    
+    invoice_data = prepare_invoice_data(invoice, branch=branch)    
+    endpoint = "/api/method/smart_invoice_api.api.save_sales"
+
+    save_sales = api(endpoint, invoice_data)
+    save_sales_data = save_sales.get("response_data")
+    json_data = json.loads(save_sales_data)
+
+    if json_data.get("resultCd") == "000":
+        msg = json_data.get("data")
+        create_qr_code(invoice, data=msg)
+    else:
+        frappe.msgprint(_(f"Message: {json_data.get('resultMsg')}"), title="Smart Invoice Failure")
+
+    stock_item_data = None
+    saved_stock_master = None
+    stock_master_data = None
+
+    # re-implemented on stock entry ledger submission hook
+    # if invoice.update_stock == 0: # TODO: update stock to 1
+    #     if stock_item_data := create_stock_item_data(invoice, invoice_data):
+    #         endpoint = "/api/method/smart_invoice_api.api.save_stock_items"
+    #         response = api(endpoint, stock_item_data)
+    #         saved_stock_items = json.loads(response.get("response_data"))
+    #         print("saved_stock_items", saved_stock_items)
+
+    #         if saved_stock_items.get("resultCd") == "000":
+    #             stock_master_data = create_stock_master_data(stock_item_data, invoice)
+
+    #             endpoint = "/api/method/smart_invoice_api.api.save_stock_master"
+    #             saved_stock_master = api(endpoint, stock_master_data)
+
+    #             if saved_stock_master.get("resultCd") != "000":
+    #                 frappe.msgprint(_(f"Message: {saved_stock_master.get('resultMsg')}"), title="Smart Invoice Failure")
+    #         else:
+    #             frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
+        
+            
+    frappe.msgprint(save_sales_data)
+    frappe.msgprint(json.dumps(invoice_data))
+    # frappe.msgprint(json.dumps(stock_item_data))
+    # frappe.msgprint(json.dumps(stock_master_data))
+    # frappe.msgprint(saved_stock_master.get("response_data")) # save_stock_items.get("response_data"))
+
+from erpnext.stock.stock_ledger import get_stock_balance
+def get_stock_master_data(stock_item_data, ledger):
+    # balance_qty = get_stock_balance(ledger.item_code, ledger.warehouse)
+    balance = frappe.get_cached_value("Bin", {"item_code": ledger.item_code, "warehouse": ledger.warehouse}, "actual_qty") or 0
+    operation = "add" if ledger.actual_qty > 0 else "sub"
+    if operation == "add":
+        balance += abs(ledger.actual_qty)   
+    else:
+        balance -= abs(ledger.actual_qty)
+
+    stock_master_data = {
+        "tpin": stock_item_data.get("tpin"),
+        "bhfId": stock_item_data.get("bhfId"),
+        "stockItemList": [{
+            "itemCd": ledger.item_code,
+            "rsdQty": balance
+        }]
+    }
+
+    stock_master_data.update(get_doc_user_data(ledger)) # add user info
+    return stock_master_data
+
+def update_stock_movement(ledger, method=None):
+    if stock_item_data := get_item_data(ledger):
+        endpoint = "/api/method/smart_invoice_api.api.save_stock_items"
+        response = api(endpoint, stock_item_data)
+        saved_stock_items = json.loads(response.get("response_data"))
+
+        if saved_stock_items.get("resultCd") == "000":
+            stock_master_data = get_stock_master_data(stock_item_data, ledger)
+
+            endpoint = "/api/method/smart_invoice_api.api.save_stock_master"
+            saved_stock_master = api(endpoint, stock_master_data)
+
+            frappe.msgprint("saved_stock_master " + saved_stock_master.get("response_data"))
+            saved_stock_master_ = json.loads(saved_stock_master.get("response_data"))
+
+            if saved_stock_master_.get("resultCd") != "000":
+                print("saved_stock_master", saved_stock_master)
+                frappe.msgprint(_(f"Message: {saved_stock_master_.get('resultMsg')}"), title="Smart Invoice Failure")
+        else:
+            frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
+    if stock_item_data:
+        frappe.msgprint("stock movement: " + json.dumps(stock_item_data) + "\n\n\n<hr/>master: " + json.dumps(stock_master_data))
+    # frappe.throw("stock movement: " + json.dumps(stock_item_data) + "\n\n\n<hr/>master: " + json.dumps(stock_master_data))
+
+
+
+def get_item_data(ledger):
+    # return {} # TODO: remove after testing
+    items = []
+    data={}
+
+    item_doc = frappe.get_cached_doc("Item", ledger.item_code)
+    unit_cd, pkg_unit = get_unit_code(item_doc, ledger.company)
+
+
+    posting_date_only = api_date_format(str(ledger.posting_date), date_only=True)
+    
+    company = frappe.get_cached_doc("Company", ledger.company)
+
+    stock_item_data = {
+        "tpin": company.tax_id,
+        "bhfId": "000", # TODO: get branch id
+        "sarNo": 1,
+        "orgSarNo": 0,
+        "regTyCd": "M",
+        "custTpin": None,
+        "custNm": None,
+        "custBhfId": "000",
+        "sarTyCd": "13", # TODO: if invoice.is_return == 0 else "12",
+        "ocrnDt": posting_date_only,
+        "totItemCnt": 1,
+        "totTaxblAmt": 0,
+        "totTaxAmt": 0,
+        "totAmt": 0,
+        "remark": None,
+        "itemList": []
+    }
+    
+    _price = ledger.incoming_rate or ledger.outgoing_rate or ledger.valuation_rate
+    print("ledger", ledger.item_code, ledger.actual_qty, _price)
+    if not _price:
+        from frappe.utils import get_link_to_form
+        
+        form_link = get_link_to_form("Item", ledger.item_code)
+
+        message = _(
+            "Valuation Rate for the Item {0}, is required to do accounting entries for {1} {2}."
+        ).format(form_link, ledger.voucher_type, ledger.voucher_no)
+        message += "<br><br>"
+        
+        solutions = (
+            _("You can Submit this entry")
+            + " {} ".format(frappe.bold(_("after")))
+            + _("performing either one below:")
+        )
+        sub_solutions = "<ul><li>" + _("Create an incoming stock transaction for the Item.") + "</li>"
+        sub_solutions += "<li>" + _("Set a Valuation Rate for {0}.").format(form_link) + "</li></ul>"
+        msg = message + solutions + sub_solutions + "</li>"
+
+        frappe.throw(msg=msg, title=_("Valuation Rate Missing"))
+        
+    qty = flt(abs(ledger.actual_qty), 3)
+    price = flt(abs(_price), 3)
+    amt = flt(qty * price, 3)
+
+
+    item_data = {
+        "itemSeq": 1,
+        "itemCd": ledger.item_code,
+        "itemClsCd": item_doc.custom_item_cls_cd or company.custom_default_item_class,
+        "itemNm": ledger.item_code,
+        "bcd": None,
+        "pkgUnitCd": pkg_unit or "PACK",
+        "pkg": qty,
+        "qtyUnitCd": unit_cd or "U",
+        "qty": qty,
+        "prc": price,
+        "splyAmt": amt,
+        "dcRt": 0.0,
+        "dcAmt": 0.0,
+        "isrccCd": None,
+        "isrccNm": None,
+        "rrp": price,
+        "isrcRt": 0.0,
+        "isrcAmt": 0.0,
+        "totDcAmt": 0.0,
+        "totAmt": amt,
+        "vatCatCd": "A",
+        "taxblAmt": 0.0,
+        "taxAmt": 0.0
+    }
+
+    # set tax defaults
+    code_doc = None
+
+    template = None
+    tax_code = None
+    tax_rate = 0
+
+    # TODO: cancelling transactions needs an adjustment entry
+    
+    # get tax code from purchase or sales invoice item if its one of these docs
+    if ledger.voucher_type in ["Purchase Invoice", "Sales Invoice", "Delivery Note", "Purchase Receipt"]:
+        doc = None
+        transaction_code = "13"
+        """
+        01 Import          Incoming - Import
+        02 Purchase        Incoming - Purchase
+        03 Return          Incoming - Return
+        04 Stock Movement  Incoming - Stock Movement
+        05 Processing      Incoming - Processing
+        06 Adjustment      Incoming - Adjustment
+        11 Sale            Outgoing - Sale
+        12 Return          Outgoing - Return
+        13 Stock Movement  Outgoing - Stock Movement
+        14 Processing      Outgoing - Processing
+        15 Discarding      Outgoing - Discarding
+        16 Adjustment      Outgoing - Adjustment
+        """
+
+        if ledger.voucher_type in ["Delivery Note", "Purchase Receipt"]:
+            if ledger.voucher_type == "Delivery Note":
+                dn = frappe.get_cached_doc("Delivery Note", ledger.voucher_no)
+                for item in dn.items:
+                    if item.item_code == ledger.item_code:
+                        tax_template = item.item_tax_template
+                        if item.against_sales_invoice:
+                            doc = frappe.get_cached_doc("Sales Invoice", item.against_sales_invoice)
+                            break
+                
+                if dn.is_return == 1:
+                    transaction_code = "12"
+                else:
+                    transaction_code = "13"
+
+                # if cancelled, use opposite transaction code
+                if dn.docstatus == 2:
+                    if dn.is_return == 1:
+                        transaction_code = "13"
+                    else:
+                        transaction_code = "12"
+            else:
+                pr = frappe.get_cached_doc("Purchase Receipt", ledger.voucher_no)
+                for item in pr.items:
+                    if item.item_code == ledger.item_code:
+                        tax_template = item.item_tax_template
+                        if item.purchase_invoice:
+                            doc = frappe.get_cached_doc("Purchase Invoice", item.purchase_invoice)
+                            break
+                    
+                if pr.is_return == 1:
+                    transaction_code = "03"
+                else:
+                    transaction_code = "04"
+
+                # if cancelled, use opposite transaction code
+                if pr.docstatus == 2:
+                    if pr.is_return == 1:
+                        transaction_code = "04"
+                    else:
+                        transaction_code = "03"
+            
+        else:
+            doc = frappe.get_cached_doc(ledger.voucher_type, ledger.voucher_no)
+            
+            if doc.doctype == "Sales Invoice":                
+                if doc.is_return == 1:
+                    transaction_code = "12"
+                else:
+                    transaction_code = "13"     
+
+                # if cancelled, use opposite transaction code
+                if doc.docstatus == 2:
+                    if doc.is_return == 1:
+                        transaction_code = "13"
+                    else:
+                        transaction_code = "12"
+            elif doc.doctype == "Purchase Invoice":
+                if doc.is_return == 1:
+                    transaction_code = "03"
+                else:
+                    transaction_code = "04"  
+
+                # if cancelled, use opposite transaction code
+                if doc.docstatus == 2:
+                    if doc.is_return == 1:
+                        transaction_code = "04"
+                    else:
+                        transaction_code = "03"
+
+        if doc or tax_template:
+            if not doc:
+                doc = frappe.get_cached_doc("Item Tax Template", tax_template)
+
+                template = tax_template
+                tax_code = doc.custom_code.title()
+                tax_rate = flt(doc.taxes[0].tax_rate, 3)
+
+            else:
+                for item in doc.items:
+                    if item.item_code == ledger.item_code:
+                        tax_code = item.custom_tax_code.title()
+
+                        # get template from doc item tax template
+                        template = item.item_tax_template
+                        tax_code = item.custom_tax_code.title()
+                        tax_rate = flt(item.custom_tax_rate, 3)
+        else:
+            template = item_doc.taxes[0].item_tax_template
+            tax_template = frappe.get_cached_doc("Item Tax Template", template)
+            tax_code = tax_template.custom_code.title()
+            tax_rate = flt(tax_template.taxes[0].tax_rate, 3)
+    else:
+        # get template from item taxes if not in transaction items
+        template = item_doc.taxes[0].item_tax_template
+        tax_template = frappe.get_cached_doc("Item Tax Template", template)
+        tax_code = tax_template.custom_code.title()
+        tax_rate = flt(tax_template.taxes[0].tax_rate, 3)
+        
+        if ledger.voucher_type == "Stock Reconciliation":
+            transaction_code = "06"
+        elif ledger.voucher_type == "Stock Entry":
+            se = frappe.get_cached_doc("Stock Entry", ledger.voucher_no)
+            if not ledger.dependant_sle_voucher_detail_no:
+                return None
+            
+            if se.stock_entry_type == "Material Issue":
+                transaction_code = "13"
+                
+                # if cancelled, use opposite transaction code
+                if se.docstatus == 2:
+                    transaction_code = "04"
+            elif se.stock_entry_type == "Material Receipt":
+                transaction_code = "04"
+                
+                # if cancelled, use opposite transaction code
+                if se.docstatus == 2:
+                    transaction_code = "13"
+
+            elif se.stock_entry_type in ["Manufacture", "Repack", "Material Transfer for Manufacture", "Send to Subcontractor"]:
+                if ledger.actual_qty > 0:
+                    transaction_code = "05"
+                else:
+                    transaction_code = "14"
+                
+                # if cancelled, use opposite transaction code
+                if se.docstatus == 2:
+                    transaction_code = "14"
+                else:
+                    transaction_code = "05"
+            else:
+                return None
+
+    # do industry tax type helps choose the correct calculation
+    # if not template:
+    #     templates = {
+    #         f"TOT - {company.abbr}": "TOT",
+    #         f"Standard Rated(16%) - {company.abbr}": "VAT",
+    #         f"Minimum Taxable Value (MTV-16%) - {company.abbr}": "VAT",
+    #         f"Reverse VAT - {company.abbr}": "VAT",
+    #         f"Disbursement - {company.abbr}": "Zero Rated (VAT)",
+    #         f"Exempt - {company.abbr}": "Zero Rated (VAT)",
+    #         f"Zero-rated by nature - {company.abbr}": "Zero Rated (VAT)",
+    #         f"Zero-rated LPO - {company.abbr}": "Zero Rated (VAT)",
+    #         f"Exports(0%) - {company.abbr}": "Zero Rated (VAT)",
+    #         f"Excise Electricity - {company.abbr}": "Excise Duty",
+    #         f"Excise on Coal - {company.abbr}": "Excise Duty",
+    #         f"Tourism Levy - {company.abbr}": "Tourism Levy",
+    #         f"Insurance Premium Levy - {company.abbr}": "Insurance Premium Levy",
+    #         f"Re-insurance - {company.abbr}": "Insurance Premium Levy"
+    #     }
+
+    if not template:
+        # use company default company if not set in transation or item
+        tax_code = company.custom_tax_code
+        if not tax_code:
+            frappe.throw(f"Set <strong>Tax Bracket</strong> in company <a href='{company.get_url()}'>{frappe.bold(ledger.company)}</a>")
+
+            code_doc = frappe.get_cached_value("Code", {"cd": tax_code}, ["name", "cd_nm", "user_dfn_cd1"], as_dict=True)
+            tax_rate = flt(code_doc.user_dfn_cd1, 2)
+            template = f"{code_doc.cd_nm} - {company.abbr}"
+
+    # Calculate taxes for the item
+    if template in [
+        f"Excise Electricity - {company.abbr}",
+        f"Excise on Coal - {company.abbr}",
+        f"Tourism Levy - {company.abbr}",
+        f"Insurance Premium Levy - {company.abbr}",
+        f"Re-insurance - {company.abbr}"
+    ]:
+        tax_types = {
+            f"Excise Electricity - {company.abbr}": "excise",
+            f"Excise on Coal - {company.abbr}": "excise",
+            f"Tourism Levy - {company.abbr}": "tl",
+            f"Insurance Premium Levy - {company.abbr}": "ipl",
+            f"Re-insurance - {company.abbr}": "ipl"
+        }
+
+        amt = flt(abs(amt), 4)
+        rate = 0.0
+        taxable_amount = 0.0
+        tax_amt = 0.0
+        
+        if tax_rate != 0:
+            rate = (flt(tax_rate/100) + 1)
+            taxable_amount = flt(amt/rate, 4)
+            tax_amt = flt(amt - taxable_amount, 4)
+
+        tax_type = tax_types[template]
+
+        if template in [
+            f"Tourism Levy - {company.abbr}",
+            f"Insurance Premium Levy - {company.abbr}",
+            f"Re-insurance - {company.abbr}"
+        ]:
+            if tax_code == "Ipl2":
+                taxable_amount = amt
+
+            item_data.update({
+                f"{tax_type}CatCd": tax_code.upper(),
+                f"{tax_type}TaxblAmt": taxable_amount,
+                f"{tax_type}Amt": tax_amt
+            })
+        elif template in [
+            f"Excise Electricity - {company.abbr}",
+            f"Excise on Coal - {company.abbr}"
+        ]:
+            item_data.update({
+                f"{tax_type}TxCatCd": tax_code.upper(),
+                f"{tax_type}TaxblAmt": taxable_amount,
+                f"{tax_type}TxAmt": tax_amt
+            })
+
+        inv_taxable_amount = taxable_amount
+        inv_tax_amount = tax_amt
+
+        tot_taxbl_amt = taxable_amount
+        tot_tax_amt = tax_amt
+        inv_tot_amt = amt
+
+        item_data.update({
+            f"taxblAmt{tax_code}": flt(inv_taxable_amount, 4),
+            f"taxAmt{tax_code}": flt(inv_tax_amount, 4),
+
+            f"taxRt{tax_code}": tax_rate,
+
+            "totTaxblAmt": flt(tot_taxbl_amt, 4),
+            "totTaxAmt": flt(tot_tax_amt, 4),
+            "totAmt": flt(inv_tot_amt, 4)
+        })
+    # elif item_doc.custom_industry_tax_type == "Rental Tax":
+    #     not_supported()
+    # elif item_doc.custom_industry_tax_type == "Service Tax":
+    #     not_supported()
+    else:
+        tax_rate = (flt(tax_rate, 4)/100) + 1 if tax_rate else 0.0
+        amt = flt(abs(amt), 4)
+        
+        taxable_amount = flt((amt/tax_rate) if tax_rate != 0 else 0, 4)
+        tax_amt = flt(amt - taxable_amount, 4)
+        
+        item_taxes = {
+            "totAmt": amt,
+            "vatTaxblAmt": taxable_amount,
+            "vatAmt": tax_amt
+        }
+        
+        if tax_code in ["A", "B", "C1", "C2", "C3", "D", "E", "Rvat"]:    
+            item_taxes.update({
+                "vatCatCd": tax_code.upper(),
+            })
+        elif tax_code == "Tot":
+            item_taxes.update({
+                "vatCatCd": tax_code.upper(),
+                "taxblAmt": amt,
+                "taxAmt": 0
+            })
+
+        item_data.update(item_taxes)
+        
+        # update each tax item being calculated
+        tax_amount = item_taxes.get("vatAmt", 0)
+        taxable_amount = item_taxes.get("vatTaxblAmt", 0)
+        total_taxable_amount = item_taxes.get("vatTaxblAmt", 0)
+        total_tax_amount = item_taxes.get("vatAmt", 0)
+        total_amount = item_taxes.get("totAmt", 0)
+
+        stock_item_data.update({
+            f"taxAmt{tax_code}": flt(tax_amount, 4),
+            f"taxblAmt{tax_code}": flt(taxable_amount, 4),
+            "taxblAmtTot": 0,
+            "taxAmtTot": 0,
+            "totTaxblAmt": flt(total_taxable_amount, 4),
+            "totTaxAmt": flt(total_tax_amount, 4),
+            "totAmt": flt(total_amount, 4)
+        })
+    stock_item_data.update({
+        "sarTyCd": transaction_code,
+        "itemList": [item_data]
+    })
+    stock_item_data.update(get_doc_user_data(ledger)) # add user info
+
+    return stock_item_data
+
+# end of get_item_data
+
+
+def create_stock_master_data(stock_items, invoice):
+
+    stock_master_data = {
+        "tpin": stock_items.get("tpin"),
+        "bhfId": stock_items.get("bhfId"),
+        "stockItemList": []
+    }
+
+    item_balances = get_item_balances()
+    new_items = []
+    print("item_balances", item_balances)
+
+    if stock_items.get("itemList"):
+        for item in stock_items.get("itemList"):
+            item_code = item.get("itemCd")
+            item_bal = item_balances.get(item_code, 0)
+            print("item_bal", item_code, item_bal)
+
+
+            # item_qty = flt(item.get("qty"))
+            # if invoice.is_return == 1:
+
+            balance = 0
+            if item_bal > 0:
+                balance = item_bal
+            
+            new_items.append({
+                "itemCd": item_code,
+                "rsdQty": balance
+            })
+
+    stock_master_data.update({"stockItemList": new_items})
+    stock_master_data.update(get_doc_user_data(invoice)) # add user info
+    return stock_master_data
+
+def get_item_balances():
+    item_balances = frappe.get_all("Bin", fields=["item_code", "actual_qty"], filters={"actual_qty": (">", 0)}, limit=0)
+    return {d.item_code: flt(d.actual_qty) for d in item_balances}
+
+
+def create_stock_item_data(invoice, invoice_data):
+    posting_date_only = api_date_format(invoice.posting_date, date_only=True)
+
+    stock_item_data = {
+        "tpin": invoice_data.get("tpin"),
+        "bhfId": invoice_data.get("bhfId"),
+        "sarNo": invoice.custom_receipt_no, # TODO: get sar no from invoice
+        "orgSarNo": 0,
+        "regTyCd": "M",
+        "custTpin": invoice_data.get("custTpin"),
+        "custNm": invoice_data.get("custNm"),
+        "custBhfId": invoice_data.get("bhfId"),
+        "sarTyCd": "13" if invoice.is_return == 0 else "12",
+        "ocrnDt": posting_date_only,
+        "totItemCnt": len(invoice.items),
+        "totTaxblAmt": invoice_data.get("totTaxblAmt"),
+        "totTaxAmt": invoice_data.get("totTaxAmt"),
+        "totAmt": invoice_data.get("totAmt"),
+        "remark": invoice.remarks,
+        "itemList": []
+    }
+    items = invoice_data.get("itemList")
+
+    if items:
+        for item in items:
+            tax_code = item.get("vatCatCd", "A") # ISSUE: only VAT codes are supported
+            taxable = item.get("vatTaxblAmt", 0.0)
+            tax = item.get("vatAmt", 0.0)
+
+            if tax_code in ["A", "B", "C1", "C2", "C3", "D", "E", "Rvat", "TOT"]:
+                taxable = item.get("vatTaxblAmt", 0.0)
+                tax = item.get("vatAmt", 0.0)
+
+            item.update({
+                    "vatCatCd": tax_code,
+                    "taxblAmt": taxable,
+                    "taxAmt": tax
+            })
+
+    stock_item_data.update({"itemList": items})
+    stock_item_data.update(get_doc_user_data(invoice)) # add user info
+    return stock_item_data
 
 
 def get_payment_code(doc):
-    if not doc.payments:
+    if not doc.payments or doc.is_pos == 0:
         return "02"
     payment_amounts = [(d.name, d.amount, d.custom_payment_cd, d.mode_of_payment) for d in doc.payments if d.amount > 0]
     sorted_payment_amounts = sorted(payment_amounts, key=lambda x: x[1], reverse=True)
@@ -440,15 +1048,11 @@ def set_item_taxes(invoice, auto_tax=None):
     """sets default Item Tax Template for invoice items if nothing is set
         called on save
     """
-    """sets default item taxe for invoice items if nothing is set
-        called on save
-    """
 
     if isinstance(invoice, str):
         invoice = frappe.get_doc("Sales Invoice", invoice)
-    else:
-        auto_tax = invoice.custom_automatically_set_item_taxes
-
+    
+    auto_tax = invoice.custom_automatically_set_item_taxes
     if auto_tax == 0:
         return
         
@@ -475,7 +1079,6 @@ def not_supported():
     frappe.throw("Smart Invoice does not support this feature/tax type yet. Please contact support.")
 
 def prepare_invoice_data(invoice, branch=None):
-        
     if isinstance(invoice, str):
         invoice = frappe.get_cached_doc("Sales Invoice", invoice)
     
@@ -489,6 +1092,7 @@ def prepare_invoice_data(invoice, branch=None):
         branches = get_user_branches()
         branch = next((b for b in branches if b['custom_company'] == invoice.company), None)
         if not branch and not frappe.flags.batch:
+            # TODO: use default branch from company if its a sync_job
             frappe.throw("No branch found for the current user and company")
     
     posting_date = invoice.posting_date
@@ -496,9 +1100,11 @@ def prepare_invoice_data(invoice, branch=None):
 
     # Group variables that depend on is_return
     if invoice.is_return == 1:
+        original_invoice = frappe.get_cached_doc("Sales Invoice", invoice.return_against)
         rcpt_ty_cd = "R"
         sales_stts_cd = "05"
-        org_invc_no = invoice.return_against
+        org_invc_no = original_invoice.custom_receipt_no
+        org_sdc_id = original_invoice.custom_sdc_id
         rfd_rsn_cd = invoice.custom_refund_reason_code
         rfd_dt = None
         if rfd_rsn_cd:
@@ -507,6 +1113,7 @@ def prepare_invoice_data(invoice, branch=None):
     else:
         rcpt_ty_cd = "S"
         sales_stts_cd = "02"
+        org_sdc_id = None
         org_invc_no = 0
         rfd_dt = None
         rfd_rsn_cd = ""
@@ -517,12 +1124,12 @@ def prepare_invoice_data(invoice, branch=None):
     posting_date_only = api_date_format(posting_date, date_only=True)
 
     country_code = get_country_code(invoice)
-    invoice_name = api_date_format(f"{posting_date} {posting_time}")+"1"
-    print("invoice_name", invoice_name)
+    invoice_name = api_date_format(f"{frappe.utils.get_datetime_str(frappe.utils.get_datetime())}")
     
     data = {
         "tpin": branch['custom_tpin'],
-        "bhfId": branch['custom_bhf_id'],
+        "bhfId": branch['custom_bhf_id'],        
+        "orgSdcId": org_sdc_id,
         "orgInvcNo": org_invc_no,
         "cisInvcNo": invoice_name,# invoice.name, # 
         "custTpin": customer.tax_id,
@@ -605,7 +1212,17 @@ def prepare_invoice_data(invoice, branch=None):
         "itemList": []
     }
     items = []
-    
+    data, items = calculate_item_taxes(company, invoice, data, items)
+
+    data.update({"itemList": items})
+    data.update(get_doc_user_data(invoice)) # add user info
+
+    return data
+
+
+def calculate_item_taxes(company, invoice, data, items):
+    items = []
+
     for idx, item in enumerate(invoice.items, start=1):
 
         item_doc = frappe.get_cached_doc("Item", item.item_code)
@@ -618,19 +1235,20 @@ def prepare_invoice_data(invoice, branch=None):
             "itemNm": item.item_code,
             "bcd": None,
             "pkgUnitCd": pkg_unit or "PACK",
-            "pkg": flt(item.qty, 3),
+            "pkg": flt(abs(item.qty), 3),
             "qtyUnitCd": unit_cd or "U",
-            "qty": flt(item.qty, 3),
+            "qty": flt(abs(item.qty), 3),
             "prc": flt(item.rate, 3),
-            "splyAmt": flt(item.amount, 3),
-            "dcRt": flt(item.discount_percentage, 3) if item.discount_percentage else 0.0,
-            "dcAmt": flt(item.discount_amount, 3) if item.discount_amount else 0.0,
+            "splyAmt": flt(abs(item.amount), 3),
+            "dcRt": 0.0, # flt(item.discount_percentage, 3) if item.discount_percentage else 0.0,
+            "dcAmt": 0.0, # flt(item.discount_amount, 3) if item.discount_amount else 0.0,
             "isrccCd": None,
             "isrccNm": None,
             "rrp": flt(item.rate, 3),
             "isrcRt": 0.0,
             "isrcAmt": 0.0,
-            "totAmt": flt(item.amount, 3),
+            "totDcAmt": 0.0,
+            "totAmt": flt(abs(item.amount), 3),
             "vatTaxblAmt": 0.0,
             "vatAmt": 0.0
         }
@@ -689,7 +1307,7 @@ def prepare_invoice_data(invoice, branch=None):
 
             tax_rate = flt(item.custom_tax_rate)
 
-            amt = flt(item.amount, 4)
+            amt = flt(abs(item.amount), 4)
             rate = 0.0
             taxable_amount = 0.0
             tax_amt = 0.0
@@ -746,7 +1364,30 @@ def prepare_invoice_data(invoice, branch=None):
         elif item_doc.custom_industry_tax_type == "Service Tax":
             not_supported()
         else:
-            item_taxes = get_item_taxes(item, tax_code)
+            item_taxes = {}
+            tax_rate = (flt(item.custom_tax_rate, 4)/100) + 1 if item.custom_tax_rate else 0.0
+            amt = flt(abs(item.amount), 4)
+            
+            taxable_amount = flt((amt/tax_rate) if tax_rate != 0 else 0, 4)
+            tax_amt = flt(amt - taxable_amount, 4)
+            
+            item_taxes = {
+                "totAmt": amt,
+                "vatTaxblAmt": taxable_amount,
+                "vatAmt": tax_amt
+            }
+            
+            if tax_code in ["A", "B", "C1", "C2", "C3", "D", "E", "Rvat"]:    
+                item_taxes.update({
+                    "vatCatCd": tax_code.upper(),
+                })
+            elif tax_code == "Tot":
+                item_taxes.update({
+                    "taxCatCd": tax_code.upper(),
+                    "vatTaxblAmt": amt,
+                    "vatAmt": 0
+                })
+
             item_data.update(item_taxes)
             
             # update each tax item being calculated
@@ -771,11 +1412,7 @@ def prepare_invoice_data(invoice, branch=None):
                 "totAmt": flt(total_amount, 4)
             })
         items.append(item_data)
-
-    data.update({"itemList": items})
-    data.update(get_doc_user_data(invoice)) # add user info
-
-    return data
+    return data, items
 
 
 def get_item_taxes(item, tax_code):
@@ -798,7 +1435,7 @@ def get_item_taxes(item, tax_code):
     """
 
     tax_rate = (flt(item.custom_tax_rate, 4)/100) + 1 if item.custom_tax_rate else 0.0 # v2: use system default
-    amt = flt(item.amount, 4)
+    amt = flt(abs(item.amount), 4)
     
     taxable_amount = flt((amt/tax_rate) if tax_rate != 0 else 0, 4)
     tax_amt = flt(amt - taxable_amount, 4)
