@@ -1,0 +1,331 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2024-11-28 12:11:47.258696",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "agent_name",
+  "supplier",
+  "column_break_puhv",
+  "currency",
+  "exchange_rate",
+  "section_break_dbso",
+  "column_break_jhnv",
+  "item_name",
+  "column_break_zniu",
+  "qty",
+  "column_break_uijg",
+  "qty_unit",
+  "column_break_yywt",
+  "amount",
+  "section_break_xmbx",
+  "column_break_dkpi",
+  "number_of_packages",
+  "column_break_oajh",
+  "package_unit",
+  "column_break_yaki",
+  "net_weight",
+  "column_break_dpbs",
+  "total_weight",
+  "section_break_xkdx",
+  "column_break_wviq",
+  "declaration_date",
+  "column_break_mpkl",
+  "declaration_number",
+  "declaration_reference",
+  "column_break_msmi",
+  "task_code",
+  "column_break_pzum",
+  "hs_code",
+  "section_break_scfr",
+  "column_break_xeyw",
+  "country_of_origin",
+  "column_break_ajab",
+  "export_code",
+  "column_break_hmke",
+  "status_code",
+  "column_break_pjjg",
+  "item_sequence",
+  "section_break_uqlv",
+  "column_break_rmct",
+  "item_class",
+  "purchase_receipt",
+  "purchase_invoice",
+  "column_break_vool",
+  "accepted"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_dbso",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Read Only",
+   "in_standard_filter": 1,
+   "label": "Supplier"
+  },
+  {
+   "fieldname": "agent_name",
+   "fieldtype": "Read Only",
+   "in_list_view": 1,
+   "label": "Agent Name"
+  },
+  {
+   "fieldname": "column_break_jhnv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Read Only",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Item Name"
+  },
+  {
+   "fieldname": "task_code",
+   "fieldtype": "Read Only",
+   "label": "Task Code"
+  },
+  {
+   "fieldname": "declaration_date",
+   "fieldtype": "Read Only",
+   "label": "Declaration Date"
+  },
+  {
+   "fieldname": "column_break_dkpi",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 1,
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "qty_unit",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Qty Unit",
+   "read_only": 1
+  },
+  {
+   "fieldname": "number_of_packages",
+   "fieldtype": "Float",
+   "label": "Number of Packages",
+   "read_only": 1
+  },
+  {
+   "fieldname": "package_unit",
+   "fieldtype": "Data",
+   "label": "Package Unit",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_weight",
+   "fieldtype": "Float",
+   "label": "Total Weight",
+   "read_only": 1
+  },
+  {
+   "fieldname": "net_weight",
+   "fieldtype": "Float",
+   "label": "Net Weight",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_xkdx",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "declaration_number",
+   "fieldtype": "Read Only",
+   "label": "Declaration Number"
+  },
+  {
+   "fieldname": "section_break_scfr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "hs_code",
+   "fieldtype": "Read Only",
+   "label": "HS Code"
+  },
+  {
+   "description": "Export Code from country of origin",
+   "fieldname": "export_code",
+   "fieldtype": "Read Only",
+   "label": "Export Code"
+  },
+  {
+   "fieldname": "country_of_origin",
+   "fieldtype": "Read Only",
+   "label": "Country of Origin"
+  },
+  {
+   "fieldname": "column_break_zniu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_xmbx",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_yaki",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_wviq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_ajab",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_xeyw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 1,
+   "fieldname": "accepted",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Accepted",
+   "options": "\nYes\nNo",
+   "read_only_depends_on": "eval: doc.status_code !== \"New\" || !doc.status_code"
+  },
+  {
+   "fieldname": "column_break_hmke",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_uijg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_oajh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_dpbs",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_mpkl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_pzum",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_yywt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "exchange_rate",
+   "fieldtype": "Float",
+   "label": "Exchange Rate",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "status_code",
+   "fieldtype": "Read Only",
+   "in_list_view": 1,
+   "label": "Status"
+  },
+  {
+   "fieldname": "column_break_pjjg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_msmi",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_puhv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "declaration_reference",
+   "fieldtype": "Read Only",
+   "label": "Declaration Reference"
+  },
+  {
+   "fieldname": "section_break_uqlv",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_rmct",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_vool",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "item_sequence",
+   "fieldtype": "Read Only",
+   "label": "Item Sequence"
+  },
+  {
+   "fieldname": "item_class",
+   "fieldtype": "Link",
+   "label": "Item Class",
+   "options": "Item Class",
+   "reqd": 1
+  },
+  {
+   "depends_on": "purchase_receipt",
+   "fieldname": "purchase_receipt",
+   "fieldtype": "Link",
+   "label": "Reference Document",
+   "options": "Purchase Receipt",
+   "read_only": 1
+  },
+  {
+   "depends_on": "purchase_invoice",
+   "fieldname": "purchase_invoice",
+   "fieldtype": "Link",
+   "label": "Reference Document",
+   "options": "Purchase Invoice",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2024-12-02 13:30:51.877109",
+ "modified_by": "Administrator",
+ "module": "Smart Invoice App",
+ "name": "ASYCUDA Items",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
