@@ -156,9 +156,8 @@ doc_events = {
         "on_cancel": "smart_invoice_app.app.delete_qr_code_file"
     },
     "Purchase Invoice": {
-        "on_update": "smart_invoice_app.app.save_invoice_api",
-        # "on_submit": "smart_invoice_app.app.save_invoice_api",
-        "on_cancel": "smart_invoice_app.app.delete_qr_code_file"
+        # "on_update": "smart_invoice_app.app.save_purchase_invoice_api",
+        "on_submit": "smart_invoice_app.app.save_purchase_invoice_api",
     },
     "Stock Ledger Entry": {
         "on_submit": "smart_invoice_app.app.update_stock_movement"

@@ -1,0 +1,141 @@
+{
+ "actions": [],
+ "autoname": "format:ASYCUDA-{YY}{MM}-{###}",
+ "creation": "2024-11-28 12:06:20.920192",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_dbso",
+  "items",
+  "section_break_updw",
+  "total_qty",
+  "column_break_padk",
+  "section_break_uvdg",
+  "amended_from",
+  "column_break_jpdv"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_dbso",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "ASYCUDA Verification",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "ASYCUDA Items"
+  },
+  {
+   "fieldname": "section_break_updw",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_padk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_uvdg",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_jpdv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_qty",
+   "fieldtype": "Read Only",
+   "in_list_view": 1,
+   "label": "Total Qty"
+  }
+ ],
+ "in_create": 1,
+ "links": [],
+ "modified": "2024-11-30 20:16:41.916877",
+ "modified_by": "Administrator",
+ "module": "Smart Invoice App",
+ "name": "ASYCUDA Verification",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase Master Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
