@@ -112,6 +112,43 @@ def delete_qr_code_file(doc, method=None):
 def delete_vat_settings_for_company(doc, method=None):
     pass
 
+
+@frappe.whitelist()
+def save_item_composition(bom, method=None, branch=None):
+    if not bom:
+        return
+
+    if type(bom) == str:
+        bom = frappe.get_cached_doc("BOM", bom)
+
+    item_data = []
+    for bom_item in bom.items:
+        item = {
+            "bhfId": "000",
+            "itemCd": bom.item,
+            "cpstItemCd": bom_item.item_code,
+            "cpstQty": float(bom_item.stock_qty)
+        }
+        item.update(get_doc_user_data(bom))
+        response = api("/api/method/smart_invoice_api.api.save_item_composition", item)
+        
+        item_data.append(validate_api_response(response))
+    if len(bom.items) == len(item_data):
+        statuses = set(item.get('resultCd') for item in item_data)
+
+        if len(statuses) == 1 and list(statuses)[0]=="000":
+            frappe.msgprint("Smart Invoice: Updated", indicator="green", alert=True)
+        elif "000" in statuses:
+            frappe.msgprint("Smart Invoice: Partial update", indicator="yellow", alert=True)
+        else:
+            frappe.msgprint("Smart Invoice: Update failure", indicator="red", alert=True)
+
+
+        
+        
+    return item_data
+
+
 def error_handler(error):
     """
     Generic error handler function.

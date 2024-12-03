@@ -150,6 +150,9 @@ doc_events = {
         "after_insert": "smart_invoice_app.app.save_item_api",
         "on_update": "smart_invoice_app.app.update_item_api"
     },
+    "BOM": {
+        "on_submit": "smart_invoice_app.app.save_item_composition"
+    },
     "Sales Invoice": {
         "on_update": "smart_invoice_app.app.save_invoice_api",
         # "on_submit": "smart_invoice_app.app.save_invoice_api",
