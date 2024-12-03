@@ -1191,33 +1191,27 @@ def get_stock_master_data(stock_item_data, ledger):
     return stock_master_data
 
 def update_stock_movement(ledger, method=None):
+    stock_master_data = None
     if stock_item_data := get_item_data(ledger):
         endpoint = "/api/method/smart_invoice_api.api.save_stock_items"
         response = api(endpoint, stock_item_data)
         saved_stock_items = json.loads(response.get("response_data"))
 
-        if saved_stock_items.get("resultCd") == "000":
+        if saved_stock_items.get("resultCd") == "000":            
             stock_master_data = get_stock_master_data(stock_item_data, ledger)
 
             endpoint = "/api/method/smart_invoice_api.api.save_stock_master"
             saved_stock_master = api(endpoint, stock_master_data)
 
-            frappe.msgprint("saved_stock_master " + saved_stock_master.get("response_data"))
-            saved_stock_master_ = json.loads(saved_stock_master.get("response_data"))
+            saved_stock_master_response = json.loads(saved_stock_master.get("response_data"))
 
-            if saved_stock_master_.get("resultCd") != "000":
-                print("saved_stock_master", saved_stock_master)
-                frappe.msgprint(_(f"Message: {saved_stock_master_.get('resultMsg')}"), title="Smart Invoice Failure")
+            if not saved_stock_master_response or saved_stock_master_response.get("resultCd") != "000":
+                frappe.msgprint(_(f"Message: {saved_stock_master_response.get('resultMsg')}"), title="Smart Invoice Failure")
         else:
             frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
-    if stock_item_data:
-        frappe.msgprint("stock movement: " + json.dumps(stock_item_data) + "\n\n\n<hr/>master: " + json.dumps(stock_master_data))
-    # frappe.throw("stock movement: " + json.dumps(stock_item_data) + "\n\n\n<hr/>master: " + json.dumps(stock_master_data))
-
 
 
 def get_item_data(ledger):
-    # return {} # TODO: remove after testing
     items = []
     data={}
 
@@ -1249,7 +1243,11 @@ def get_item_data(ledger):
     }
     
     _price = ledger.incoming_rate or ledger.outgoing_rate or ledger.valuation_rate
-    print("ledger", ledger.item_code, ledger.actual_qty, _price)
+    
+    if not _price:
+        item_value = frappe.db.get_value("Item", ledger.item_code, "valuation_rate")
+        _price = item_value
+
     if not _price:        
         form_link = get_link_to_form("Item", ledger.item_code)
 
@@ -1431,10 +1429,11 @@ def get_item_data(ledger):
             transaction_code = "06"
         elif ledger.voucher_type == "Stock Entry":
             se = frappe.get_cached_doc("Stock Entry", ledger.voucher_no)
-            if not ledger.dependant_sle_voucher_detail_no:
+            if se.stock_entry_type in ["Material Transfer"]:
+                # prevent duplication of entries for Stock Transfers
                 return None
             
-            if se.stock_entry_type == "Material Issue":
+            elif se.stock_entry_type == "Material Issue":
                 transaction_code = "13"
                 
                 # if cancelled, use opposite transaction code
@@ -1460,26 +1459,7 @@ def get_item_data(ledger):
                     transaction_code = "05"
             else:
                 return None
-
-    # do industry tax type helps choose the correct calculation
-    # if not template:
-    #     templates = {
-    #         f"TOT - {company.abbr}": "TOT",
-    #         f"Standard Rated(16%) - {company.abbr}": "VAT",
-    #         f"Minimum Taxable Value (MTV-16%) - {company.abbr}": "VAT",
-    #         f"Reverse VAT - {company.abbr}": "VAT",
-    #         f"Disbursement - {company.abbr}": "Zero Rated (VAT)",
-    #         f"Exempt - {company.abbr}": "Zero Rated (VAT)",
-    #         f"Zero-rated by nature - {company.abbr}": "Zero Rated (VAT)",
-    #         f"Zero-rated LPO - {company.abbr}": "Zero Rated (VAT)",
-    #         f"Exports(0%) - {company.abbr}": "Zero Rated (VAT)",
-    #         f"Excise Electricity - {company.abbr}": "Excise Duty",
-    #         f"Excise on Coal - {company.abbr}": "Excise Duty",
-    #         f"Tourism Levy - {company.abbr}": "Tourism Levy",
-    #         f"Insurance Premium Levy - {company.abbr}": "Insurance Premium Levy",
-    #         f"Re-insurance - {company.abbr}": "Insurance Premium Levy"
-    #     }
-
+                
     if not template:
         # use company default company if not set in transation or item
         tax_code = company.custom_tax_code
@@ -2360,20 +2340,28 @@ def get_unit_code(item, company):
         - smart_invoice_settings.default_uom : suggest each
         - smart_invoice_settings.default_pkg_uom : suggest pack
     """
-    codes = frappe.get_all("Code", fields=["name", "cd", "cd_nm", "cd_cls"], filters={"cd_cls": ["in", ["10", "17"]]})
 
     unit_cd = None
     pkg_unit = None
-    for code in codes:
-        if (code.cd_nm.lower() == item.stock_uom.lower() or 
-                item.stock_uom.lower() in code.cd_nm.lower() or 
-                code.cd_nm.lower() in item.stock_uom.lower()):
-            unit_cd = code.cd
-        if item.custom_pkg_unit:
-            if (code.cd_nm.lower() == item.custom_pkg_unit.lower() or 
-                    item.custom_pkg_unit.lower() in code.cd_nm.lower() or 
-                    code.cd_nm.lower() in item.custom_pkg_unit.lower()):
-                pkg_unit = code.cd
+    if item.custom_qty_unit_cd:
+        unit_cd =  item.custom_qty_unit_cd
+    if item.custom_pkg_unit_cd:
+        pkg_unit =  item.custom_pkg_unit_cd
+
+    if not unit_cd or not pkg_unit:
+
+        codes = frappe.get_all("Code", fields=["name", "cd", "cd_nm", "cd_cls"], filters={"cd_cls": ["in", ["10", "17"]]})
+
+        for code in codes:
+            if (code.cd_nm.lower() == item.stock_uom.lower() or 
+                    item.stock_uom.lower() == code.cd_nm.lower() or 
+                    code.cd_nm.lower() == item.stock_uom.lower()):
+                unit_cd = code.cd
+            if item.custom_pkg_unit:
+                if (code.cd_nm.lower() == item.custom_pkg_unit.lower() or 
+                        item.custom_pkg_unit.lower() == code.cd_nm.lower() or 
+                        code.cd_nm.lower() == item.custom_pkg_unit.lower()):
+                    pkg_unit = code.cd
     
     defaults = []
     company_doc = None

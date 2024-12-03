@@ -2,6 +2,28 @@
  {
   "docstatus": 0,
   "doctype": "Client Script",
+  "dt": "Purchase Invoice",
+  "enabled": 1,
+  "modified": "2024-11-28 15:11:02.339624",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Purchase Invoice List",
+  "script": "frappe.listview_settings['Purchase Invoice'] = {\n    refresh: function(listview) {\n        listview.page.add_inner_button(__(\"Download Purchase Invoices\"), function() {\n            frappe.call({\n                method: \"smart_invoice_app.app.get_purchase_invoices\",\n                args: {\n                    from_list: true\n                },\n                callback: (r) => {\n                    listview.refresh();\n                }\n            });\n             \n        }, __(\"Smart Invoice\"));\n        // listview.page.get_field(\"Get Purchase Invoices\").$input.addClass(\"btn-danger\");\n    },\n};",
+  "view": "List"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Purchase Invoice",
+  "enabled": 1,
+  "modified": "2024-11-28 12:00:24.458444",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Purchase Invoice",
+  "script": "frappe.ui.form.on('Purchase Invoice', {\n    validate(frm) {\n        // ensure taxes are inclusive in the item rate\n        frm.doc.taxes.forEach(tax => {\n            if (tax.included_in_print_rate === 0) {\n                tax.included_in_print_rate = 1;\n            }\n        });\n    }\n});",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
   "dt": "Mode of Payment",
   "enabled": 1,
   "modified": "2024-09-29 22:01:26.624310",
@@ -85,6 +107,17 @@
   "module": "Smart Invoice App",
   "name": "Smart Invoice - Sales Invoice",
   "script": "frappe.ui.form.on('Sales Invoice', {\n\trefresh(frm) {\n        // Set up field filters\n        frm.set_query(\"custom_refund_reason\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"32\"]]\n                }\n            };\n        });\n        frm.set_query(\"custom_stock_adjustment_reason\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"35\"]]\n                }\n            };\n        });\n        // Reason for Debit note 67\n        // frm.set_query(\"custom_pkg_unit\", function() {\n        //     return {\n        //         filters: {\n        //             \"custom_code_class_name\": [\"in\", [\"17\"]]\n        //         }\n        //     };\n        // });\n        \n        // frm.set_query(\"tax_category\", \"taxes\", function() {\n        //     return {\n        //         filters: {\n        //             \"custom_cd\": [\"not in\", [\"TOT\"]]\n        //         }\n        //     };\n        // });\n\t},\n    validate(frm) {\n        // ensure taxes are inclusive in the item rate\n        frm.doc.taxes.forEach(tax => {\n            if (tax.included_in_print_rate === 0) {\n                tax.included_in_print_rate = 1;\n            }\n        });\n        \n        // update item taxes\n        // update_taxes(frm);\n        \n    }\n    \n});\n\n// function update_taxes(frm){\n//     frappe.call({\n//         method: \"smart_invoice_app.app.set_item_taxes\",\n//         args: { \n//             invoice: frm.doc,\n//             invoice_items: frm.doc.items\n//         },\n// // \t\tfreeze: true,\n// // \t\tfreeze_message: __(\"Updating Item Taxes ...\"),\n//         callback: (r)=>{\n//             // frm.reload_doc();\n//         }\n//     });\n// }\n\n// function create_codes_if_needed(frm){\n//     frappe.call({\n//         method: \"smart_invoice_app.app.create_codes_if_needed\",\n//         args: {\n//             item: frm.doc.name\n//         },\n// \t\tfreeze: true,\n// \t\tfreeze_message: __(\"Updating Smart Invoice item codes ...\"),\n//         callback: (r)=>{\n//         }\n//     });\n    \n// }\n\n\n// function call_api(frm){\n//     frappe.call({\n//         method: \"smart_invoice_app.app.sync_items\",\n//         args: {\n//             initialize: true\n//         },\n// \t\tfreeze: true,\n// \t\tfreeze_message: __(\"Running Smart Invoice item sync ...\"),\n//         callback: (r)=>{\n//             frm.reload_doc();\n//         }\n//     });\n// }",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "BOM",
+  "enabled": 1,
+  "modified": "2024-12-03 17:07:36.154455",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice: BOM",
+  "script": "frappe.ui.form.on('BOM', {\n\trefresh(frm) {\n\t\tbtn = frm.add_custom_button(__(\"Smart Invoice Sync\"), function() {\n            call_api(frm);\n        })\n\t\t.removeClass(\"btn-default\")\n\t\t.addClass(\"btn-success\");\n        // set_inner_btn_group_as_smart_invoice(\"Sync to Smart Invoice\");\n\t}\n});\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.save_item_composition\",\n        args: {\n            bom: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Smart Invoice sync ...\"),\n        callback: (r)=>{\n            frm.reload_doc();\n        }\n    });\n}",
   "view": "Form"
  }
 ]
