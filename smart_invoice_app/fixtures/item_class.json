@@ -2,6 +2,19 @@
  {
   "docstatus": 0,
   "doctype": "Item Class",
+  "item_cls_cd": "46181901",
+  "item_cls_lvl": null,
+  "item_cls_nm": "46181901",
+  "mjr_tg_yn": 0,
+  "modified": "2024-11-27 20:54:13.091693",
+  "name": "46181901",
+  "tax_ty_cd": null,
+  "tax_type": null,
+  "use_yn": 1
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Item Class",
   "item_cls_cd": "15000000",
   "item_cls_lvl": "1",
   "item_cls_nm": "Fuels and Fuel Additives and Lubricants and Anti corrosive Materials",

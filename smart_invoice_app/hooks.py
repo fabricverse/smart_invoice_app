@@ -163,7 +163,7 @@ doc_events = {
         "on_submit": "smart_invoice_app.app.save_purchase_invoice_api",
     },
     "Stock Ledger Entry": {
-        "on_submit": "smart_invoice_app.app.update_stock_movement"
+        "after_insert": "smart_invoice_app.app.update_stock_movement"
     },
     "POS Invoice": {
         "on_submit": "smart_invoice_app.app.save_invoice_api"
