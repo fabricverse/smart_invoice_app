@@ -700,10 +700,9 @@ def save_purchase_invoice_api(invoice, method=None, branch=None):
         msg = json_data.get("data")
     else:
         frappe.throw(_(f"Message: {json_data.get('resultMsg')}"), title="Smart Invoice Failure")
-        print("error", json_data)
             
-    frappe.msgprint(save_purchase_data)
-    frappe.msgprint(json.dumps(invoice_data))
+    # frappe.msgprint(save_purchase_data)
+    # frappe.msgprint(json.dumps(invoice_data))
 
 
 def get_invoice_data(invoice, branch=None):
@@ -1154,38 +1153,7 @@ def save_invoice_api(invoice, method=None, branch=None):
         msg = json_data.get("data")
         create_qr_code(invoice, data=msg)
     else:
-        print("save_sales_data", json_data)
         frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
-
-    stock_item_data = None
-    saved_stock_master = None
-    stock_master_data = None
-
-    # re-implemented on stock entry ledger submission hook
-    # if invoice.update_stock == 0: # TODO: update stock to 1
-    #     if stock_item_data := create_stock_item_data(invoice, invoice_data):
-    #         endpoint = "/api/method/smart_invoice_api.api.save_stock_items"
-    #         response = api(endpoint, stock_item_data)
-    #         saved_stock_items = json.loads(response.get("response_data"))
-    #         print("saved_stock_items", saved_stock_items)
-
-    #         if saved_stock_items.get("resultCd") == "000":
-    #             stock_master_data = create_stock_master_data(stock_item_data, invoice)
-
-    #             endpoint = "/api/method/smart_invoice_api.api.save_stock_master"
-    #             saved_stock_master = api(endpoint, stock_master_data)
-
-    #             if saved_stock_master.get("resultCd") != "000":
-    #                 frappe.msgprint(_(f"Message: {saved_stock_master.get('resultMsg')}"), title="Smart Invoice Failure")
-    #         else:
-    #             frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
-        
-            
-    frappe.msgprint(save_sales_data)
-    frappe.msgprint(json.dumps(invoice_data))
-    # frappe.msgprint(json.dumps(stock_item_data))
-    # frappe.msgprint(json.dumps(stock_master_data))
-    # frappe.msgprint(saved_stock_master.get("response_data")) # save_stock_items.get("response_data"))
 
 from erpnext.stock.stock_ledger import get_stock_balance
 def get_stock_master_data(stock_item_data, ledger):
@@ -1584,8 +1552,6 @@ def get_item_data(ledger):
             })
             item_taxes.pop("vatAmt", None)
 
-        print(item_taxes)
-
         item_data.update(item_taxes)
         
         # update each tax item being calculated
@@ -1623,14 +1589,11 @@ def create_stock_master_data(stock_items, invoice):
 
     item_balances = get_item_balances()
     new_items = []
-    print("item_balances", item_balances)
 
     if stock_items.get("itemList"):
         for item in stock_items.get("itemList"):
             item_code = item.get("itemCd")
             item_bal = item_balances.get(item_code, 0)
-            print("item_bal", item_code, item_bal)
-
 
             # item_qty = flt(item.get("qty"))
             # if invoice.is_return == 1:
@@ -2045,7 +2008,6 @@ def calculate_item_taxes(company, invoice, data, items):
 
         item_doc = frappe.get_cached_doc("Item", item.item_code)
         unit_cd, pkg_unit = get_unit_code(item_doc, invoice.company)
-        print("item ", item)
         
         item_data = {
             "itemSeq": idx,
@@ -2153,13 +2115,6 @@ def calculate_item_taxes(company, invoice, data, items):
                     f"{tax_type}TaxblAmt": taxable_amount,
                     f"{tax_type}TxAmt": tax_amt
                 })
-
-            # print("tax_type", tax_code)
-            # print("rate", rate)
-            # print("amt", amt)
-            # print("taxable_amount", taxable_amount)
-            # print("tax_amt", tax_amt)
-
 
             inv_taxable_amount = data[f"taxblAmt{tax_code}"] + taxable_amount
             inv_tax_amount = data[f"taxAmt{tax_code}"] + tax_amt
@@ -2495,7 +2450,6 @@ def generate_item_code(item, initialize=False):
 def sync_items(initialize=False):
     r = get_items_api(initialize=True)
     if not r:
-        print("trhow")
         frappe.throw(title="Smart Invoice Error", msg="No data received, try again")
     if r.get("resultCd") != "000": 
         return
