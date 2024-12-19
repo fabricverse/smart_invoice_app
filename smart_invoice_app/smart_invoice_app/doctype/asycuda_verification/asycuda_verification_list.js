@@ -3,10 +3,13 @@ frappe.listview_settings['ASYCUDA Verification'] = {
         // download_imports(listview);
 
         listview.page.add_inner_button(__("Download Imports"), function() {
-            download_imports(listview);
-             
-        });
-        listview.page.inner_toolbar.find('button:contains("Download Imports")').removeClass('btn-default').addClass('btn-primary');
+            download_imports(listview);             
+        }, __("Smart Invoice"));
+        
+        listview.page.get_inner_group_button("Smart Invoice")
+        .find("button")
+        .removeClass("btn-default")
+        .addClass("btn-info");
     },
 };
 

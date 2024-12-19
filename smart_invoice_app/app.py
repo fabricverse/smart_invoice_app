@@ -92,6 +92,13 @@ def create_qr_code(doc, data):
         doc.db_set('invoice_qr_code', _file.file_url)
         doc.db_set('custom_sdc_id', data.get("sdcId"))
         doc.db_set('custom_receipt_no', data.get("rcptNo"))
+
+        doc.db_set('custom_internal_data', data.get("intrlData"))
+        doc.db_set('custom_fiscal_signature', data.get("rcptSign"))
+        doc.db_set('custom_vsdc_date', data.get("vsdcRcptPbctDate"))
+        doc.db_set('custom_mrc_no', data.get("mrcNo"))
+
+        # intrlData, vsdcRcptPbctDate, mrcNo
         
         doc.notify_update()
 
@@ -189,6 +196,8 @@ def error_handler(error):
 def api(endpoint, data, initialize=False): 
     settings = get_settings()
     base_url = settings.base_url
+    if settings.default_server == 1:
+        base_url = settings.default_vsdc_url
     secret = settings.api_secret
 
     error_messages = {
@@ -671,7 +680,7 @@ def get_purchase_invoices_api():
 
 @frappe.whitelist()
 def save_purchase_invoice_api(invoice, method=None, branch=None):
-    if frappe.flags.dont_sync == 1 or invoice.asycuda == 1:
+    if frappe.flags.dont_sync == 1 or invoice.custom_asycuda == 1:
         frappe.flags.dont_sync = 0
         return
     
@@ -811,8 +820,6 @@ def get_invoice_data(invoice, branch=None):
             "cfmDt": posting_date_time,
             "pchsDt": posting_date_only
         }
-        
-    print("country_code", country_code)
     
     data.update({
         "tpin": branch['custom_tpin'],
@@ -950,14 +957,22 @@ def calculate_item_taxes_2(company, invoice, data, items, country_code=None):
             if invoice.doctype == "Sales Invoice" and (invoice.po_no and invoice.custom_validate_lpo == 1):
                 item.item_tax_template = f"Zero-rating LPO - {company.abbr}"
             elif country_code and country_code != "ZM" and invoice.doctype == "Sales Invoice":
-                item.item_tax_template = f"Exports(0%) - {company.abbr}"
+                export_tax_template = f"Exports(0%) - {company.abbr}"
+                if item.item_tax_template != export_tax_template:
+                    frappe.db.set_value(invoice.doctype + " Item", item.name, "item_tax_template", export_tax_template)
+                    for tax in invoice.taxes:
+                        tax_doctype = "Sales Taxes and Charges" if invoice.doctype == "Sales Invoice" else "Purchase Taxes and Charges"
+                        frappe.delete_doc(tax_doctype, tax.name)
+                        frappe.db.set_value(invoice.doctype, invoice.name, "total_taxes_and_charges", 0)
+
+                item.item_tax_template = export_tax_template
 
             doc = frappe.get_cached_doc("Item Tax Template", item.item_tax_template)
 
             template = item.item_tax_template
             tax_code = doc.custom_code.title()
             tax_rate = flt(doc.taxes[0].tax_rate, 3)
-                
+
             return template, tax_code, tax_rate
         
         # get tax code from purchase or sales invoice item
@@ -975,6 +990,7 @@ def calculate_item_taxes_2(company, invoice, data, items, country_code=None):
                 
         if not template:
             # use company default company if not set in transation or item
+            # TODO: if below doesnt set default company tax, copy logic from get_tax_rate in vat trans report py
             if country_code and country_code != "ZM" and invoice.doctype == "Sales Invoice":
                 template, tax_code, tax_rate = get_item_tax_template(item, company, country_code, invoice)
             else:
@@ -1128,7 +1144,10 @@ def save_invoice_api(invoice, method=None, branch=None):
     endpoint = "/api/method/smart_invoice_api.api.save_sales"
 
     save_sales = api(endpoint, invoice_data)
+    
     save_sales_data = save_sales.get("response_data")
+    if not save_sales_data:
+        frappe.throw("Smart Invoice: Connection Failure")
     json_data = json.loads(save_sales_data)
 
     if json_data.get("resultCd") == "000":
@@ -1136,7 +1155,7 @@ def save_invoice_api(invoice, method=None, branch=None):
         create_qr_code(invoice, data=msg)
     else:
         print("save_sales_data", json_data)
-        frappe.throw(json_data.get('resultMsg'), title="Smart Invoice Failure")
+        frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
 
     stock_item_data = None
     saved_stock_master = None
@@ -1193,22 +1212,20 @@ def get_stock_master_data(stock_item_data, ledger):
 def update_stock_movement(ledger, method=None):
     stock_master_data = None
     if stock_item_data := get_item_data(ledger):
-        endpoint = "/api/method/smart_invoice_api.api.save_stock_items"
-        response = api(endpoint, stock_item_data)
+        response = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
         saved_stock_items = json.loads(response.get("response_data"))
 
-        if saved_stock_items.get("resultCd") == "000":            
+        if saved_stock_items.get("resultCd") == "000":
             stock_master_data = get_stock_master_data(stock_item_data, ledger)
-
-            endpoint = "/api/method/smart_invoice_api.api.save_stock_master"
-            saved_stock_master = api(endpoint, stock_master_data)
+            
+            saved_stock_master = api("/api/method/smart_invoice_api.api.save_stock_master", stock_master_data)
 
             saved_stock_master_response = json.loads(saved_stock_master.get("response_data"))
 
             if not saved_stock_master_response or saved_stock_master_response.get("resultCd") != "000":
-                frappe.msgprint(_(f"Message: {saved_stock_master_response.get('resultMsg')}"), title="Smart Invoice Failure")
+                frappe.throw(_(f"Message saved_stock_master_response: {saved_stock_master_response.get('resultMsg')}"), title="Smart Invoice Failure")
         else:
-            frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
+            frappe.throw(_(f"Message saved_stock_items: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
 
 
 def get_item_data(ledger):
@@ -1407,12 +1424,10 @@ def get_item_data(ledger):
             else:
                 for item in doc.items:
                     if item.item_code == ledger.item_code:
-                        tax_code = item.custom_tax_code.title()
-
-                        # get template from doc item tax template
-                        template = item.item_tax_template
-                        tax_code = item.custom_tax_code.title()
-                        tax_rate = flt(item.custom_tax_rate, 3)
+                        template = item_doc.taxes[0].item_tax_template
+                        tax_template = frappe.get_cached_doc("Item Tax Template", template)
+                        tax_code = tax_template.custom_code.title()
+                        tax_rate = flt(tax_template.taxes[0].tax_rate, 3)
         else:
             template = item_doc.taxes[0].item_tax_template
             tax_template = frappe.get_cached_doc("Item Tax Template", template)
@@ -1559,12 +1574,17 @@ def get_item_data(ledger):
             item_taxes.update({
                 "vatCatCd": tax_code.upper(),
             })
-        elif tax_code == "Tot":
+        elif tax_code in ["Tot", "TOT"]:
             item_taxes.update({
-                "vatCatCd": tax_code.upper(),
+                "vatCatCd": "A", #TODO: API failing to accept TOT, have to force a VAT tax
+                "taxCatCd": "TOT",
                 "taxblAmt": amt,
-                "taxAmt": 0
+                "taxAmt": 0,
+                "vatAmt": 0
             })
+            item_taxes.pop("vatAmt", None)
+
+        print(item_taxes)
 
         item_data.update(item_taxes)
         
@@ -2429,9 +2449,55 @@ def get_item_api(item_code):
 
 
 @frappe.whitelist()
+def generate_item_code(item, initialize=False):
+    """
+    Generate a custom item code based on the following format:
+    ZM: Country of Origin (Zambia)
+    2: Product Type (Finished Product)
+    NT: Packaging Unit (NET)
+    BA: Quantity Unity (Barrel)
+    0000001: increments from 0000001 to N value (7 digits)
+    """
+
+    def get_next_value(doctype, field, padding=7):
+        """
+        Generate the next value for the given prefix, doctype, and field.
+        """
+        count = frappe.db.count(doctype, filters={field: ["!=", ""]})
+        next_value = count + 1
+        return str(next_value).zfill(padding)
+
+    if(type(item) == str):
+        item = frappe._dict(json.loads(item))
+
+    if item.custom_generated_item_code:
+        return item.custom_generated_item_code
+
+    # Get the country code from the item's country of origin
+    country_code = frappe.get_cached_value("Country", item.country_of_origin, "code").upper()
+
+    # Get the product type code from the item's item group
+    item_group = frappe.get_cached_doc("Item Group", item.item_group)
+    product_type_code = item_group.custom_item_ty_cd or "2"  # Default to "2" for finished product
+
+    # Get the packaging unit code and quantity unity code
+    company_name = frappe.defaults.get_user_default("Company")
+    unit, pkg_unit = get_unit_code(item, company_name)
+
+    # Generate the next value for the item code
+    item_code_seed = f"{country_code}{product_type_code}{pkg_unit}{unit}"
+    next_val = get_next_value(doctype="Item", field="custom_generated_item_code", padding=7)
+
+    return f"{item_code_seed}{next_val}"
+
+
+@frappe.whitelist()
 def sync_items(initialize=False):
     r = get_items_api(initialize=True)
-    if not r.get("resultCd") == "000": 
+    if not r:
+        print("trhow")
+        frappe.throw(title="Smart Invoice Error", msg="No data received, try again")
+    if r.get("resultCd") != "000": 
         return
     
     data = r['data']['itemList']
@@ -2469,7 +2535,8 @@ def sync_items(initialize=False):
     # create items not in smart invoice
     for item in missing_in_si:
         try:
-            if save_item_api(item):
+            save_result = save_item_api(item)
+            if save_result:
                 count += 1
             else:
                 failed += 1
@@ -2504,8 +2571,9 @@ def prepare_item_data(item, branch=None):
 
     if not item_type:
         if frappe.flags.skip_failing:
-            return False
-        frappe.throw("Smart Invoice requires an Item Type for <strong>Item Group {0}</strong>.".format(frappe.bold(item.item_group)))
+            item_type = "2"
+        else:
+            frappe.throw("Smart Invoice requires an Item Type for <strong>Item Group {0}</strong>.".format(frappe.bold(item.item_group)))
 
     item_data = []
     # check if item has a unit_code
@@ -2513,47 +2581,49 @@ def prepare_item_data(item, branch=None):
         unit = item.custom_qty_unit_cd
         pkg_unit = item.custom_pkg_unit_cd
     elif not item.stock_uom or not item.custom_pkg_unit:
-        if frappe.flags.skip_failing:
-            return False
-        frappe.throw("Smart Invoice requires a UOM and Package UOM for Item {0}".format(frappe.bold(item.item_code)))
-    else:
-        for branch in branches:            
-            default_price = get_item_price(item.item_code, branch.get("custom_company"))
-            unit, pkg_unit = get_unit_code(item, branch.get("custom_company"))
-            data = {        
-                "tpin": branch.get("custom_tpin"),
-                "bhfId": branch.get("custom_bhf_id"),
-                "useYn": "Y" if item.disabled == 0 else "N",
-                "itemCd": item.item_code,
-                "itemNm": item.item_code,
-                "itemStdNm": item.item_name,
-                "itemClsCd": item.custom_item_cls_cd,
-                "itemTyCd": item_type,
-                "orgnNatCd": frappe.get_cached_value("Country", item.country_of_origin, "code").upper(),
-                "pkgUnitCd": pkg_unit,
-                "qtyUnitCd": unit,
-                "vatCatCd": tax_code,
-                "iplCatCd": item.custom_ipl_cat_cd if item.custom_industry_tax_type == "Insurance Premium Levy" else None,
-                "tlCatCd": item.custom_tl_cat_cd if item.custom_industry_tax_type == "Tourism Levy" else None,
-                "exciseTxCatCd": item.custom_excise_code if item.custom_industry_tax_type == "Excise Duty" else None,
-                "svcChargeYn": "Y" if item.custom_industry_tax_type == "Service Tax" else "N", # v2
-                "rentalYn": "Y" if item.custom_industry_tax_type == "Rental Tax" else "N", # v2
-                "btchNo": batch,
-                "bcd": barcode,
-                "dftPrc": default_price,
-                "manufacturerTpin": item.custom_manufacturer_tpin,
-                "manufactureritemCd": item.custom_manufacture_item_cd,
-                "rrp": default_price,
-                "isrcAplcbYn": "Y" if item.custom_industry_tax_type == "Insurance Premium Levy" else "N",
-                "addInfo":item.description,
-                "sftyQty": item.safety_stock,
-                "useYn": "Y" if item.disabled == 0 else "N",        
-                "regrNm": users[item.owner].full_name,
-                "regrId": item.owner,
-                "modrNm": users[frappe.session.user].full_name,
-                "modrId": frappe.session.user
-            }
-            item_data.append(data)
+        unit, pkg_unit = get_unit_code(item, branches[0].get("custom_company"))
+    
+    for branch in branches:            
+        default_price = get_item_price(item.item_code, branch.get("custom_company"))
+        unit, pkg_unit = get_unit_code(item, branch.get("custom_company"))
+        gen_item_code = item.custom_generated_item_code or generate_item_code(item)
+        if not item.custom_generated_item_code:
+            frappe.db.set_value("Item", item.name, "custom_generated_item_code", gen_item_code)
+
+        data = {        
+            "tpin": branch.get("custom_tpin"),
+            "bhfId": branch.get("custom_bhf_id"),
+            "useYn": "Y" if item.disabled == 0 else "N",
+            "itemCd": gen_item_code,
+            "itemNm": item.item_code,
+            "itemStdNm": item.item_name,
+            "itemClsCd": item.custom_item_cls_cd,
+            "itemTyCd": item_type,
+            "orgnNatCd": frappe.get_cached_value("Country", item.country_of_origin, "code").upper(),
+            "pkgUnitCd": pkg_unit,
+            "qtyUnitCd": unit,
+            "vatCatCd": tax_code,
+            "iplCatCd": item.custom_ipl_cat_cd if item.custom_industry_tax_type == "Insurance Premium Levy" else None,
+            "tlCatCd": item.custom_tl_cat_cd if item.custom_industry_tax_type == "Tourism Levy" else None,
+            "exciseTxCatCd": item.custom_excise_code if item.custom_industry_tax_type == "Excise Duty" else None,
+            "svcChargeYn": "Y" if item.custom_industry_tax_type == "Service Tax" else "N", # v2
+            "rentalYn": "Y" if item.custom_industry_tax_type == "Rental Tax" else "N", # v2
+            "btchNo": batch,
+            "bcd": barcode,
+            "dftPrc": default_price,
+            "manufacturerTpin": item.custom_manufacturer_tpin,
+            "manufactureritemCd": item.custom_manufacture_item_cd,
+            "rrp": default_price,
+            "isrcAplcbYn": "Y" if item.custom_industry_tax_type == "Insurance Premium Levy" else "N",
+            "addInfo":item.description,
+            "sftyQty": item.safety_stock,
+            "useYn": "Y" if item.disabled == 0 else "N",        
+            "regrNm": users[item.owner].full_name,
+            "regrId": item.owner,
+            "modrNm": users[frappe.session.user].full_name,
+            "modrId": frappe.session.user
+        }
+        item_data.append(data)
     return item_data
 
 @frappe.whitelist()
@@ -3132,12 +3202,14 @@ def update_code(name, code_data, class_data, existing_codes, mapped_doctype=None
         doc.flags.ignore_mandatory=True
         doc.save(ignore_permissions=True)
         
-def get_codes(initialize=False):
+def get_codes(initialize=False, validate=True):
     response = api("/api/method/smart_invoice_api.api.select_codes", {
         "bhf_id": "000"
     }, initialize)
-
-    return validate_api_response(response)
+    if validate:
+        return validate_api_response(response)
+    else:
+        return response
 
 
 def validate_api_response(fetched_data):
@@ -3221,13 +3293,17 @@ def test_connection():
 def test_connection():   
     # verify_site_encryption()
 
-    codes = get_codes()
+    codes = get_codes(validate=False)
 
     if codes:
-        if not codes.get('error'):
+        response_data = codes.get("response_data")
+        data = json.loads(response_data) if response_data else {}
+        if data and not data.get('error') and data.get('resultCd') in ["000", "001"]:
             frappe.msgprint("Connection Successful", indicator='green', alert=True)
+            return True
         else:
-            frappe.msgprint("Connection Failure 1", indicator='red', alert=True)
+            frappe.msgprint("Connection Failure", indicator='red', alert=True)
+            return False
     else:
         frappe.msgprint("Connection Failure", indicator='red', alert=True)
-    return codes
+        return False
