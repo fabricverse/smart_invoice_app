@@ -330,8 +330,8 @@ fixtures = [
                 "Stock Entry",
                 "UOM",
                 "Company",
-                "Mode of Payment",
                 "Country",
+                "Mode of Payment",
                 "Mode of Payment Account",
                 "Sales Invoice Item",
                 "Purchase Invoice Item",
@@ -344,7 +344,32 @@ fixtures = [
             ]],
             ["modified", ">", "2024-09-26"]
         ]
-    }
+    },
+    {
+        "doctype": "Property Setter",
+        "filters": {
+            "doc_type": ["in", [
+                "Branch",
+                "Customer",
+                "Supplier",
+                "Item Group",
+                "Item",
+                "Item Tax Template",
+                "Tax Category",
+                "Purchase Invoice",
+                "Purchase Invoice Item",
+                "Sales Invoice",
+                "Sales Invoice Item",
+                "BOM",
+                "Company",
+                "Delivery Note",
+                "Purchase Receipt",
+                "Stock Entry",
+                "Contact",
+                "Address",
+            ]]
+        }
+    },
 ]
 
 """
