@@ -2,6 +2,17 @@
  {
   "docstatus": 0,
   "doctype": "Client Script",
+  "dt": "Item Group",
+  "enabled": 1,
+  "modified": "2024-12-24 15:27:42.632819",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Item Tax Template",
+  "script": "frappe.ui.form.on('Item Tax Template', {\n\trefresh(frm) {\n        // Set up field filter for custom_branch_status\n        frm.set_query(\"custom_smart_invoice_tax_code\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"cd\", \"05\"]]\n                }\n            };\n        });\n        \n        frappe.db.get_list('Code', {\n\t        filters: {\n\t            cd_cls: '05'\n\t        }\n\t    })\n\t    .then(codes => {\n\t        frm.toggle_reqd('custom_smart_invoice_tax_code', codes.length > 0);\n\t    });\n\t}\n})",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
   "dt": "Purchase Invoice",
   "enabled": 1,
   "modified": "2024-12-23 14:03:25.799549",
@@ -26,10 +37,10 @@
   "doctype": "Client Script",
   "dt": "Mode of Payment",
   "enabled": 1,
-  "modified": "2024-12-23 14:03:26.019198",
+  "modified": "2024-12-24 15:15:07.225944",
   "module": "Smart Invoice App",
   "name": "Smart Invoice - Mode of Payment",
-  "script": "frappe.ui.form.on('Mode of Payment', {\n\trefresh(frm) {\n\t    // Set up field filter for custom_zra_payment_type\n        frm.set_query(\"custom_zra_payment_type\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"Payment Type\", \"07\"]]\n                }\n            };\n        });\n\t\t\n\t}\n});",
+  "script": "frappe.ui.form.on('Mode of Payment', {\n\trefresh(frm) {\n\t    // Set up field filter for custom_zra_payment_type\n        frm.set_query(\"custom_zra_payment_type\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"Payment Type\", \"07\"]]\n                }\n            };\n        });\n        \n        frappe.db.get_list('Code', {\n\t        filters: {\n\t            cd_cls: '07'\n\t        }\n\t    })\n\t    .then(codes => {\n\t        frm.toggle_reqd('custom_zra_payment_type', codes.length > 0);\n\t    });\n\t}\n});",
   "view": "Form"
  },
  {
@@ -48,10 +59,10 @@
   "doctype": "Client Script",
   "dt": "Item Group",
   "enabled": 1,
-  "modified": "2024-12-23 14:03:25.992725",
+  "modified": "2024-12-24 15:15:22.844139",
   "module": "Smart Invoice App",
   "name": "Smart Invoice - Item Group",
-  "script": "frappe.ui.form.on('Item Group', {\n\trefresh(frm) {\n        // Set up field filter for custom_branch_status\n        frm.set_query(\"custom_item_ty\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"Item Type\", \"24\"]]\n                }\n            };\n        });\n\t}\n})",
+  "script": "frappe.ui.form.on('Item Group', {\n\trefresh(frm) {\n        // Set up field filter for custom_branch_status\n        frm.set_query(\"custom_item_ty\", function() {\n            return {\n                filters: {\n                    \"cd_cls\": [\"in\", [\"Item Type\", \"24\"]]\n                }\n            };\n        });\n        \n        frappe.db.get_list('Code', {\n\t        filters: {\n\t            cd_cls: '24'\n\t        }\n\t    })\n\t    .then(codes => {\n\t        frm.toggle_reqd('custom_item_ty', codes.length > 0);\n\t    });\n\t}\n})",
   "view": "Form"
  },
  {
@@ -92,10 +103,10 @@
   "doctype": "Client Script",
   "dt": "Company",
   "enabled": 1,
-  "modified": "2024-12-23 14:03:25.936828",
+  "modified": "2024-12-24 17:13:35.331192",
   "module": "Smart Invoice App",
   "name": "Smart Invoice - Company",
-  "script": "frappe.ui.form.on('Company', {\n\trefresh(frm) {\n\t    \n        // frm.add_custom_button(__(\"Sync with Smart Invoice\"), function() {\n        //     call_api(frm);\n        // });\n        \n        // Set up field filters\n        frm.set_query(\"custom_default_unit_of_measure\", function() {\n            return {\n                filters: [\n                    [\"custom_code_class_name\", \"=\", \"10\"],\n                    [\"custom_code_class_name\", \"!=\", undefined]\n                ]\n            };\n        });\n        \n        frm.set_query(\"custom_packaging_unit\", function() {\n            return {\n                filters: [\n                    [\"custom_code_class_name\", \"=\", \"17\"],\n                    [\"custom_code_class_name\", \"!=\", null]\n                ]\n            };\n        });\n\t},\n\tcustom_update_codes(frm){\n\t    create_codes_if_needed(frm);\n\t}\n\t\n});\n\n\nfunction create_codes_if_needed(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.create_codes_if_needed\",\n        args: {\n            item: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Updating Smart Invoice item codes ...\"),\n        callback: (r)=>{\n        }\n    });\n    \n}\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.save_item_api\",\n        args: {\n            item: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Updating Smart Invoice item data ...\"),\n        callback: (r)=>{\n            frm.reload_doc();\n        }\n    });\n}",
+  "script": "frappe.ui.form.on('Company', {\n\trefresh(frm) {\n\t    \n        frm.get_field(\"custom_update_codes\").$input.removeClass(\"btn-default\").addClass(\"btn-success\");\n                \n\t    frappe.db.get_list('Code', {\n\t        filters: {\n\t            cd_cls: '10'\n\t        }\n\t    })\n\t    .then(codes => {\n\t        console.log(codes.length)\n\t        frm.toggle_reqd('custom_default_unit_of_measure', codes.length > 0);\n\t        frm.toggle_reqd('custom_default_item_class', codes.length > 0);\n\t        frm.toggle_reqd('custom_packaging_unit', codes.length > 0);\n\t        frm.toggle_reqd('custom_tax_bracket', codes.length > 0);\n\t        \n            frm.toggle_display('custom_smart_invoice', codes.length > 0);\n            frm.toggle_display('custom_section_break_emz9e', codes.length > 0);\n\t    });\n        frm.toggle_reqd('tax_id', true);\n        toggle_get_data_btn_class(frm);        \n\t    \n        // frm.add_custom_button(__(\"Sync with Smart Invoice\"), function() {\n        //     call_api(frm);\n        // });\n        \n        // Set up field filters\n        frm.set_query(\"custom_tax_bracket\", function() {\n            return {\n                filters: [\n                    [\"cd_cls\", \"=\", \"04\"]\n                ]\n            };\n        });\n        \n        frm.set_query(\"custom_default_unit_of_measure\", function() {\n            return {\n                filters: [\n                    [\"custom_code_class_name\", \"=\", \"10\"],\n                    [\"custom_code_class_name\", \"!=\", undefined]\n                ]\n            };\n        });\n        \n        frm.set_query(\"custom_packaging_unit\", function() {\n            return {\n                filters: [\n                    [\"custom_code_class_name\", \"=\", \"17\"],\n                    [\"custom_code_class_name\", \"!=\", null]\n                ]\n            };\n        });\n\t},\n\tcustom_update_codes(frm){\n\t    create_codes_if_needed(frm);\n\t},\n\ttax_id(frm){\n\t    toggle_get_data_btn_class(frm);\n\t}\n\t\n});\n\n\nfunction create_codes_if_needed(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.create_codes_if_needed\",\n        args: {\n            item: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Updating Smart Invoice item codes ...\"),\n        callback: (r)=>{\n        }\n    });\n    \n}\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.save_item_api\",\n        args: {\n            item: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Updating Smart Invoice item data ...\"),\n        callback: (r)=>{\n            frm.reload_doc();\n        }\n    });\n}\n\nfunction toggle_get_data_btn_class(frm){        \n    frm.toggle_display('custom_update_codes', frm.doc.tax_id);\n}\n",
   "view": "Form"
  },
  {
