@@ -1,5 +1,14 @@
 [
  {
+  "custom_cd": null,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2022-03-02 18:09:24.788589",
+  "name": "Zambian Tax",
+  "title": "Zambian Tax "
+ },
+ {
   "custom_cd": "C2",
   "disabled": 0,
   "docstatus": 0,
