@@ -274,12 +274,12 @@ standard_doctypes = [
 
 fixtures = [
     {
-        "doctype": "Client Script",
-        "filters": [
-            {
-                "module": "Smart Invoice App"
-            }
-        ]
+        "dt": "Client Script",
+        "filters": {
+            "module": ["in", [
+                "Smart Invoice App",
+            ]]
+        }
     },
     {
         "doctype": "Role",
@@ -296,54 +296,22 @@ fixtures = [
         "doctype": "District", 
     },
     {
-        "doctype": "Code Class", 
-    },
-    {
-        "doctype": "Item Class", 
-    },
-    {
         "doctype": "Tax Category", 
     },
     {
-        "doctype": "Code", 
+        "doctype": "Code Class", 
     },
+    # {
+    #     "doctype": "Item Class", 
+    # },
+    # {
+    #     "doctype": "Code", 
+    # },
     {
-        "doctype": "Custom Field",
-        "filters": [
-            ["dt", "in", [
-                "Manufacturer",
-                "Item",
-                "Item Price",
-                "Item Group",
-                "Tax Category",
-                "Sales Taxes and Charges",
-                "Purchase Taxes and Charges",
-                "Contact"
-                "Branch",
-                "Customer",
-                "Customer Branch",
-                "Supplier",
-                "Sales Invoice",
-                "Purchase Invoice",
-                "Stock Ledger Entry",
-                "Mode of Payment",
-                "Stock Entry",
-                "UOM",
-                "Company",
-                "Country",
-                "Mode of Payment",
-                "Mode of Payment Account",
-                "Sales Invoice Item",
-                "Purchase Invoice Item",
-                "Stock Entry Item",
-                "Stock Ledger Entry Item",
-                "Item Price",
-                "Item Group",
-                "Item Class",
-                "Manufacturer"
-            ]],
-            ["modified", ">", "2024-09-26"]
-        ]
+        "dt": "Custom Field",
+        "filters": {
+            "module": "Smart Invoice App"
+        }
     },
     {
         "doctype": "Property Setter",
@@ -367,6 +335,14 @@ fixtures = [
                 "Stock Entry",
                 "Contact",
                 "Address",
+            ]]
+        }
+    },
+    {
+        "doctype": "Print Format",
+        "filters": {
+            "module": ["in", [
+                "Smart Invoice App",
             ]]
         }
     },
