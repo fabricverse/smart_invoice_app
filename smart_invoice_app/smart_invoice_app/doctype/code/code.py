@@ -4,10 +4,13 @@
 import frappe
 from frappe.utils import flt
 from frappe.model.document import Document
+from smart_invoice_app.app import is_migration
 
 
 class Code(Document):
 	def validate(self):
+		if is_migration():
+			return
 		self.attempt_code_mapping()
 	
 	def attempt_code_mapping(self):

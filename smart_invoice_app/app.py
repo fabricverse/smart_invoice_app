@@ -227,11 +227,17 @@ def api(endpoint, data, initialize=False):
             })
         
         if not data.get("tpin"):
+            tpin = None
             if not branches:
                 branches = get_user_branches()
+            if branches:
+                tpin =  branches[0].get("custom_tpin")
+            if not tpin:
+                tpin = settings.tpin
             data.update({
-                "tpin": branches[0].get("custom_tpin")
+                "tpin": tpin
             })
+                
         
         if initialize:
             data.update({
@@ -2343,7 +2349,15 @@ def get_user_branches(name=None, user=None):
 
 def is_migration():
     stack = inspect.stack()
-    return any(frame.function == 'migrate' for frame in stack)
+    b = any(
+        frame.function == 'migrate' or
+        'install' in frame.function
+        
+               for frame in stack)
+    if b:
+        print('ignored on installation/migration')
+    return b
+    
 
 def get_unit_code(item, company):
     """
@@ -2753,6 +2767,21 @@ def get_customer_api(customer, branch="Headquarter"):  # incomplete
     return validate_api_response(response)
 
 
+def get_branch_tpin(branch):
+    if type(branch) == str:
+        branch = frappe.get_cached_doc("Branch", branch)
+        tpin = branch.custom_tpin
+    else:
+        tpin = branch.custom_tpin
+    
+    return tpin
+
+    # if company:
+    #     custom_tpin = company.tax_id
+    # else: 
+    #     settings = get_settings()
+    #     custom_tpin = settings.tpin
+
 
 @frappe.whitelist()
 def save_customer_api(customer, company=None, branch=None):
@@ -2761,15 +2790,17 @@ def save_customer_api(customer, company=None, branch=None):
         return
     
     custom_bhf_id = branch.custom_bhf_id if branch else "000"
-    custom_tpin = company.tax_id if company else "000"
+    tpin = get_branch_tpin(branch)
+
     users = {d.name: d for d in frappe.get_all("User", fields=["name", "full_name"])}
-    address = ""
+    address = customer.address_html
     contact = frappe.get_cached_doc("Contact", customer.contact_person)
     mobile_no = customer.mobile_no
     email = customer.email_id
+
     data={
-        "tpin": company.tax_id,
-        "bhfId": branch.custom_bhf_id,
+        "tpin": tpin,
+        "bhfId": custom_bhf_id,
         "custTpin": customer.tax_id,
         "custNo": mobile_no,
         "custNm": customer.customer_name,
@@ -3207,7 +3238,12 @@ def update_code(name, code_data, class_data, existing_codes, mapped_doctype=None
         if mapped_doctype:
             doc.mapped_doctype = mapped_doctype
         doc.flags.ignore_mandatory=True
-        doc.save(ignore_permissions=True)
+        try:
+            doc.save(ignore_permissions=True)
+        except frappe.exceptions.LinkValidationError as e:
+            frappe.msgprint(str(e))
+        except Exception as e:
+            frappe.msgprint(str(e))
         
 def get_codes(initialize=False, validate=True):
     response = api("/api/method/smart_invoice_api.api.select_codes", {
