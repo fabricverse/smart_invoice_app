@@ -1,0 +1,28 @@
+[
+ {
+  "custom_cd": "17-EACH-Each",
+  "custom_code_cd": "EACH",
+  "custom_code_class_code": "17",
+  "custom_code_class_name": "17",
+  "docstatus": 0,
+  "doctype": "UOM",
+  "enabled": 1,
+  "modified": "2024-12-28 15:48:46.367412",
+  "must_be_whole_number": 0,
+  "name": "Each",
+  "uom_name": "Each"
+ },
+ {
+  "custom_cd": "10-EA-Each",
+  "custom_code_cd": "EA",
+  "custom_code_class_code": "10",
+  "custom_code_class_name": "10",
+  "docstatus": 0,
+  "doctype": "UOM",
+  "enabled": 1,
+  "modified": "2024-12-28 15:11:16.896351",
+  "must_be_whole_number": 0,
+  "name": "Nos",
+  "uom_name": "Nos"
+ }
+]

@@ -346,25 +346,24 @@ fixtures = [
             ]]
         }
     },
+    {
+        "doctype": "Code",
+        "filters": {
+            "cd_nm": ["in", [
+                "Each",
+            ]]
+        }
+    },
+    {
+        "doctype": "UOM",
+        "filters": {
+            "uom_name": ["in", [
+                "Each",
+                "Nos",
+            ]]
+        }
+    },
 ]
-
-"""
-
-"custom_column_break_o8y3c",
-"custom_pkg_unit_cd",
-"custom_pkg_unit",
-"custom_column_break_jspfa",
-"custom_item_cls_cd",
-"custom_item_cls",
-"custom_smart_invoice",
-"custom_rental_yn",
-"custom_svc_charge_yn",
-"custom_manufacture_item_cd",
-"default_manufacturer_part_no",
-"custom_smart_invoice_manufacturer_details",
-"custom_manufacturer_tpin",
-"country_of_origin",
-"""
 
 # user_data_fields = [
 # 	{

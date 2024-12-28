@@ -1,0 +1,50 @@
+[
+ {
+  "cd": "EA",
+  "cd_cls": "10",
+  "cd_nm": "Each",
+  "docstatus": 0,
+  "doctype": "Code",
+  "mapped_doctype": "UOM",
+  "mapped_entry": "Each",
+  "modified": "2024-12-28 15:06:45.300325",
+  "name": "10-EA-Each",
+  "user_dfn_cd1": null
+ },
+ {
+  "cd": "EACH",
+  "cd_cls": "10",
+  "cd_nm": "Each",
+  "docstatus": 0,
+  "doctype": "Code",
+  "mapped_doctype": "UOM",
+  "mapped_entry": "Each",
+  "modified": "2024-12-28 15:06:45.337841",
+  "name": "10-EACH-Each",
+  "user_dfn_cd1": null
+ },
+ {
+  "cd": "EA",
+  "cd_cls": "17",
+  "cd_nm": "Each",
+  "docstatus": 0,
+  "doctype": "Code",
+  "mapped_doctype": "UOM",
+  "mapped_entry": "Each",
+  "modified": "2024-12-28 15:48:46.335693",
+  "name": "17-EA-Each",
+  "user_dfn_cd1": null
+ },
+ {
+  "cd": "EACH",
+  "cd_cls": "17",
+  "cd_nm": "Each",
+  "docstatus": 0,
+  "doctype": "Code",
+  "mapped_doctype": "UOM",
+  "mapped_entry": "Each",
+  "modified": "2024-12-28 15:48:46.359164",
+  "name": "17-EACH-Each",
+  "user_dfn_cd1": null
+ }
+]
