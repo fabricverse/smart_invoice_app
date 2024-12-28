@@ -2961,6 +2961,8 @@ def update_branches(initialize=False):
     # Fetch all existing branches
     existing_branches = {d.branch: d for d in get_saved_branches()}
     statuses = {d.cd: d for d in frappe.get_all("Code", fields=["name", "cd"], filters={"cd_cls": "09"})}
+    if not statuses:
+        frappe.throw("Initialize ZRA data first")
 
     for branch_data in data['data']['bhfList']:
 
