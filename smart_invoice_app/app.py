@@ -333,7 +333,7 @@ def api(endpoint, data, initialize=False):
 
 
 def get_saved_branches():
-    branches = frappe.get_all("Branch", fields=["*"], limit=0)
+    branches = frappe.get_all("Branch", fields=["*"], order_by="custom_bhf_id asc", limit=0)
     if not branches:
         branch = frappe.new_doc("Branch")
         branch.custom_bhf_id = "000"
@@ -341,10 +341,9 @@ def get_saved_branches():
     return branches
 
 def get_branches(initialize=False): # review
-    saved_branches = get_saved_branches()
 
     response = api("/api/method/smart_invoice_api.api.select_branches", {
-        "bhf_id": saved_branches[0].custom_bhf_id
+        "bhf_id": "000"
     }, initialize)
 
     return validate_api_response(response)
@@ -2355,7 +2354,7 @@ def is_migration():
         
                for frame in stack)
     if b:
-        print('ignored on installation/migration')
+        print('Skipping action during installation/migration')
     return b
     
 
@@ -3219,12 +3218,14 @@ def update_codes(initialize=False):
                     update_code(name, code_data, class_data, existing_codes, mapped_doctype)
             except frappe.exceptions.DuplicateEntryError as e:
                 update_code(name, code_data, class_data, existing_codes, mapped_doctype)
-    
     frappe.db.commit()
     return True
 
 def update_code(name, code_data, class_data, existing_codes, mapped_doctype=None):
-    existing_code = existing_codes[name]
+    existing_code = frappe.get_doc("Code", name)
+
+    if not existing_code:
+        return
 
     if (existing_code.cd_cls != class_data['cdCls'] or
         existing_code.cd_nm != code_data['cdNm'] or
@@ -3244,6 +3245,7 @@ def update_code(name, code_data, class_data, existing_codes, mapped_doctype=None
             frappe.msgprint(str(e))
         except Exception as e:
             frappe.msgprint(str(e))
+
         
 def get_codes(initialize=False, validate=True):
     response = api("/api/method/smart_invoice_api.api.select_codes", {

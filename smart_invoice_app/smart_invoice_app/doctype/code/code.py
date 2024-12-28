@@ -14,7 +14,8 @@ class Code(Document):
 		self.attempt_code_mapping()
 	
 	def attempt_code_mapping(self):
-		if not self.mapped_doctype or (self.mapped_doctype != "UOM" and self.mapped_entry):
+		already_mapped_non_uom_code = (self.mapped_doctype != "UOM" and self.mapped_entry)
+		if not self.mapped_doctype or already_mapped_non_uom_code:
 			return
 		
 		map_entry = self.find_mapping_entry()
@@ -51,18 +52,18 @@ class Code(Document):
 					# update different fields
 					if (mapped_uom[0]['custom_cd'] != self.name or 
 						mapped_uom[0]['custom_code_cd'] != self.cd or 
-						mapped_uom[0]['custom_code_class_name'] != self.cd_cls):		
+						mapped_uom[0]['custom_code_class_name'] != self.cd_cls):
 
 						uom_doc = frappe.get_doc("UOM", mapped_uom[0]['uom_name'])
 						uom_doc.custom_cd = self.name
 						uom_doc.custom_code_cd = self.cd
 						uom_doc.custom_code_class_name = self.cd_cls
 						uom_doc.flags.ignore_mandatory = True
-						uom_doc.save(ignore_permissions=True)
-					
+						uom_doc.save(ignore_permissions=True)					
 					return mapped_uom[0]['uom_name']
 				else:
-					return self.create_uom_entry().uom_name
+					mapped_uom = self.create_uom_entry().uom_name
+					return mapped_uom
 			except Exception as e:
 				frappe.throw(str(e))
 		if self.mapped_doctype in ['Tax Category']:
@@ -117,6 +118,7 @@ class Code(Document):
 		item_tax = frappe.new_doc("Item Tax Template")
 		item_tax.title = self.cd_nm
 		item_tax.custom_smart_invoice_tax_code = self.name
+		item_tax.custom_code = self.cd
 		item_tax.company = company.name
 		
 		# Create a child table row for taxes
@@ -144,6 +146,7 @@ class Code(Document):
 		new_doc.enabled = 1
 
 		new_doc.insert(ignore_permissions=True, ignore_mandatory=True)
+		frappe.db.commit()
 		return new_doc
 	
 	def create_country_entry(self):
