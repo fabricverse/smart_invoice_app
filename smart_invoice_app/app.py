@@ -13,29 +13,28 @@ import inspect
 from frappe.utils.password import get_decrypted_password, get_encryption_key
 import re
 
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-from frappe.utils.data import add_to_date, get_time, getdate
-from pyqrcode import create as qr_create
+from datetime import datetime, date
 
-from erpnext import get_region
-
-
-
-"""global method to convert date to yyyymmddmmss"""
-def api_date_format(date, date_only=False):
-    if type(date) == str and not date_only:
-        date = datetime.strptime(date.split('.')[0], "%Y-%m-%d %H:%M:%S")
-    elif type(date) == str and date_only:
-        date = datetime.strptime(date, "%Y-%m-%d")
-    elif type(date) != datetime:
+def api_date_format(date_input, date_only=False):
+    if isinstance(date_input, str):
+        if not date_only:
+            date_input = datetime.strptime(date_input.split('.')[0], "%Y-%m-%d %H:%M:%S")
+        else:
+            date_input = datetime.strptime(date_input, "%Y-%m-%d")
+    elif isinstance(date_input, date):
+        # Convert datetime.date to datetime.datetime
+        date_input = datetime.combine(date_input, datetime.min.time())
+    elif not isinstance(date_input, datetime):
         frappe.throw("Invalid date type")
-    return date.strftime("%Y%m%d%H%M%S") if not date_only else date.strftime("%Y%m%d")
-
     
+    return date_input.strftime("%Y%m%d%H%M%S") if not date_only else date_input.strftime("%Y%m%d")
+
 frappe.whitelist()
 def get_settings():
     return frappe.get_cached_doc("Smart Invoice Settings", "Smart Invoice Settings")
 
+def get_region(company_name):
+    return frappe.get_cached_value("Company", company_name, "country")
 
 def create_qr_code(doc, data):
     region = get_region(doc.company)
@@ -744,7 +743,7 @@ def get_invoice_data(invoice, branch=None):
     posting_date_only = api_date_format(posting_date, date_only=True)
 
     country_code = get_country_code(invoice)
-    invoice_name = api_date_format(f"{frappe.utils.get_datetime_str(frappe.utils.get_datetime())}")
+    test_invoice_name = api_date_format(f"{frappe.utils.get_datetime_str(frappe.utils.get_datetime())}")
 
     if invoice.doctype == "Sales Invoice":
         # Group variables that depend on is_return
@@ -834,7 +833,7 @@ def get_invoice_data(invoice, branch=None):
         "bhfId": branch['custom_bhf_id'],        
         "orgSdcId": org_sdc_id,
         "orgInvcNo": org_invc_no,
-        "cisInvcNo": invoice_name,# invoice.name, #
+        "cisInvcNo": invoice.name, #test_invoice_name
             
         "rfdDt": rfd_dt,
         "rfdRsnCd": rfd_rsn_cd,
@@ -1155,14 +1154,14 @@ def save_invoice_api(invoice, method=None, branch=None):
     
     save_sales_data = save_sales.get("response_data")
     if not save_sales_data:
-        frappe.throw("Smart Invoice: Connection Failure")
+        frappe.msgprint("Smart Invoice: Connection Failure. Retrying ...")
     json_data = json.loads(save_sales_data)
 
     if json_data.get("resultCd") == "000":
         msg = json_data.get("data")
         create_qr_code(invoice, data=msg)
     else:
-        frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
+        frappe.msgprint(f"{json_data.get('resultMsg')}", title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
 
 from erpnext.stock.stock_ledger import get_stock_balance
 def get_stock_master_data(stock_item_data, ledger):
@@ -3344,8 +3343,11 @@ def test_connection():
 
     if codes:
         response_data = codes.get("response_data")
-        data = json.loads(response_data) if response_data else {}
-        if data and not data.get('error') and data.get('resultCd') in ["000", "001"]:
+
+        data = {}
+        if response_data and response_data != "Smart Invoice VSDC Timeout":
+            data = json.loads(response_data)
+        if data and not data.get('error') and data.get('resultCd') in ["000", "001"] and response_data != "Smart Invoice VSDC Timeout":
             frappe.msgprint("Connection Successful", indicator='green', alert=True)
             return True
         else:
@@ -3353,4 +3355,8 @@ def test_connection():
             return False
     else:
         frappe.msgprint("Connection Failure", indicator='red', alert=True)
+        return False
+        return False
+        return False
+        return False
         return False
