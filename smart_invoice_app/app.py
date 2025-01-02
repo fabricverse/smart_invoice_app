@@ -834,7 +834,7 @@ def get_invoice_data(invoice, branch=None):
         "bhfId": branch['custom_bhf_id'],        
         "orgSdcId": org_sdc_id,
         "orgInvcNo": org_invc_no,
-        "cisInvcNo": invoice_name,# invoice.name, #
+        "cisInvcNo": invoice.name, #invoice_name
             
         "rfdDt": rfd_dt,
         "rfdRsnCd": rfd_rsn_cd,
@@ -1152,17 +1152,34 @@ def save_invoice_api(invoice, method=None, branch=None):
     endpoint = "/api/method/smart_invoice_api.api.save_sales"
 
     save_sales = api(endpoint, invoice_data)
+    if save_sales.get('error', None):
+        print(save_sales)
+        # frappe.msgprint(title=f"Smart Invoice Error: {save_sales.get('error')}", msg=save_sales.get("response"))
+
+        error_handler(save_sales)
+        return
+    validate_api_response(save_sales)
+    print(save_sales)
     
     save_sales_data = save_sales.get("response_data")
     if not save_sales_data:
-        frappe.throw("Smart Invoice: Connection Failure")
+        frappe.msgprint("Smart Invoice: Connection Failure. Retrying in the background ...")
+        return
     json_data = json.loads(save_sales_data)
 
     if json_data.get("resultCd") == "000":
         msg = json_data.get("data")
-        create_qr_code(invoice, data=msg)
+        # create_qr_code(invoice, data=msg)
     else:
-        frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
+        if json_data.get('resultMsg', None):
+            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
+        elif json_data.get('error', None):
+            frappe.throw(json_data.get('error'), title=f"Smart Invoice Failure")
+        else:
+            frappe.throw(json_data, title=f"Smart Invoice Failure")
+
+
+
 
 from erpnext.stock.stock_ledger import get_stock_balance
 def get_stock_master_data(stock_item_data, ledger):
