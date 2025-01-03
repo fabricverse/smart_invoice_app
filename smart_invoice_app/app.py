@@ -13,6 +13,10 @@ import inspect
 from frappe.utils.password import get_decrypted_password, get_encryption_key
 import re
 
+from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+from frappe.utils.data import add_to_date, get_time, getdate
+from pyqrcode import create as qr_create
+
 from datetime import datetime, date
 
 def api_date_format(date_input, date_only=False):
@@ -88,16 +92,26 @@ def create_qr_code(doc, data):
         _file.save()
 
         # assigning to document
-        doc.db_set('invoice_qr_code', _file.file_url)
-        doc.db_set('custom_sdc_id', data.get("sdcId"))
-        doc.db_set('custom_receipt_no', data.get("rcptNo"))
+        # doc.db_set('invoice_qr_code', _file.file_url)
+        # doc.db_set('custom_sdc_id', data.get("sdcId"))
+        # doc.db_set('custom_receipt_no', data.get("rcptNo"))
 
-        doc.db_set('custom_internal_data', data.get("intrlData"))
-        doc.db_set('custom_fiscal_signature', data.get("rcptSign"))
-        doc.db_set('custom_vsdc_date', data.get("vsdcRcptPbctDate"))
-        doc.db_set('custom_mrc_no', data.get("mrcNo"))
+        # doc.db_set('custom_internal_data', data.get("intrlData"))
+        # doc.db_set('custom_fiscal_signature', data.get("rcptSign"))
+        # doc.db_set('custom_vsdc_date', data.get("vsdcRcptPbctDate"))
+        # doc.db_set('custom_mrc_no', data.get("mrcNo"))
 
         # intrlData, vsdcRcptPbctDate, mrcNo
+
+        doc.db_set({
+            'invoice_qr_code': _file.file_url,
+            'custom_sdc_id': data.get("sdcId"),
+            'custom_receipt_no': data.get("rcptNo"),
+            'custom_internal_data': data.get("intrlData"),
+            'custom_fiscal_signature': data.get("rcptSign"),
+            'custom_vsdc_date': data.get("vsdcRcptPbctDate"),
+            'custom_mrc_no': data.get("mrcNo")
+        })
         
         doc.notify_update()
 
@@ -697,7 +711,7 @@ def save_purchase_invoice_api(invoice, method=None, branch=None):
         if save_purchase.get("error"):
             frappe.throw(save_purchase.get("error"), title="Smart Invoice Failure")
 
-    save_purchase_data = save_purchase.get("response_data")
+    save_purchase_data = save_purchase.get("response")
     json_data = json.loads(save_purchase_data)
 
     if json_data.get("resultCd") == "000":
@@ -1146,39 +1160,42 @@ def calculate_item_taxes(company, invoice, data, items, country_code=None):
 
 @frappe.whitelist()
 def save_invoice_api(invoice, method=None, branch=None):
+    frappe.db.commit()
     
     invoice_data = get_invoice_data(invoice, branch=branch)    
     endpoint = "/api/method/smart_invoice_api.api.save_sales"
-
-    save_sales = api(endpoint, invoice_data)
-    if save_sales.get('error', None):
-        print(save_sales)
+    save_response = api(endpoint, invoice_data)
+    
+    if save_response.get('error', None):
+        print(1, save_response)
         # frappe.msgprint(title=f"Smart Invoice Error: {save_sales.get('error')}", msg=save_sales.get("response"))
 
-        error_handler(save_sales)
+        error_handler(save_response)
         return
-    validate_api_response(save_sales)
-    print(save_sales)
     
-    save_sales_data = save_sales.get("response_data")
-    if not save_sales_data:
+    invoice_data = save_response.get("response", None)
+    if not invoice_data:
         frappe.msgprint("Smart Invoice: Connection Failure. Retrying in the background ...")
         return
-    json_data = json.loads(save_sales_data)
+    json_data = json.loads(invoice_data)
 
     if json_data.get("resultCd") == "000":
-        msg = json_data.get("data")
-        # create_qr_code(invoice, data=msg)
+        data = json_data.get("data")
+        create_qr_code(invoice, data=data)
     else:
         if json_data.get('resultMsg', None):
             frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
         elif json_data.get('error', None):
-            frappe.throw(json_data.get('error'), title=f"Smart Invoice Failure")
+            if json_data.get('error') in ["VSDC Connection Error", "VSDC timeout"]:
+                frappe.msgprint("Smart Invoice: Connection Failure. Retrying in the background ...")
+            elif json_data.get('text', None):
+                # frappe.throw(json_data.get('text'), title=f"Smart Invoice Failure")
+                frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure")
+
+            else:
+                frappe.throw(str(json_data), title=f"Smart Invoice Failure")
         else:
-            frappe.throw(json_data, title=f"Smart Invoice Failure")
-
-
-
+            frappe.throw(str(json_data), title=f"Smart Invoice Failure")
 
 from erpnext.stock.stock_ledger import get_stock_balance
 def get_stock_master_data(stock_item_data, ledger):
@@ -1206,14 +1223,14 @@ def update_stock_movement(ledger, method=None):
     stock_master_data = None
     if stock_item_data := get_item_data(ledger):
         response = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
-        saved_stock_items = json.loads(response.get("response_data"))
+        saved_stock_items = json.loads(response.get("response"))
 
         if saved_stock_items.get("resultCd") == "000":
             stock_master_data = get_stock_master_data(stock_item_data, ledger)
             
             saved_stock_master = api("/api/method/smart_invoice_api.api.save_stock_master", stock_master_data)
 
-            saved_stock_master_response = json.loads(saved_stock_master.get("response_data"))
+            saved_stock_master_response = json.loads(saved_stock_master.get("response"))
 
             if not saved_stock_master_response or saved_stock_master_response.get("resultCd") != "000":
                 frappe.throw(_(f"Message saved_stock_master_response: {saved_stock_master_response.get('resultMsg')}"), title="Smart Invoice Failure")
@@ -2732,11 +2749,11 @@ def sync_customer_api(customer):
 
     response = api("/api/method/smart_invoice_api.api.save_branche_customer", data)
 
-    response_data = json.loads(response.get('response_data', None))
+    response = json.loads(response.get('response', None))
 
-    if response_data:
-        code = response_data.get("resultCd")
-        msg = response_data.get("resultMsg")
+    if response:
+        code = response.get("resultCd")
+        msg = response.get("resultMsg")
 
         if code == "000": 
             frappe.msgprint(f"Synchronized customer details with Smart Invoice", indicator='green', alert=True)
@@ -2745,18 +2762,18 @@ def sync_customer_api(customer):
             if code == "910":
                 if "custNo" in msg:
                     frappe.msgprint(
-                        title=f"Smart Invoice Error - {response_data.get('resultCd')}",
+                        title=f"Smart Invoice Error - {response.get('resultCd')}",
                         msg="The phone number length is incorrect, make sure its 10 digits"
                     )
                 elif "TPIN" in msg:
                     frappe.throw(
-                        title=f"Smart Invoice Error - {response_data.get('resultCd')}",
+                        title=f"Smart Invoice Error - {response.get('resultCd')}",
                         msg="TPIN is invalid, check if the length is correct"
                     )
                 else:
                     frappe.msgprint(
-                        title=f"Smart Invoice Error - {response_data.get('resultCd')}",
-                        msg=str(response_data.get('resultMsg'))
+                        title=f"Smart Invoice Error - {response.get('resultCd')}",
+                        msg=str(response.get('resultMsg'))
                     )
     else:
         frappe.msgprint(f"Smart Invoice connection failure, please try again shortly.", indicator='red')
@@ -3140,8 +3157,8 @@ def update_codes(initialize=False):
     if not fetched_data:
         return None
     
-    if fetched_data.get('response_data', None):
-        fetched_data = fetched_data.get('response_data')
+    if fetched_data.get('response', None):
+        fetched_data = fetched_data.get('response')
     else:
         result_cd = fetched_data.get('resultCd', None)
         error = fetched_data.get('error', None)
@@ -3283,15 +3300,15 @@ def validate_api_response(fetched_data):
     try:
         response_json = fetched_data if isinstance(fetched_data, dict) else json.loads(fetched_data)
         
-        response_data = response_json.get('response_data', None)
-        if type(response_data) == str:
-            response_data = json.loads(response_data)
+        response = response_json.get('response', None)
+        if type(response) == str:
+            response = json.loads(response)
         
-        result_cd = response_data.get('resultCd')
-        result_msg = response_data.get('resultMsg')
+        result_cd = response.get('resultCd')
+        result_msg = response.get('resultMsg')
 
         if result_cd in ('000', '001', '801', '802', '803', '805'):
-            return response_data
+            return response
 
         error_messages = {
             '894': "Unable to connect to the Smart Invoice Server",
@@ -3332,39 +3349,22 @@ def validate_api_response(fetched_data):
         # error_traceback = traceback.format_exc()
         # print(f"{str(e)}\n\nTraceback:\n{error_traceback}")
         return None
-
-@frappe.whitelist()
-def test_connection():   
-    codes = get_codes()
-    
-    if codes:
-        if not codes.get('error'):
-            frappe.msgprint("Connection Successful", indicator='green', alert=True)
-        else:
-            frappe.msgprint("Connection Failure", indicator='red', alert=True)
-    else:
-        frappe.msgprint("Connection Failure", indicator='red', alert=True)
-    return codes
-    
-    # if 'error_info' in locals():
-    #     error_handler(error_info)
-    #     return None
-
-
+        
 
 @frappe.whitelist()
 def test_connection():   
     # verify_site_encryption()
 
-    codes = get_codes(validate=False)
+    # codes = get_codes(validate=False)
+    branches = get_branches()
 
-    if codes:
-        response_data = codes.get("response_data")
+    if branches:
+        response = branches.get("response")
 
         data = {}
-        if response_data and response_data != "Smart Invoice VSDC Timeout":
-            data = json.loads(response_data)
-        if data and not data.get('error') and data.get('resultCd') in ["000", "001"] and response_data != "Smart Invoice VSDC Timeout":
+        if response and response != "Smart Invoice VSDC Timeout":
+            data = json.loads(response)
+        if data and not data.get('error') and data.get('resultCd') in ["000", "001"] and response != "Smart Invoice VSDC Timeout":
             frappe.msgprint("Connection Successful", indicator='green', alert=True)
             return True
         else:
@@ -3372,8 +3372,4 @@ def test_connection():
             return False
     else:
         frappe.msgprint("Connection Failure", indicator='red', alert=True)
-        return False
-        return False
-        return False
-        return False
         return False
