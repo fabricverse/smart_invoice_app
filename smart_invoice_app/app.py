@@ -1234,26 +1234,26 @@ def get_stock_master_data(stock_item_data, ledger):
     return stock_master_data
 
 def update_stock_movement(ledger, method=None):
-    frappe.db.commit()
+    
     stock_master_data = None
     if stock_item_data := get_item_data(ledger):
         sync_doc = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
         response = json.loads(sync_doc.get("response"))
-        print(response, sync_doc)
+        print("response", sync_doc)
 
-        if response.get("resultCd") == "000" and not response.get('error', None):
-            stock_master_data = get_stock_master_data(response, ledger)
+        if response.get("resultCd") == "000" or sync_doc.get('status', None) == "Connection Error":
+            stock_master_data = get_stock_master_data(sync_doc, ledger)
             
             saved_stock_master = api("/api/method/smart_invoice_api.api.save_stock_master", stock_master_data)
 
             saved_stock_master_response = json.loads(saved_stock_master.get("response"))
 
-            if not saved_stock_master_response or saved_stock_master_response.get("resultCd") != "000":
-                frappe.throw(_(f"Message saved_stock_master_response: {saved_stock_master_response.get('resultMsg')}"), title="Smart Invoice Failure")
-        elif response.get('error', None):
-            frappe.msgprint(title=response.get("text", response.get('error', "Unknown Error: " + str(response))), msg=response.get('error', None))
-        else:
-            frappe.throw(_(f"Message saved_stock_items: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
+        #     if not saved_stock_master_response or saved_stock_master_response.get("resultCd") != "000":
+        #         frappe.msgprint(_(f"Message: {saved_stock_master_response.get('resultMsg')}"), title="Smart Invoice Failure")
+        # elif response.get('error', None):
+        #     frappe.msgprint(title=response.get("text", response.get('error', "Unknown Error: " + str(response))), msg=response.get('error', None))
+        # else:
+        #     frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
 
 
 def get_item_data(ledger):
