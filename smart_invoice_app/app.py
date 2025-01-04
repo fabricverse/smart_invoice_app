@@ -694,7 +694,8 @@ def get_purchase_invoices_api():
     data = validate_api_response(response)
     return data
 
-
+def retry_message():
+    frappe.msgprint(title="Smart Invoice", msg="Connection Failure. Retrying in the background ...")
 
 @frappe.whitelist()
 def save_purchase_invoice_api(invoice, method=None, branch=None):
@@ -704,20 +705,36 @@ def save_purchase_invoice_api(invoice, method=None, branch=None):
     
     invoice_data = get_invoice_data(invoice, branch=branch)    
     endpoint = "/api/method/smart_invoice_api.api.save_purchase"
+    save_response = api(endpoint, invoice_data)
 
-    save_purchase = api(endpoint, invoice_data)
+    if not validate_api_response(save_response):
+        if save_response.get("error", None):
+            retry_message()
+            return
 
-    if not validate_api_response(save_purchase):
-        if save_purchase.get("error"):
-            frappe.throw(save_purchase.get("error"), title="Smart Invoice Failure")
-
-    save_purchase_data = save_purchase.get("response")
-    json_data = json.loads(save_purchase_data)
+    invoice_data = save_response.get("response", None)
+    if not invoice_data:
+        retry_message()
+        return
+    json_data = json.loads(invoice_data)
 
     if json_data.get("resultCd") == "000":
-        msg = json_data.get("data")
+        frappe.msgprint("Saved to Smart Invoice", alert=True, indicator="success")
     else:
-        frappe.throw(_(f"Message: {json_data.get('resultMsg')}"), title="Smart Invoice Failure")
+        if json_data.get('resultMsg', None):
+            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
+        elif json_data.get('error', None):
+            if json_data.get('error') in ["VSDC Connection Error", "VSDC timeout"]:
+                retry_message()
+            elif json_data.get('text', None):
+                # frappe.throw(json_data.get('text'), title=f"Smart Invoice Failure")
+                frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure")
+                frappe.msgprint("This document will be uploaded once connected to smart invoice", title=f"Smart Invoice Failure")
+
+            else:
+                frappe.throw(str(json_data), title=f"Smart Invoice Failure")
+        else:
+            frappe.throw(str(json_data), title=f"Smart Invoice Failure")
 
 
 def get_invoice_data(invoice, branch=None):
@@ -1167,15 +1184,12 @@ def save_invoice_api(invoice, method=None, branch=None):
     save_response = api(endpoint, invoice_data)
     
     if save_response.get('error', None):
-        print(1, save_response)
-        # frappe.msgprint(title=f"Smart Invoice Error: {save_sales.get('error')}", msg=save_sales.get("response"))
-
         error_handler(save_response)
         return
     
     invoice_data = save_response.get("response", None)
     if not invoice_data:
-        frappe.msgprint("Smart Invoice: Connection Failure. Retrying in the background ...")
+        frappe.msgprint(title="Smart Invoice", msg="Connection Failure. Retrying in the background ...")
         return
     json_data = json.loads(invoice_data)
 
@@ -1220,13 +1234,15 @@ def get_stock_master_data(stock_item_data, ledger):
     return stock_master_data
 
 def update_stock_movement(ledger, method=None):
+    frappe.db.commit()
     stock_master_data = None
     if stock_item_data := get_item_data(ledger):
-        response = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
-        saved_stock_items = json.loads(response.get("response"))
+        sync_doc = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
+        response = json.loads(sync_doc.get("response"))
+        print(response, sync_doc)
 
-        if saved_stock_items.get("resultCd") == "000":
-            stock_master_data = get_stock_master_data(stock_item_data, ledger)
+        if response.get("resultCd") == "000" and not response.get('error', None):
+            stock_master_data = get_stock_master_data(response, ledger)
             
             saved_stock_master = api("/api/method/smart_invoice_api.api.save_stock_master", stock_master_data)
 
@@ -1234,6 +1250,8 @@ def update_stock_movement(ledger, method=None):
 
             if not saved_stock_master_response or saved_stock_master_response.get("resultCd") != "000":
                 frappe.throw(_(f"Message saved_stock_master_response: {saved_stock_master_response.get('resultMsg')}"), title="Smart Invoice Failure")
+        elif response.get('error', None):
+            frappe.msgprint(title=response.get("text", response.get('error', "Unknown Error: " + str(response))), msg=response.get('error', None))
         else:
             frappe.throw(_(f"Message saved_stock_items: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
 
