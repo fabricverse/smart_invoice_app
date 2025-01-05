@@ -1,7 +1,7 @@
 # Copyright (c) 2024, Bantoo and Partners and contributors
 # For license information, please see license.txt
 
-import frappe
+import frappe, json
 from frappe.model.document import Document
 from smart_invoice_app.app import (api, validate_api_response, 
     format_date_only, get_doc_user_data, api_date_format, 
@@ -48,7 +48,7 @@ class ASYCUDAVerification(Document):
         
         items = self.get_purchase_items()
         if not items:
-            return
+            frappe.throw("No items to add. You need to update import items first")
 
         branches = get_user_branches()
         currency, conversion_rate = self.get_currency_and_exchange_rate()
@@ -77,6 +77,7 @@ class ASYCUDAVerification(Document):
         self.save()
         return doc.name
 
+    @frappe.whitelist()
     def get_purchase_items(self):
         items = []
         for item in self.items:
@@ -133,7 +134,8 @@ class ASYCUDAVerification(Document):
             if count > 0:
                 request_data.update({"importItemList": task_items})
                 response = api( "/api/method/smart_invoice_api.api.update_import_items", request_data )
-                response_data = validate_api_response(response)
+                validate_api_response(response)
+                response_data = json.loads(response.get('response'))
                 
                 if response_data:                    
                     if response_data.get("resultCd") =="000":
@@ -288,7 +290,8 @@ def select_import_items():
         }, 
         initialize=True,
     )
-    return validate_api_response(response)
+    validate_api_response(response)
+    return json.loads(response.get('response'))
 
 @frappe.whitelist()
 def get(from_list=False):
@@ -427,6 +430,6 @@ def create_doc(item_data):
         })
         
         doc.flags.ignore_permissions=True
-        doc.insert()
+        doc.insert(ignore_permissions=True)
     else:
         frappe.msgprint("Smart Invoice: No new imports", indicator="Blue", alert=True)

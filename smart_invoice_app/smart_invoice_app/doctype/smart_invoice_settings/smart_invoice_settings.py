@@ -12,8 +12,8 @@ class SmartInvoiceSettings(Document):
 		# Check if the update is triggered by a migration
 		if is_migration():
 			return
-		test_connection()
-		self.initialize_vsdc()
+		if test_connection():
+			self.initialize_vsdc()
 
 	def validate(self):
 		site_url = frappe.utils.get_url()
@@ -33,7 +33,7 @@ class SmartInvoiceSettings(Document):
 		})
 
 		if response:
-			if data:= response.get("response_data"):
+			if data:= response.get("response"):
 				data = json.loads(data)
 				if data.get("resultCd") in ["000", "902"]:
 					return "Device is initialized"				
@@ -43,7 +43,7 @@ class SmartInvoiceSettings(Document):
 				return "No response data. Verify your VSDC Settings."
 
 		else:
-			return "Error: {str(response)}"
+			return f"Error: {str(response)}"
 
 			# TODO: simplify
 		

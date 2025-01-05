@@ -10,16 +10,26 @@ frappe.ui.form.on("ASYCUDA Verification", {
 
 function add_create_buttons(frm){
 
-    frm.add_custom_button(__("Purchase Receipt"), function() {
-        create_purchase_receipt(frm); 
-    }, __("Create"));
+    frappe.call({
+        method: "get_purchase_items",
+        doc: frm.doc,
+        callback: (r=>{
+            if (!r.error && r.message.length>0){
+                frm.add_custom_button(__("Purchase Receipt"), function() {
+                    create_purchase_receipt(frm); 
+                }, __("Create"));
+            
+                frm.add_custom_button(__("Purchase Invoice"), function() {
+                    create_purchase_invoice(frm);
+                }, __("Create"));
+                frm.page.set_inner_btn_group_as_primary(__("Create"));
+            
+                // frm.find('button:contains("Create")').removeClass('btn-default').addClass('btn-success');
+            }
+            
+        })
 
-    frm.add_custom_button(__("Purchase Invoice"), function() {
-        create_purchase_invoice(frm);
-    }, __("Create"));
-    frm.page.set_inner_btn_group_as_primary(__("Create"));
-
-    // frm.find('button:contains("Create")').removeClass('btn-default').addClass('btn-success');
+    })
     
 }
 
