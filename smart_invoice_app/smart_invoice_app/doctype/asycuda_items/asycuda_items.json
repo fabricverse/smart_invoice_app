@@ -294,8 +294,8 @@
    "fieldname": "item_class",
    "fieldtype": "Link",
    "label": "Item Class",
-   "options": "Item Class",
-   "reqd": 1
+   "mandatory_depends_on": "eval: true",
+   "options": "Item Class"
   },
   {
    "depends_on": "purchase_receipt",
@@ -317,7 +317,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2024-12-02 13:30:51.877109",
+ "modified": "2025-01-05 19:57:42.402239",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "ASYCUDA Items",

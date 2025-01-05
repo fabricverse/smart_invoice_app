@@ -11,11 +11,11 @@ frappe.ui.form.on("Smart Invoice Settings", {
                 })
             }, "Menu");
 
-            frm.add_custom_button(__("Update ZRA Data"), function() {
-                frappe.call({
-                    method: "smart_invoice_app.app.sync_dependancies"
-                })
-            }, "Menu");
+            // frm.add_custom_button(__("Update ZRA Data"), function() {
+            //     frappe.call({
+            //         method: "smart_invoice_app.app.sync_dependancies"
+            //     })
+            // }, "Menu");
 
             frm.add_custom_button(__("Initialize ZRA Data"), function() {
                 frappe.call({
