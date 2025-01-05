@@ -45,13 +45,22 @@
   "title": "Reverse VAT"
  },
  {
-  "custom_cd": "B",
+  "custom_cd": "D",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "Tax Category",
-  "modified": "2024-09-28 17:58:54.069761",
-  "name": "Minimum Taxable Value (MTV-16%)",
-  "title": "Minimum Taxable Value (MTV-16%)"
+  "modified": "2024-09-28 18:34:42.130850",
+  "name": "Exempt",
+  "title": "Exempt"
+ },
+ {
+  "custom_cd": "E",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Tax Category",
+  "modified": "2024-09-28 16:44:12.608280",
+  "name": "Disbursement",
+  "title": "Disbursement"
  },
  {
   "custom_cd": "C3",
@@ -63,13 +72,13 @@
   "title": "Zero-rated by nature"
  },
  {
-  "custom_cd": "D",
+  "custom_cd": "B",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "Tax Category",
-  "modified": "2024-09-28 18:34:42.130850",
-  "name": "Exempt",
-  "title": "Exempt"
+  "modified": "2024-09-28 17:58:54.069761",
+  "name": "Minimum Taxable Value (MTV-16%)",
+  "title": "Minimum Taxable Value (MTV-16%)"
  },
  {
   "custom_cd": "A",
@@ -79,14 +88,5 @@
   "modified": "2024-09-28 18:34:41.864432",
   "name": "Standard Rated(16%)",
   "title": "Standard Rated(16%)"
- },
- {
-  "custom_cd": "E",
-  "disabled": 0,
-  "docstatus": 0,
-  "doctype": "Tax Category",
-  "modified": "2024-09-28 16:44:12.608280",
-  "name": "Disbursement",
-  "title": "Disbursement"
  }
 ]
