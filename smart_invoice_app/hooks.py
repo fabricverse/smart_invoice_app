@@ -154,7 +154,10 @@ doc_events = {
         "on_update": "smart_invoice_app.app.update_item_api"
     },
     "Customer": {
-        "on_update": "smart_invoice_app.app.sync_customer"
+        "on_update": [
+            "smart_invoice_app.customizations.customer.check_phone_duplicates",
+            "smart_invoice_app.app.sync_customer"
+        ]
     },
     "BOM": {
         "on_submit": "smart_invoice_app.app.save_item_composition"
