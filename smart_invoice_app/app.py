@@ -345,7 +345,6 @@ def api(endpoint, data, initialize=False):
         }
         return error_handler(error_info)
 
-
 def get_saved_branches():
     branches = frappe.get_all("Branch", fields=["*"], order_by="custom_bhf_id asc", limit=0)
     if not branches:
@@ -1409,12 +1408,12 @@ def get_item_data(ledger):
                 if dn.is_return == 1:
                     transaction_code = "12"
                 else:
-                    transaction_code = "13"
+                    transaction_code = "11"
 
                 # if cancelled, use opposite transaction code
                 if dn.docstatus == 2:
                     if dn.is_return == 1:
-                        transaction_code = "13"
+                        transaction_code = "11"
                     else:
                         transaction_code = "12"
             else:
@@ -1425,18 +1424,18 @@ def get_item_data(ledger):
                         if item.purchase_invoice:
                             doc = frappe.get_cached_doc("Purchase Invoice", item.purchase_invoice)
                             break
-                    
+                
                 if pr.is_return == 1:
                     transaction_code = "03"
                 else:
-                    transaction_code = "04"
+                    if pr.custom_asycuda == 0: 
+                        transaction_code = "02"
+                    else:
+                        transaction_code = "01"
 
                 # if cancelled, use opposite transaction code
                 if pr.docstatus == 2:
-                    if pr.is_return == 1:
-                        transaction_code = "04"
-                    else:
-                        transaction_code = "03"
+                    transaction_code = "03"
             
         else:
             doc = frappe.get_cached_doc(ledger.voucher_type, ledger.voucher_no)
@@ -1445,12 +1444,12 @@ def get_item_data(ledger):
                 if doc.is_return == 1:
                     transaction_code = "12"
                 else:
-                    transaction_code = "13"     
+                    transaction_code = "11"     
 
                 # if cancelled, use opposite transaction code
                 if doc.docstatus == 2:
                     if doc.is_return == 1:
-                        transaction_code = "13"
+                        transaction_code = "11"
                     else:
                         transaction_code = "12"
             elif doc.doctype == "Purchase Invoice":
@@ -1502,13 +1501,13 @@ def get_item_data(ledger):
                 return None
             
             elif se.stock_entry_type == "Material Issue":
-                transaction_code = "13"
+                transaction_code = "16"
                 
                 # if cancelled, use opposite transaction code
                 if se.docstatus == 2:
                     transaction_code = "04"
             elif se.stock_entry_type == "Material Receipt":
-                transaction_code = "04"
+                transaction_code = "06"
                 
                 # if cancelled, use opposite transaction code
                 if se.docstatus == 2:
@@ -2392,7 +2391,7 @@ def get_user_branches(name=None, user=None):
         if branch:
             return branch
 
-    branches = frappe.get_all("Branch", fields=["branch", "custom_bhf_id", "custom_tpin", "custom_company"], limit=0)
+    branches = frappe.get_all("Branch", fields=["branch", "custom_bhf_id", "custom_tpin", "custom_company"], filters={"custom_bhf_id": ["is", "set"]}, limit=0)
     branch_users = frappe.get_all("Branch User", fields=["*"], filters={"user_id": ("in", [frappe.session.user])}, limit=0)
 
     branch_data = []

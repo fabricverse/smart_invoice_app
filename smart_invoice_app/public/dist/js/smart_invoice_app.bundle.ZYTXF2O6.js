@@ -108,5 +108,74 @@
       return variant_fields;
     }
   };
+
+  // ../smart_invoice_app/smart_invoice_app/public/js/smart_invoice_setup.js
+  console.log("asd");
+  $(document).ready(function() {
+    frappe.call({
+      method: "smart_invoice_app.scripts.setup.check_setup",
+      callback: (r) => {
+        let setup_progress = r.message;
+        if (r.error || !setup_progress) {
+          console.log(r.error);
+          return;
+        }
+        console.log("system_is_setup", setup_progress);
+        if (setup_progress.system_is_setup) {
+          if (setup_progress.branches_setup) {
+            branch_selector();
+            return;
+          } else {
+            frappe.show_alert("Please setup branches first");
+          }
+        }
+      }
+    });
+  });
+  function branch_selector() {
+    frappe.call({
+      method: "smart_invoice_app.scripts.branch.get_branches_with_setup",
+      callback: function(r) {
+        if (r.error) {
+          frappe.show_alert(__("Error fetching branches: ") + r.message);
+          return;
+        }
+        let branches = r.message;
+        if (branches.length === 0) {
+          frappe.show_alert(__("No branches are set up."));
+          return;
+        } else {
+          show_branch_selection_dialog(branches);
+        }
+      }
+    });
+  }
+  function show_branch_selection_dialog(branches) {
+    let branch_options = branches.map((branch) => ({ label: branch.name, value: branch.name }));
+    let dialog = new frappe.ui.Dialog({
+      title: __("Select Branch"),
+      fields: [
+        {
+          fieldtype: "Select",
+          fieldname: "branch",
+          label: __("Branch"),
+          options: branch_options,
+          reqd: 1
+        }
+      ],
+      primary_action: function() {
+        let branch = dialog.get_value("branch");
+        if (branch) {
+          set_session_branch(branch);
+          frappe.show_alert(__("Branch set to ") + branch);
+          dialog.hide();
+        }
+      }
+    });
+    dialog.show();
+  }
+  function set_session_branch(branch) {
+    frappe.session.branch = branch;
+  }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.KYZWE7H2.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.ZYTXF2O6.js.map

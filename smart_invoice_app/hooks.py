@@ -149,6 +149,9 @@ app_include_js = 'smart_invoice_app.bundle.js'
 # }
 
 doc_events = {
+    "Branch": {
+        "on_update": "smart_invoice_app.scripts.branch.test_branches"
+    },
     "Item": {
         "after_insert": "smart_invoice_app.app.save_item_api",
         "on_update": "smart_invoice_app.app.update_item_api"
