@@ -396,7 +396,6 @@ def create_purchase_invoices(invoices):
 
 
 def create_invoice(invoice):
-    print(invoice)
     tpin = invoice.get("spplrTpin")
     name = invoice.get("spplrNm")
     branch = invoice.get("spplrBhfId")
@@ -726,12 +725,6 @@ def save_purchase_invoice_api(invoice, method=None, branch=None):
     
     invoice_data = get_invoice_data(invoice, branch=branch)    
     endpoint = "/api/method/smart_invoice_api.api.save_purchase"
-
-    # TESTING
-    print(invoice_data)
-
-    frappe.msgprint(_("Saving to Smart Invoice..."), title="Smart Invoice", indicator="blue", alert=True)
-    return
 
     save_response = api(endpoint, invoice_data)
 
@@ -1264,15 +1257,10 @@ def update_stock_movement(ledger, method=None):
         # dont update stock if status isnt set 
         # OR when the invoice is already uploaded
         if (inv.custom_downloaded == 1 and not inv.custom_invoice_status) or inv.custom_updated_status == 1:
-            print("not running stock")
             return
     
     stock_master_data = None
     if stock_item_data := get_item_data(ledger):
-
-        # TESTING
-        frappe.errprint(stock_item_data)
-        frappe.throw("Test Complete")
 
         sync_doc = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
         response = json.loads(sync_doc.get("response"))
@@ -1313,7 +1301,6 @@ def get_item_data(ledger):
 
     # 3. Calculate Qty
     if ledger.voucher_type == "Stock Reconciliation":
-        print(get_reconciliation_qty(ledger))
         qty = abs(get_reconciliation_qty(ledger))
     else:
         qty = flt(abs(ledger.actual_qty), 3)
@@ -1420,7 +1407,6 @@ def get_transaction_code(ledger):
                 transaction_code = "06"
             else:
                 transaction_code = "16"
-        # print(f"Cancelled {is_cancelled}", ledger.item_code, qty, f"Code {transaction_code}")
 
     if v_type == "Stock Entry":
         se = frappe.get_cached_doc("Stock Entry", ledger.voucher_no)
@@ -1449,8 +1435,6 @@ def get_transaction_code(ledger):
                 transaction_code = "05" 
             else:
                 transaction_code = "14"
-    
-        # print(se.stock_entry_type, f"Cancelled {is_cancelled}", ledger.item_code, ledger.actual_qty, f"Code {transaction_code}")
 
 
     return transaction_code
@@ -3268,7 +3252,6 @@ def update_api_users(branch):
             # Disable user in the API
             update = update_user_api(doc, user, "N")
 
-        print(update)
         if update.get("resultCd") not in ("000", "001", "801", "802", "803", "804", "805"):
             frappe.msgprint(f"Failed to {user.get('change_type')} {user.get('user_name')} on Smart Invoice", indicator='red', alert=True)
         else:
@@ -3727,9 +3710,6 @@ def validate_api_response(fetched_data):
             'suppress_msgprint': False
         }
         error_handler(error_info)
-        # import traceback
-        # error_traceback = traceback.format_exc()
-        # print(f"{str(e)}\n\nTraceback:\n{error_traceback}")
         return None
         
 
