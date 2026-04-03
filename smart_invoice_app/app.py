@@ -726,6 +726,13 @@ def save_purchase_invoice_api(invoice, method=None, branch=None):
     
     invoice_data = get_invoice_data(invoice, branch=branch)    
     endpoint = "/api/method/smart_invoice_api.api.save_purchase"
+
+    # TESTING
+    print(invoice_data)
+
+    frappe.msgprint(_("Saving to Smart Invoice..."), title="Smart Invoice", indicator="blue", alert=True)
+    return
+
     save_response = api(endpoint, invoice_data)
 
     if not validate_api_response(save_response):
@@ -1262,10 +1269,11 @@ def update_stock_movement(ledger, method=None):
     
     stock_master_data = None
     if stock_item_data := get_item_data(ledger):
-        frappe.errprint(stock_item_data)
 
-        frappe.throw("***********")
-        return 
+        # TESTING
+        frappe.errprint(stock_item_data)
+        frappe.throw("Test Complete")
+
         sync_doc = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
         response = json.loads(sync_doc.get("response"))
 
@@ -1287,7 +1295,8 @@ def get_reconciliation_qty(ledger):
     # Match the SLE voucher_detail_no to the SR Item 'name'
     qty = frappe.db.get_value("Stock Reconciliation Item", ledger.voucher_detail_no, "quantity_difference")
     return flt(qty, 3)
-        
+
+
 def get_item_data(ledger):
     item_doc = frappe.get_cached_doc("Item", ledger.item_code)
     company = frappe.get_cached_doc("Company", ledger.company)
@@ -1347,7 +1356,11 @@ def get_item_data(ledger):
 
     # 4. Process Tax Logic
     stock_item_data, item_data = get_tax_logic(ledger, item_doc, company, amt, stock_item_data, item_data)
-
+    
+    item_data.update({
+        "taxblAmt": item_data.get("vatTaxblAmt", 0),
+        "taxAmt": item_data.get("vatAmt", 0)
+    })
     stock_item_data.update({"itemList": [item_data]})
     stock_item_data.update(get_doc_user_data(ledger)) 
 
@@ -1382,7 +1395,7 @@ def get_transaction_code(ledger):
         if v_type == "Purchase Receipt":
             pr = frappe.get_cached_doc("Purchase Receipt", ledger.voucher_no)
             if pr.is_return == 1 or is_cancelled: return "03"
-            return "01" if pr.custom_asycuda != 0 else "02"
+            else: return "02" # removed custom_asycuda as field wasnt in PR
 
         doc = frappe.get_cached_doc(v_type, ledger.voucher_no)
         if v_type == "Sales Invoice":
@@ -1390,8 +1403,9 @@ def get_transaction_code(ledger):
             return ("11" if doc.is_return == 1 else "12") if is_cancelled else code
         
         if v_type == "Purchase Invoice":
-            code = "03" if doc.is_return == 1 else "02"
-            return ("02" if doc.is_return == 1 else "03") if is_cancelled else code
+            pi = frappe.get_cached_doc("Purchase Invoice", ledger.voucher_no)
+            if pi.is_return == 1 or is_cancelled: return "03"
+            return "01" if pi.custom_asycuda != 0 else "02"
 
     if v_type == "Stock Reconciliation": 
         # Match the SLE voucher_detail_no to the SR Item 'name'
@@ -1445,24 +1459,26 @@ def get_tax_logic(ledger, item_doc, company, amt, stock_item_data, item_data):
     """Calculates specific taxes including Excise and Levies"""
     template, tax_code, tax_rate = None, None, 0
     
-    # 1. Find Template
+    # 1. Find Template using the specific row ID (voucher_detail_no)
     if ledger.voucher_type in ["Purchase Invoice", "Sales Invoice", "Delivery Note", "Purchase Receipt"]:
-        parent = frappe.get_cached_doc(ledger.voucher_type, ledger.voucher_no)
-        for row in parent.items:
-            if row.item_code == ledger.item_code:
-                template = row.get("item_tax_template") or item_doc.taxes[0].item_tax_template if item_doc.taxes else None
-                break
+        # The child table name in Frappe is usually "{Parent Doctype} Item"
+        # We fetch 'item_tax_template' from the specific row that created this SLE
+        template = frappe.db.get_value(f"{ledger.voucher_type} Item", 
+                                       ledger.voucher_detail_no, "item_tax_template")
     
+    # Fallback 1: Item Master
     if not template and item_doc.taxes:
         template = item_doc.taxes[0].item_tax_template
 
     if template:
         tax_template = frappe.get_cached_doc("Item Tax Template", template)
-        tax_code = tax_template.custom_code.title()
+        # title() turns "a" to "A", ensure custom_code is set on the template
+        tax_code = tax_template.custom_code.upper() if tax_template.custom_code else "A"
         tax_rate = flt(tax_template.taxes[0].tax_rate, 3) if tax_template.taxes else 0
+        
     else:
         # Company Default Fallback
-        tax_code = company.custom_tax_code
+        tax_code = (company.custom_tax_code or "A").upper()
         if not tax_code:
             frappe.throw(f"Set Tax Bracket in company {ledger.company}")
         code_doc = frappe.get_cached_value("Code", {"cd": tax_code}, ["cd_nm", "user_dfn_cd1"], as_dict=True)
@@ -1501,7 +1517,7 @@ def get_tax_logic(ledger, item_doc, company, amt, stock_item_data, item_data):
         item_taxes = {"totAmt": amt, "vatTaxblAmt": taxable_amount, "vatAmt": tax_amt}
         
         if tax_code in ["A", "B", "C1", "C2", "C3", "D", "E", "Rvat"]:    
-            item_taxes.update({"vatCatCd": tax_code.upper() or "B"})
+            item_taxes.update({"vatCatCd": tax_code.upper() or "A"})
         elif tax_code.upper() == "TOT":
             item_taxes.update({"vatCatCd": "A", "taxCatCd": "TOT", "taxblAmt": amt, "taxAmt": 0, "vatAmt": 0})
             item_taxes.pop("vatAmt", None)
@@ -1511,19 +1527,49 @@ def get_tax_logic(ledger, item_doc, company, amt, stock_item_data, item_data):
 
     return stock_item_data, item_data
 
+
 def get_valuation_price(ledger):
-    _price = ledger.incoming_rate or ledger.outgoing_rate or ledger.valuation_rate
+    """Fetches the price, prioritizing the Gross Amount if it's an Invoice/Receipt"""
+    _price = 0
+    
+    # 1. Try to get Gross Price from the source document first
+    if ledger.voucher_type in ["Purchase Invoice", "Sales Invoice", "Purchase Receipt", "Delivery Note"]:
+        # Get the 'rate' (Gross) instead of 'net_rate' (Net)
+        _price = frappe.db.get_value(f"{ledger.voucher_type} Item", 
+            {"parent": ledger.voucher_no, "item_code": ledger.item_code}, "rate")
+
+    # 2. Fallback to Ledger rates if not an invoice or rate was 0
+    if not _price:
+        _price = ledger.incoming_rate or ledger.outgoing_rate or ledger.valuation_rate
+    
+    # 3. Last resort: Item Master
     if not _price:
         _price = frappe.db.get_value("Item", ledger.item_code, "valuation_rate")
 
     if not _price:        
         form_link = get_link_to_form("Item", ledger.item_code)
         message = _("Valuation Rate for the Item {0}, is required to do accounting entries for {1} {2}.").format(form_link, ledger.voucher_type, ledger.voucher_no)
-        solutions = _("You can submit this entry") + " {} ".format(frappe.bold(_("after"))) + _("performing either one below:")
+        solutions = _("You can Submit this entry") + " {} ".format(frappe.bold(_("after"))) + _("performing either one below:")
         sub_solutions = f"<ul><li>{_('Create an incoming stock transaction for the Item.')}</li><li>{_('Set a Valuation Rate for {0}.').format(form_link)}</li></ul>"
         frappe.throw(msg=message + "<br><br>" + solutions + sub_solutions, title=_("Valuation Rate Missing"))
         
     return flt(abs(_price), 3)
+
+
+
+# def get_valuation_price(ledger):
+#     _price = ledger.incoming_rate or ledger.outgoing_rate or ledger.valuation_rate
+#     if not _price:
+#         _price = frappe.db.get_value("Item", ledger.item_code, "valuation_rate")
+
+#     if not _price:        
+#         form_link = get_link_to_form("Item", ledger.item_code)
+#         message = _("Valuation Rate for the Item {0}, is required to do accounting entries for {1} {2}.").format(form_link, ledger.voucher_type, ledger.voucher_no)
+#         solutions = _("You can submit this entry") + " {} ".format(frappe.bold(_("after"))) + _("performing either one below:")
+#         sub_solutions = f"<ul><li>{_('Create an incoming stock transaction for the Item.')}</li><li>{_('Set a Valuation Rate for {0}.').format(form_link)}</li></ul>"
+#         frappe.throw(msg=message + "<br><br>" + solutions + sub_solutions, title=_("Valuation Rate Missing"))
+        
+#     return flt(abs(_price), 3)
 
 
 def get_item_data_deprecated(ledger):
