@@ -92,18 +92,11 @@ def create_qr_code(doc, data):
         _file.save()
 
         # assigning to document
-        # doc.db_set('invoice_qr_code', _file.file_url)
-        # doc.db_set('custom_sdc_id', data.get("sdcId"))
-        # doc.db_set('custom_receipt_no', data.get("rcptNo"))
 
-        # doc.db_set('custom_internal_data', data.get("intrlData"))
-        # doc.db_set('custom_fiscal_signature', data.get("rcptSign"))
-        # doc.db_set('custom_vsdc_date', data.get("vsdcRcptPbctDate"))
-        # doc.db_set('custom_mrc_no', data.get("mrcNo"))
-
-        # intrlData, vsdcRcptPbctDate, mrcNo
-
+        # Create the formatted ZRA Smart Invoice ID
+        smart_invoice_id = make_smart_invoice_id(doc, data)
         doc.db_set({
+            'custom_smart_invoice_id': smart_invoice_id,
             'invoice_qr_code': _file.file_url,
             'custom_sdc_id': data.get("sdcId"),
             'custom_receipt_no': data.get("rcptNo"),
@@ -114,6 +107,22 @@ def create_qr_code(doc, data):
         })
         
         doc.notify_update()
+
+import re
+
+def make_smart_invoice_id(doc, data):
+    # doc.is_return will be 1 for Credit Notes, 0 for Sales Invoices
+    prefix = "CRN" if doc.is_return else "INV"
+    
+    # Extract numeric portion of SDC ID (e.g., SDC0020000351 -> 0020000351)
+    sdc_full = data.get("sdcId") or ""
+    sdc_numeric = re.sub(r'\D', '', sdc_full)
+    
+    # Extract numeric portion of Invoice Name (e.g., SINV-002047 -> 002047)
+    doc_name = doc.name or "1"
+    doc_numeric = re.sub(r'\D', '', doc_name)
+    
+    return f"{prefix}{sdc_numeric}/{doc_numeric}"
 
 
 def delete_qr_code_file(doc, method=None):
@@ -1192,8 +1201,7 @@ def calculate_item_taxes(company, invoice, data, items, country_code=None):
 
 
 @frappe.whitelist()
-def save_invoice_api(invoice, method=None, branch=None):
-    
+def save_invoice_api(invoice, method=None, branch=None):    
     invoice_data = get_invoice_data(invoice, branch=branch)    
     endpoint = "/api/method/smart_invoice_api.api.save_sales"
     save_response = api(endpoint, invoice_data)
