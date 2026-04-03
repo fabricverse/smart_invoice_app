@@ -1152,7 +1152,7 @@ def calculate_item_taxes(company, invoice, data, items, country_code=None):
                 
             if tax_code in ["A", "B", "C1", "C2", "C3", "D", "E", "Rvat"]:    
                 item_taxes.update({
-                    "vatCatCd": tax_code.upper(),
+                    "vatCatCd": tax_code.upper() or "B",
                 })
             elif tax_code == "Tot":
                 if invoice.doctype == "Sales Invoice":
@@ -1231,7 +1231,6 @@ def save_invoice_api(invoice, method=None, branch=None):
 
 from erpnext.stock.stock_ledger import get_stock_balance
 def get_stock_master_data(stock_item_data, ledger):
-    # balance_qty = get_stock_balance(ledger.item_code, ledger.warehouse)
     balance = frappe.get_cached_value("Bin", {"item_code": ledger.item_code, "warehouse": ledger.warehouse}, "actual_qty") or 0
     operation = "add" if ledger.actual_qty > 0 else "sub"
     if operation == "add":
@@ -1263,6 +1262,10 @@ def update_stock_movement(ledger, method=None):
     
     stock_master_data = None
     if stock_item_data := get_item_data(ledger):
+        frappe.errprint(stock_item_data)
+
+        frappe.throw("***********")
+        return 
         sync_doc = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
         response = json.loads(sync_doc.get("response"))
 
@@ -1280,7 +1283,250 @@ def update_stock_movement(ledger, method=None):
         #     frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
 
 
+def get_reconciliation_qty(ledger):
+    # Match the SLE voucher_detail_no to the SR Item 'name'
+    qty = frappe.db.get_value("Stock Reconciliation Item", ledger.voucher_detail_no, "quantity_difference")
+    return flt(qty, 3)
+        
 def get_item_data(ledger):
+    item_doc = frappe.get_cached_doc("Item", ledger.item_code)
+    company = frappe.get_cached_doc("Company", ledger.company)
+    unit_cd, pkg_unit = get_unit_code(item_doc, ledger.company)
+    posting_date_only = api_date_format(str(ledger.posting_date), date_only=True)
+
+    # 1. Get Transaction Code
+    transaction_code = get_transaction_code(ledger)
+    if not transaction_code:
+        return None
+
+    # 2. Get Valuation Price
+    price = get_valuation_price(ledger)
+
+    # 3. Calculate Qty
+    if ledger.voucher_type == "Stock Reconciliation":
+        print(get_reconciliation_qty(ledger))
+        qty = abs(get_reconciliation_qty(ledger))
+    else:
+        qty = flt(abs(ledger.actual_qty), 3)
+
+    amt = flt(qty * price, 3)
+
+    # Initial Item and Stock Data structures
+    item_data = {
+        "itemSeq": 1, 
+        "itemCd": ledger.item_code, 
+        "itemNm": ledger.item_code,
+        "itemClsCd": item_doc.custom_item_cls_cd or company.custom_default_item_class,
+        "bcd": None,
+        "pkgUnitCd": pkg_unit or "PACK", 
+        "pkg": qty, 
+        "qtyUnitCd": unit_cd or "U", 
+        "qty": qty,
+        "prc": price, 
+        "splyAmt": amt, 
+        "rrp": price, 
+        "totAmt": amt, 
+        "vatCatCd": "B",
+        "taxblAmt": 0.0, 
+        "taxAmt": 0.0, 
+        "dcRt": 0.0,
+        "dcAmt": 0.0, 
+        "isrccCd": None, 
+        "isrccNm": None, 
+        "isrcRt": 0.0, 
+        "isrcAmt": 0.0, 
+        "totDcAmt": 0.0,
+    }
+
+    stock_item_data = {
+        "tpin": company.tax_id, "bhfId": "000", "sarNo": 1, "orgSarN": 0, "regTyCd": "M",
+        "custTpin": None, "custNm": None, "custBhfId": "000", "sarTyCd": transaction_code,
+        "ocrnDt": posting_date_only, "totItemCnt": 1, "totTaxblAmt": 0, "totTaxAmt": 0, "totAmt": 0,
+        "remark": None, "itemList": []
+    }
+
+    # 4. Process Tax Logic
+    stock_item_data, item_data = get_tax_logic(ledger, item_doc, company, amt, stock_item_data, item_data)
+
+    stock_item_data.update({"itemList": [item_data]})
+    stock_item_data.update(get_doc_user_data(ledger)) 
+
+    return stock_item_data
+
+def get_transaction_code(ledger):
+    """ Determines the sarTyCd based on voucher type and cancellation status
+    
+        01 Import          Incoming - Import
+        02 Purchase        Incoming - Purchase
+        03 Return          Incoming - Return
+        04 Stock Movement  Incoming - Stock Movement
+        05 Processing      Incoming - Processing
+        06 Adjustment      Incoming - Adjustment
+        11 Sale            Outgoing - Sale
+        12 Return          Outgoing - Return
+        13 Stock Movement  Outgoing - Stock Movement
+        14 Processing      Outgoing - Processing
+        15 Discarding      Outgoing - Discarding
+        16 Adjustment      Outgoing - Adjustment
+    """
+    v_type = ledger.voucher_type
+    is_cancelled = ledger.is_cancelled == 1
+    transaction_code = "16"
+    
+    if v_type in ["Purchase Invoice", "Sales Invoice", "Delivery Note", "Purchase Receipt"]:
+        if v_type == "Delivery Note":
+            dn = frappe.get_cached_doc("Delivery Note", ledger.voucher_no)
+            code = "12" if dn.is_return == 1 else "11"
+            return ("11" if dn.is_return == 1 else "12") if is_cancelled else code
+            
+        if v_type == "Purchase Receipt":
+            pr = frappe.get_cached_doc("Purchase Receipt", ledger.voucher_no)
+            if pr.is_return == 1 or is_cancelled: return "03"
+            return "01" if pr.custom_asycuda != 0 else "02"
+
+        doc = frappe.get_cached_doc(v_type, ledger.voucher_no)
+        if v_type == "Sales Invoice":
+            code = "12" if doc.is_return == 1 else "11"
+            return ("11" if doc.is_return == 1 else "12") if is_cancelled else code
+        
+        if v_type == "Purchase Invoice":
+            code = "03" if doc.is_return == 1 else "02"
+            return ("02" if doc.is_return == 1 else "03") if is_cancelled else code
+
+    if v_type == "Stock Reconciliation": 
+        # Match the SLE voucher_detail_no to the SR Item 'name'
+        qty = get_reconciliation_qty(ledger)
+        if is_cancelled:
+            if qty > 0:
+                transaction_code = "16"
+            else:
+                transaction_code = "06"
+        else:
+            if qty > 0:
+                transaction_code = "06"
+            else:
+                transaction_code = "16"
+        # print(f"Cancelled {is_cancelled}", ledger.item_code, qty, f"Code {transaction_code}")
+
+    if v_type == "Stock Entry":
+        se = frappe.get_cached_doc("Stock Entry", ledger.voucher_no)
+        if se.stock_entry_type == "Material Transfer": 
+            # TODO: Warehouses must be tied to Branches
+            # One WH deducting, one increasing
+            # For now, we will assume all transfers are within the current branch
+            if ledger.actual_qty > 0: 
+                transaction_code = "04" 
+            else:
+                transaction_code = "13"
+        if se.stock_entry_type == "Material Issue": 
+            if is_cancelled:
+                transaction_code = "06" # 06 - Adjustment
+            else:
+                transaction_code = "15" # 15 - Discarding - only for issues, returns should be coded as adjustments
+                
+        if se.stock_entry_type == "Material Receipt": 
+            if is_cancelled:
+                transaction_code = "16" # 16 - Adjustment
+            else:
+                transaction_code = "06"
+
+        if se.stock_entry_type in ["Manufacture", "Repack", "Material Transfer for Manufacture", "Send to Subcontractor"]:
+            if ledger.actual_qty > 0: 
+                transaction_code = "05" 
+            else:
+                transaction_code = "14"
+    
+        # print(se.stock_entry_type, f"Cancelled {is_cancelled}", ledger.item_code, ledger.actual_qty, f"Code {transaction_code}")
+
+
+    return transaction_code
+
+def get_tax_logic(ledger, item_doc, company, amt, stock_item_data, item_data):
+    """Calculates specific taxes including Excise and Levies"""
+    template, tax_code, tax_rate = None, None, 0
+    
+    # 1. Find Template
+    if ledger.voucher_type in ["Purchase Invoice", "Sales Invoice", "Delivery Note", "Purchase Receipt"]:
+        parent = frappe.get_cached_doc(ledger.voucher_type, ledger.voucher_no)
+        for row in parent.items:
+            if row.item_code == ledger.item_code:
+                template = row.get("item_tax_template") or item_doc.taxes[0].item_tax_template if item_doc.taxes else None
+                break
+    
+    if not template and item_doc.taxes:
+        template = item_doc.taxes[0].item_tax_template
+
+    if template:
+        tax_template = frappe.get_cached_doc("Item Tax Template", template)
+        tax_code = tax_template.custom_code.title()
+        tax_rate = flt(tax_template.taxes[0].tax_rate, 3) if tax_template.taxes else 0
+    else:
+        # Company Default Fallback
+        tax_code = company.custom_tax_code
+        if not tax_code:
+            frappe.throw(f"Set Tax Bracket in company {ledger.company}")
+        code_doc = frappe.get_cached_value("Code", {"cd": tax_code}, ["cd_nm", "user_dfn_cd1"], as_dict=True)
+        tax_rate = flt(code_doc.user_dfn_cd1, 2)
+        template = f"{code_doc.cd_nm} - {company.abbr}"
+
+    # 2. Calculate Based on Template Type
+    special_templates = [f"Excise Electricity - {company.abbr}", f"Excise on Coal - {company.abbr}", 
+                         f"Tourism Levy - {company.abbr}", f"Insurance Premium Levy - {company.abbr}", f"Re-insurance - {company.abbr}"]
+
+    amt = flt(abs(amt), 4)
+    if template in special_templates:
+        tax_types = {f"Excise Electricity - {company.abbr}": "excise", f"Excise on Coal - {company.abbr}": "excise",
+                     f"Tourism Levy - {company.abbr}": "tl", f"Insurance Premium Levy - {company.abbr}": "ipl", f"Re-insurance - {company.abbr}": "ipl"}
+        
+        rate_factor = (flt(tax_rate/100) + 1)
+        taxable_amount = flt(amt/rate_factor, 4) if tax_rate != 0 else amt
+        tax_amt = flt(amt - taxable_amount, 4)
+        tax_type = tax_types[template]
+
+        if tax_type in ["tl", "ipl"]:
+            if tax_code == "Ipl2": taxable_amount = amt
+            item_data.update({f"{tax_type}CatCd": tax_code.upper(), f"{tax_type}TaxblAmt": taxable_amount, f"{tax_type}Amt": tax_amt})
+        else:
+            item_data.update({f"{tax_type}TxCatCd": tax_code.upper(), f"{tax_type}TaxblAmt": taxable_amount, f"{tax_type}TxAmt": tax_amt})
+
+        item_data.update({f"taxblAmt{tax_code}": taxable_amount, f"taxAmt{tax_code}": tax_amt, f"taxRt{tax_code}": tax_rate, "totTaxblAmt": taxable_amount, "totTaxAmt": tax_amt, "totAmt": amt})
+        stock_item_data.update({f"taxAmt{tax_code}": tax_amt, f"taxblAmt{tax_code}": taxable_amount, "totTaxblAmt": taxable_amount, "totTaxAmt": tax_amt, "totAmt": amt})
+
+    else:
+        # Standard VAT / TOT logic
+        rate_factor = (flt(tax_rate, 4)/100) + 1 if tax_rate else 0.0
+        taxable_amount = flt((amt/rate_factor) if rate_factor != 0 else 0, 4)
+        tax_amt = flt(amt - taxable_amount, 4)
+        
+        item_taxes = {"totAmt": amt, "vatTaxblAmt": taxable_amount, "vatAmt": tax_amt}
+        
+        if tax_code in ["A", "B", "C1", "C2", "C3", "D", "E", "Rvat"]:    
+            item_taxes.update({"vatCatCd": tax_code.upper() or "B"})
+        elif tax_code.upper() == "TOT":
+            item_taxes.update({"vatCatCd": "A", "taxCatCd": "TOT", "taxblAmt": amt, "taxAmt": 0, "vatAmt": 0})
+            item_taxes.pop("vatAmt", None)
+
+        item_data.update(item_taxes)
+        stock_item_data.update({f"taxAmt{tax_code}": item_taxes.get("vatAmt", 0), f"taxblAmt{tax_code}": taxable_amount, "totTaxblAmt": taxable_amount, "totTaxAmt": item_taxes.get("vatAmt", 0), "totAmt": amt})
+
+    return stock_item_data, item_data
+
+def get_valuation_price(ledger):
+    _price = ledger.incoming_rate or ledger.outgoing_rate or ledger.valuation_rate
+    if not _price:
+        _price = frappe.db.get_value("Item", ledger.item_code, "valuation_rate")
+
+    if not _price:        
+        form_link = get_link_to_form("Item", ledger.item_code)
+        message = _("Valuation Rate for the Item {0}, is required to do accounting entries for {1} {2}.").format(form_link, ledger.voucher_type, ledger.voucher_no)
+        solutions = _("You can submit this entry") + " {} ".format(frappe.bold(_("after"))) + _("performing either one below:")
+        sub_solutions = f"<ul><li>{_('Create an incoming stock transaction for the Item.')}</li><li>{_('Set a Valuation Rate for {0}.').format(form_link)}</li></ul>"
+        frappe.throw(msg=message + "<br><br>" + solutions + sub_solutions, title=_("Valuation Rate Missing"))
+        
+    return flt(abs(_price), 3)
+
+
+def get_item_data_deprecated(ledger):
     items = []
     data={}
 
@@ -1296,7 +1542,7 @@ def get_item_data(ledger):
         "tpin": company.tax_id,
         "bhfId": "000", # TODO: get branch id
         "sarNo": 1,
-        "orgSarNo": 0,
+        "orgSarN": 0,
         "regTyCd": "M",
         "custTpin": None,
         "custNm": None,
@@ -1336,7 +1582,16 @@ def get_item_data(ledger):
 
         frappe.throw(msg=msg, title=_("Valuation Rate Missing"))
         
-    qty = flt(abs(ledger.actual_qty), 3)
+    if (ledger.voucher_type == "Stock Reconciliation"):
+        balance_qty = get_stock_balance(ledger.item_code, ledger.warehouse)
+        if (ledger.actual_qty - balance_qty) > 1:
+            # adjustment code
+            qty = flt(abs(ledger.qty_after_transaction - balance_qty), 3)
+        else:
+            qty = flt(abs(ledger.qty_after_transaction - balance_qty), 3)
+    else:
+        qty = flt(abs(ledger.actual_qty), 3)
+
     price = flt(abs(_price), 3)
     amt = flt(qty * price, 3)
 
@@ -1362,7 +1617,7 @@ def get_item_data(ledger):
         "isrcAmt": 0.0,
         "totDcAmt": 0.0,
         "totAmt": amt,
-        "vatCatCd": "A",
+        "vatCatCd": "B",
         "taxblAmt": 0.0,
         "taxAmt": 0.0
     }
@@ -1374,7 +1629,9 @@ def get_item_data(ledger):
     tax_code = None
     tax_rate = 0
 
-    # TODO: cancelling transactions needs an adjustment entry
+    # TODO
+    # move to separate function
+    # check stock movement 
     
     # get tax code from purchase or sales invoice item if its one of these docs
     if ledger.voucher_type in ["Purchase Invoice", "Sales Invoice", "Delivery Note", "Purchase Receipt"]:
@@ -1429,6 +1686,7 @@ def get_item_data(ledger):
                     transaction_code = "03"
                 else:
                     if pr.custom_asycuda == 0: 
+                        # importing transaction
                         transaction_code = "02"
                     else:
                         transaction_code = "01"
@@ -1456,12 +1714,12 @@ def get_item_data(ledger):
                 if doc.is_return == 1:
                     transaction_code = "03"
                 else:
-                    transaction_code = "04"  
+                    transaction_code = "02"  
 
                 # if cancelled, use opposite transaction code
                 if doc.docstatus == 2:
                     if doc.is_return == 1:
-                        transaction_code = "04"
+                        transaction_code = "02"
                     else:
                         transaction_code = "03"
 
@@ -1496,34 +1754,39 @@ def get_item_data(ledger):
             transaction_code = "06"
         elif ledger.voucher_type == "Stock Entry":
             se = frappe.get_cached_doc("Stock Entry", ledger.voucher_no)
+
             if se.stock_entry_type in ["Material Transfer"]:
                 # prevent duplication of entries for Stock Transfers
+                # TODO: should be 13 | for transfer out and 6 for transfer in, but currently we are only taking the first entry which is transfer out
                 return None
             
             elif se.stock_entry_type == "Material Issue":
-                transaction_code = "16"
+                transaction_code = "15"
                 
                 # if cancelled, use opposite transaction code
                 if se.docstatus == 2:
-                    transaction_code = "04"
+                    transaction_code = "06"
+
             elif se.stock_entry_type == "Material Receipt":
                 transaction_code = "06"
                 
                 # if cancelled, use opposite transaction code
                 if se.docstatus == 2:
-                    transaction_code = "13"
+                    transaction_code = "15"
 
             elif se.stock_entry_type in ["Manufacture", "Repack", "Material Transfer for Manufacture", "Send to Subcontractor"]:
-                if ledger.actual_qty > 0:
-                    transaction_code = "05"
+
+                if ledger.is_cancelled == 0:
+                    if ledger.actual_qty > 0:
+                        transaction_code = "05"
+                    else:
+                        transaction_code = "14"
                 else:
-                    transaction_code = "14"
-                
-                # if cancelled, use opposite transaction code
-                if se.docstatus == 2:
-                    transaction_code = "14"
-                else:
-                    transaction_code = "05"
+                    # if cancelled, use opposite transaction code
+                    if ledger.actual_qty > 0:
+                        transaction_code = "06"
+                    else:
+                        transaction_code = "16"
             else:
                 return None
                 
@@ -1624,7 +1887,7 @@ def get_item_data(ledger):
         
         if tax_code in ["A", "B", "C1", "C2", "C3", "D", "E", "Rvat"]:    
             item_taxes.update({
-                "vatCatCd": tax_code.upper(),
+                "vatCatCd": tax_code.upper()  or "B",
             })
         elif tax_code in ["Tot", "TOT"]:
             item_taxes.update({
@@ -1707,7 +1970,7 @@ def create_stock_item_data(invoice, invoice_data):
         "tpin": invoice_data.get("tpin"),
         "bhfId": invoice_data.get("bhfId"),
         "sarNo": invoice.custom_receipt_no, # TODO: get sar no from invoice
-        "orgSarNo": 0,
+        "orgSarN": 0,
         "regTyCd": "M",
         "custTpin": invoice_data.get("custTpin"),
         "custNm": invoice_data.get("custNm"),
@@ -1725,7 +1988,7 @@ def create_stock_item_data(invoice, invoice_data):
 
     if items:
         for item in items:
-            tax_code = item.get("vatCatCd", "A") # ISSUE: only VAT codes are supported
+            tax_code = item.get("vatCatCd", "B") # ISSUE: only VAT codes are supported
             taxable = item.get("vatTaxblAmt", 0.0)
             tax = item.get("vatAmt", 0.0)
 
@@ -2694,7 +2957,7 @@ def prepare_item_data(item, branch=None):
             "orgnNatCd": frappe.get_cached_value("Country", item.country_of_origin, "code").upper(),
             "pkgUnitCd": pkg_unit,
             "qtyUnitCd": unit,
-            "vatCatCd": tax_code,
+            "vatCatCd": tax_code or "B",
             "iplCatCd": item.custom_ipl_cat_cd if item.custom_industry_tax_type == "Insurance Premium Levy" else None,
             "tlCatCd": item.custom_tl_cat_cd if item.custom_industry_tax_type == "Tourism Levy" else None,
             "exciseTxCatCd": item.custom_excise_code if item.custom_industry_tax_type == "Excise Duty" else None,
