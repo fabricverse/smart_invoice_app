@@ -2810,14 +2810,17 @@ def update_item_api(item, method=None, branch=None):
         response_doc = api("/api/method/smart_invoice_api.api.update_item", item)
         response = response_doc.get('response', None)
         item_data.append(validate_api_response(response_doc))
+        print(f"Response for item {item.get('itemCd')}: {response}")
 
         try:
             reponse_json = json.loads(response)
             if reponse_json.get('resultCd') not in ["000", "001"]:
                 if reponse_json.get('resultCd') == "999":
                     frappe.msgprint(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="Try using setting Item Class to <strong>Unclassified Product</strong>")
+                elif reponse_json.get('resultCd') == "899":
+                    frappe.msgprint(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="The Smart Invoice virtual device is not misconfigured. Please contact support.")
                 else:
-                    frappe.msgprint(title="Smart Invoice Error", msg=reponse_json.get('msg'))
+                    frappe.msgprint(title="Smart Invoice Error", msg=reponse_json.get('resultMsg'))
         except Exception as e:
             frappe.msgprint(title="Smart Invoice Error", msg=str(e))
 
@@ -3029,7 +3032,6 @@ def save_item_api(item, method=None, branch=None):
     data = prepare_item_data(item, branch=branch)
     if not data:
         return False
-
     item_data = []
     for item in data:
         response_doc = api("/api/method/smart_invoice_api.api.save_item", item)
@@ -3041,8 +3043,10 @@ def save_item_api(item, method=None, branch=None):
             if reponse_json.get('resultCd') not in ["000", "001"]:
                 if reponse_json.get('resultCd') == "999":
                     frappe.throw(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="Try using setting Item Class to <strong>Unclassified Product</strong>")
+                elif reponse_json.get('resultCd') == "899":
+                    frappe.throw(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="The Smart Invoice virtual device is not misconfigured. Please contact support.")
                 else:
-                    frappe.msgprint(title="Smart Invoice Error", msg=reponse_json.get('msg'))
+                    frappe.msgprint(title="Smart Invoice Error", msg=reponse_json.get('resultMsg'))
         except Exception as e:
             frappe.msgprint(title="Smart Invoice Error", msg=str(e))
         
