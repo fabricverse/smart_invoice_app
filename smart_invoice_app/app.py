@@ -2796,6 +2796,7 @@ def get_item_price(item_code, company, price_list="Standard Selling", customer_g
     return price.price_list_rate if price else 0
 
 
+from frappe.utils import now, time_diff_in_seconds
 @frappe.whitelist()
 def update_item_api(item, method=None, branch=None):
     if not item:
@@ -2803,6 +2804,11 @@ def update_item_api(item, method=None, branch=None):
 
     if type(item) == str:
         item = frappe.get_cached_doc("Item", item)
+
+    # Skip if created less than 5 seconds ago
+    if time_diff_in_seconds(now(), item.creation) <= 5:
+        return
+
     data = prepare_item_data(item, branch=branch)
 
     item_data = []
@@ -2810,7 +2816,6 @@ def update_item_api(item, method=None, branch=None):
         response_doc = api("/api/method/smart_invoice_api.api.update_item", item)
         response = response_doc.get('response', None)
         item_data.append(validate_api_response(response_doc))
-        print(f"Response for item {item.get('itemCd')}: {response}")
 
         try:
             reponse_json = json.loads(response)
