@@ -1390,7 +1390,7 @@ def get_transaction_code(ledger):
         if v_type == "Purchase Receipt":
             pr = frappe.get_cached_doc("Purchase Receipt", ledger.voucher_no)
             if pr.is_return == 1 or is_cancelled: return "03"
-            else: return "02" # removed custom_asycuda as field wasnt in PR
+            return "01" if pr.custom_asycuda != 0 else "02"
 
         doc = frappe.get_cached_doc(v_type, ledger.voucher_no)
         if v_type == "Sales Invoice":
