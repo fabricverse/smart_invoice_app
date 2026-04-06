@@ -1343,7 +1343,7 @@ def get_item_data(ledger):
     }
 
     stock_item_data = {
-        "tpin": company.tax_id, "bhfId": "000", "sarNo": 1, "orgSarN": 0, "regTyCd": "M",
+        "tpin": company.tax_id, "bhfId": "000", "sarNo": 1, "orgSarNo": 0, "regTyCd": "M",
         "custTpin": None, "custNm": None, "custBhfId": "000", "sarTyCd": transaction_code,
         "ocrnDt": posting_date_only, "totItemCnt": 1, "totTaxblAmt": 0, "totTaxAmt": 0, "totAmt": 0,
         "remark": None, "itemList": []
@@ -1580,7 +1580,7 @@ def get_item_data_deprecated(ledger):
         "tpin": company.tax_id,
         "bhfId": "000", # TODO: get branch id
         "sarNo": 1,
-        "orgSarN": 0,
+        "orgSarNo": 0,
         "regTyCd": "M",
         "custTpin": None,
         "custNm": None,
@@ -2008,7 +2008,7 @@ def create_stock_item_data(invoice, invoice_data):
         "tpin": invoice_data.get("tpin"),
         "bhfId": invoice_data.get("bhfId"),
         "sarNo": invoice.custom_receipt_no, # TODO: get sar no from invoice
-        "orgSarN": 0,
+        "orgSarNo": 0,
         "regTyCd": "M",
         "custTpin": invoice_data.get("custTpin"),
         "custNm": invoice_data.get("custNm"),

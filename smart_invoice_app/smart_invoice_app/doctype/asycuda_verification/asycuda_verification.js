@@ -3,7 +3,9 @@
 
 frappe.ui.form.on("ASYCUDA Verification", {
 	refresh(frm) {
+        frm.clear_custom_buttons();
         add_create_buttons(frm);
+        console.log("refresh buttons");
 	},
 });
 
@@ -26,10 +28,14 @@ function add_create_buttons(frm){
             
                 // frm.find('button:contains("Create")').removeClass('btn-default').addClass('btn-success');
             }
+            else{
+                console.log("No items with status 'New' or None found. No buttons added.");
+            }
             
         })
 
     })
+    console.log("add create buttons");
     
 }
 

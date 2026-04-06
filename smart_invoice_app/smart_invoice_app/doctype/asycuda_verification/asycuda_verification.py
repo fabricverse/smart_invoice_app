@@ -50,17 +50,19 @@ class ASYCUDAVerification(Document):
         if not items:
             frappe.throw("No items to add. You need to update import items first")
 
-        branches = get_user_branches()
         currency, conversion_rate = self.get_currency_and_exchange_rate()
-        doc = frappe.new_doc(doctype)
+
+        branches = get_user_branches()
+        branch = branches[0].get('branch') if branches else "000"
         
+        doc = frappe.new_doc(doctype)        
         doc.update({
             "supplier": supplier,
             "currency": currency,
             "conversion_rate": conversion_rate,
             "custom_asycuda": 1,
             "update_stock": 1,
-            "custom_branch": branches[0].get('branch'),
+            "custom_branch": branch,
             "items": items
         })
         doc.flags.ignore_permissions=True
@@ -71,24 +73,30 @@ class ASYCUDAVerification(Document):
             for i in self.items:
                 if item.get('docname') == i.name:
                     if doctype == "Purchase Invoice":
-                        i.purchase_invoice == doc.name
+                        i.purchase_invoice = doc.name
                     else: 
-                        i.purchase_receipt == doc.name
+                        i.purchase_receipt = doc.name
         self.save()
         return doc.name
-
+    
     @frappe.whitelist()
     def get_purchase_items(self):
         items = []
         for item in self.items:
-            if item.status_code in [None, "New"]:
-                continue
-            # items.append(self.get_or_create_new_item(item))
-            try:
-                items.append(self.get_or_create_new_item(item))
-            except Exception as e:
-                frappe.msgprint(f"Failed to create item <strong>{item.item_name}<br><hr/>Error</strong>: {str(e)}" )
+            # If you want to ALLOW "New" items, remove this block.
+            # If you only want "Accepted" items, keep it but check against "Accepted".
             
+            # Change: Only skip if it is specifically Rejected or empty
+            if not item.accepted or (not item.status_code or item.status_code == "Rejected"):
+                continue
+                
+            try:
+                # This calls the method to match/create the ERPNext Item
+                item_data = self.get_or_create_new_item(item)
+                items.append(item_data)
+            except Exception as e:
+                frappe.msgprint(f"Failed to create item <strong>{item.item_name}</strong>: {str(e)}")
+                
         return items
             
 
@@ -133,49 +141,104 @@ class ASYCUDAVerification(Document):
 
             if count > 0:
                 request_data.update({"importItemList": task_items})
-                response = api( "/api/method/smart_invoice_api.api.update_import_items", request_data )
+                
+                # --- TESTING BLOCK ---
+                USE_MOCK = True  # Flip this to False when you have API access
+                if USE_MOCK:
+                    # Simulate a successful API response
+                    response_data = get_mock_response() #"SUCCESS") 
+                    # We wrap it in a mock response object to mimic the real 'api' return
+                    response = {"response": json.dumps(response_data)}
+                    print(request_data)
+                else:
+                    # REAL API CALL
+                    response = api("/api/method/smart_invoice_api.api.update_import_items", request_data)
+                # --- END TESTING BLOCK ---
+
+                # response = api( "/api/method/smart_invoice_api.api.update_import_items", request_data )
                 validate_api_response(response)
                 response_data = json.loads(response.get('response'))
                 
-                if response_data:                    
+                if response_data:  
+                    result_code = response_data.get("resultCd")                  
                     if response_data.get("resultCd") =="000":
                         self.update_item_status()   
                         frappe.msgprint(f"Smart Invoice: {response_data.get('resultMsg')}", indicator='Success', alert=True)
                     if response_data.get("resultCd") == "001":
                         frappe.msgprint(f"Smart Invoice: {response_data.get('resultMsg')}", indicator='Warn', alert=True)
+                    else:
+                        frappe.msgprint(f"Cannot connect to Smart Invoice ({result_code}). Please try again later.", indicator="Red", alert=True)
+
     
     def update_item_status(self):
+
         rs = select_import_items()
-        if not rs:
+        # Use this to simulate the 'rs' variable in update_item_status
+        # rs = {
+        #     "resultCd": "000",
+        #     "resultMsg": "It is succeeded",
+        #     "data": {
+        #         "itemList": [
+        #             # Record 1 (LG TV) is GONE from this list because processing is finished
+        #             {
+        #                 "taskCd": "84013245",
+        #                 "hsCd": "58071005",
+        #                 "itemNm": "ZEN OFFICE CHAIR",
+        #                 "qty": 100,
+        #                 "imptItemsttsCd": "2" 
+        #             },
+        #             {
+        #                 "taskCd": "84013245",
+        #                 "hsCd": "48191007",
+        #                 "itemNm": "HONDA GENSET",
+        #                 "qty": 100,
+        #                 "imptItemsttsCd": "2"
+        #             }
+        #         ]
+        #     }
+        # }
+
+        if not rs or rs.get('resultCd') not in ["000", "001"]:
             return
 
-        if rs.get('resultCd', False) in ["000", "001"]:
-            item_data = rs.get('data', {'itemList': None}).get('itemList')
-            if not item_data:
-                return # TODO: rejected items wont show, process them as such
-                for item in self.items:
-                    self.set_status(item)
+        # Extract API data safely
+        api_response_data = rs.get('data', {})
+        item_data = api_response_data.get('itemList') or []
 
-        db_dict = self.items_as_dict()        
-        
-        # Update status for each item in self.items
-        item_data_keys = set()
+        # If API is empty, it usually means items were processed/cleared
+        if not item_data:
+            for item in self.items:
+                # Only update if not already finalized
+                if item.status_code not in ["Accepted", "Rejected"]:
+                    self.set_status(item)
+            # self.save()
+            return
+
+        db_dict = self.items_as_dict()
+
+        # Build a lookup set of items currently "active" in the API
+        # Note: We exclude status from the key so we can find the item regardless of its status change
+        api_item_keys = set()
         for api_item in item_data:
-            task_code = api_item.get('taskCd', None)
-            hs_code = api_item.get('hsCd', None)
-            item_name = api_item.get('itemNm', None)
-            qty = float(api_item.get('qty', None))
-            amount = api_item.get('invcFcurAmt', None)
-            new_status = get_status_by_code(api_item.get('imptItemsttsCd')) or "New"
-            
-            item_data_keys.add((task_code, hs_code, item_name, qty, amount, new_status))
-                        
-        # Find and update items no longer in API response
-        removed_items = set(db_dict.keys()) - item_data_keys
+            key = (
+                api_item.get('taskCd'),
+                api_item.get('hsCd'),
+                api_item.get('itemNm'),
+                flt(api_item.get('qty'))
+            )
+            api_item_keys.add(key)
+
+        # Iterate local items and update status if they are no longer in the API queue
         for item in self.items:
-            item_key = (item.task_code, item.hs_code, item.item_name, item.qty, item.amount, item.status_code)
-            if item_key in removed_items and item.status_code not in ["Rejected", "Accepted"]:
-                self.set_status(item)
+            local_key = (item.task_code, item.hs_code, item.item_name, flt(item.qty))
+            
+            if local_key not in api_item_keys:
+                # Item is no longer in the "Pending" API list, 
+                # so we sync it to its "Accepted/Rejected" state
+                if item.status_code not in ["Accepted", "Rejected"]:
+                    self.set_status(item)
+        
+        # self.save()
                 
 
     def set_status(self, item):
@@ -195,25 +258,26 @@ class ASYCUDAVerification(Document):
         pass
 
     def get_or_create_new_item(self, item):
-        company = frappe.get_cached_doc("Company", frappe.defaults.get_user_default("Company"))
+        company_name = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value('Global Defaults', 'default_company')
+        company = frappe.get_cached_doc("Company", company_name)
+
         price = flt(float(item.amount)/float(item.qty), 4)
         docname = item.name
-
+        qty = flt(item.qty) or 1.0
         name = item.item_name
+
         custom_industry_tax_type, tax_code = get_industry_tax_type(tax_code=company.custom_tax_code) #
         itt = get_tax_template_by_tax_code(company.custom_tax_code) #
         uom = get_uom_by_zra_unit(item.qty_unit) or company.custom_default_unit_of_measure
-        db_item = frappe.db.sql(
-            f"""
-                SELECT i.name as docname, i.item_code as item_code, i.item_name as item_name, t.item_tax_template as item_tax_template, 
-                        i.stock_uom as uom
-                FROM tabItem as i
-                LEFT JOIN `tabItem Tax` as t
-                ON i.name = t.parent
-                WHERE
-                    item_code = "{name}" OR
-                    LOWER(item_name) = "{name.lower()}"
-            """, as_dict=1)
+
+        # FIX: Parameterized SQL to prevent injection
+        db_item = frappe.db.sql("""
+            SELECT i.name as docname, i.item_code as item_code, i.item_name as item_name, 
+                   t.item_tax_template as item_tax_template, i.stock_uom as uom
+            FROM tabItem as i
+            LEFT JOIN `tabItem Tax` as t ON i.name = t.parent
+            WHERE i.item_code = %s OR LOWER(i.item_name) = %s OR LOWER(i.item_code) = %s OR LOWER(i.item_name) = %s
+        """, (name, name.lower(), name.lower(), name.lower()), as_dict=1)
 
         if db_item:
             return {
@@ -221,7 +285,7 @@ class ASYCUDAVerification(Document):
                 'item_name': db_item[0].item_name,
                 'item_tax_template': itt,
                 'uom': uom,
-                'qty': item.qty,
+                'qty': qty,
                 'rate': price,
                 'amount': float(item.amount),
                 'docname': docname
@@ -258,6 +322,29 @@ class ASYCUDAVerification(Document):
                 'amount': float(item.amount),
                 'docname': docname
             }
+def get_mock_response(scenario="SUCCESS"):
+    """Returns a fake API response dictionary"""
+    if scenario == "SUCCESS":
+        return {
+            "resultCd": "000",
+            "resultMsg": "Transaction Successful",
+            "data": {
+                "itemList": [
+                    {
+                        "taskCd": "TASK-101", "dclDe": "20240101", "itemSeq": 1,
+                        "hsCd": "1234", "itemNm": "MOCK ITEM A", "imptItemsttsCd": "2",
+                        "qty": 10, "invcFcurAmt": 1000, "invcFcurCd": "ZMW", "invcFcurExcrt": 1.0
+                    }
+                ]
+            }
+        }
+    else:
+        return {
+            "resultCd": "999",
+            "resultMsg": "Internal Provider Error",
+            "data": {"itemList": []}
+        }
+
 
 def get_country_code(code):
     temp = frappe.get_all("Country", filters={"code": code}, fields=["country_name"])
