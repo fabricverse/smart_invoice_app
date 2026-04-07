@@ -137,13 +137,12 @@ class ASYCUDAVerification(Document):
                         }
                         content.update( get_doc_user_data(self) )
                         task_items.append(content)
-                    # break # TODO: remove
 
             if count > 0:
                 request_data.update({"importItemList": task_items})
                 
                 # --- TESTING BLOCK ---
-                USE_MOCK = True  # Flip this to False when you have API access
+                USE_MOCK = False  # Flip this to False when you have API access
                 if USE_MOCK:
                     # Simulate a successful API response
                     response_data = get_mock_response() #"SUCCESS") 
