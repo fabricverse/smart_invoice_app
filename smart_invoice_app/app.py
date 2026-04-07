@@ -1230,7 +1230,6 @@ def save_invoice_api(invoice, method=None, branch=None):
             if json_data.get('error') in ["VSDC Connection Error", "VSDC timeout"]:
                 frappe.msgprint("Smart Invoice: Connection Failure. Retrying in the background ...")
             elif json_data.get('text', None):
-                # frappe.throw(json_data.get('text'), title=f"Smart Invoice Failure")
                 frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure")
             else:
                 frappe.throw(str(json_data), title=f"Smart Invoice Failure")
