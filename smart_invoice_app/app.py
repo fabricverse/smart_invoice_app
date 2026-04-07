@@ -3451,68 +3451,153 @@ def update_branches(initialize=False):
 
 def update_item_classes(initialize=False):
     """
-    1. Fetch item classes from API
-    2. Compare with saved item classes
-    3. If not saved, insert
-    4. If saved, update if anything is different
+    Synchronizes Item Classes from the API.
+    Tracks and reports the number of records actually modified.
     """
     data = get_item_classes(initialize)
 
     if not data or not data.get("data"):
-        return
-
-
-    # If we've reached here, we have a successful response
-    # Proceed with processing the data
+        return False
         
     item_class_list = data['data'].get('itemClsList', [])
+    
+    # Initialize counters
+    updated_count = 0
+    new_count = 0
 
-    # Fetch all existing item classes
-    existing_item_classes = {d.name: d for d in frappe.get_all("Item Class", fields=["name", "item_cls_cd", "item_cls_nm"])}
-    tax_types = {d.custom_cd: d for d in frappe.get_all("Tax Category", fields=["title", "custom_cd"])}
+    # 1. Fetch existing Item Classes
+    existing_item_classes = {
+        d.item_cls_cd: d for d in frappe.get_all(
+            "Item Class", 
+            fields=["name", "item_cls_cd", "item_cls_nm", "item_cls_lvl", "tax_ty_cd", "use_yn", "mjr_tg_yn"]
+        )
+    }
+    
+    # 2. Map Tax Category Titles
+    tax_types = {
+        d.custom_cd: d.title for d in frappe.get_all(
+            "Tax Category", 
+            fields=["title", "custom_cd"]
+        )
+    }
 
-    # Update Item Classes
     for item_class_data in item_class_list:
-        # Get the tax type title based on the taxTyCd
-        tax_type_title = None
-        if item_class_data.get('taxTyCd'):
-            tax_type = tax_types.get(item_class_data['taxTyCd'])
-            if tax_type:
-                tax_type_title = tax_type.title
+        api_cd = str(item_class_data.get('itemClsCd') or "").strip()
+        api_nm = (item_class_data.get('itemClsNm') or "").strip()
+        api_lvl = str(item_class_data.get('itemClsLvl') or "").strip()
+        
+        api_use_yn = 1 if item_class_data.get('useYn', "Y") == "Y" else 0
+        api_mjr_tg = 1 if item_class_data.get('mjrTgYn', "N") == "Y" else 0
+        api_tax_title = tax_types.get(item_class_data.get('taxTyCd'))
 
-        use_yn = 1 if item_class_data.get('useYn', "Y") == "Y" else 0
-        mjr_tg_yn = 1 if item_class_data.get('mjrTgYn', "N") == "Y" else 0
-
-        if item_class_data['itemClsCd'] not in existing_item_classes:
+        if api_cd not in existing_item_classes:
+            # Insert New Item Class
             frappe.get_doc({
                 "doctype": "Item Class",
-                "item_cls_cd": item_class_data['itemClsCd'],
-                "item_cls_nm": item_class_data['itemClsNm'],
-                "item_cls_lvl": item_class_data.get('itemClsLvl', None),
-                "tax_ty_cd": tax_type_title,
-                "use_yn": use_yn,
-                "mjr_tg_yn": mjr_tg_yn
+                "item_cls_cd": api_cd,
+                "item_cls_nm": api_nm,
+                "item_cls_lvl": api_lvl,
+                "tax_ty_cd": api_tax_title,
+                "use_yn": api_use_yn,
+                "mjr_tg_yn": api_mjr_tg
             }).insert(ignore_permissions=True, ignore_mandatory=True)
+            new_count += 1
         else:
-            existing_class = existing_item_classes[item_class_data['itemClsCd']]
-            if (existing_class.item_cls_nm != item_class_data['itemClsNm'] or 
-                    existing_class.item_cls_lvl != item_class_data.get('itemClsLvl', None) or 
-                    existing_class.tax_ty_cd != item_class_data.get('taxTyCd', None) or 
-                    existing_class.use_yn != use_yn or 
-                    existing_class.mjr_tg_yn != mjr_tg_yn):
+            curr = existing_item_classes[api_cd]
+            changes = {}
+
+            # Dirty Check
+            if (curr.item_cls_nm or "").strip() != api_nm:
+                changes['item_cls_nm'] = api_nm
+            
+            if str((curr.item_cls_lvl or "").strip()) != str(api_lvl):
+                changes['item_cls_lvl'] = api_lvl
+            
+            if (curr.tax_ty_cd or "").strip() != (api_tax_title or "").strip():
+                changes['tax_ty_cd'] = api_tax_title
                 
-                doc = frappe.get_doc("Item Class", item_class_data['itemClsCd'])
-                doc.item_cls_nm = item_class_data['itemClsNm']
-                doc.item_cls_lvl = item_class_data.get('itemClsLvl', None)
-                doc.tax_type = tax_type_title
-                doc.use_yn = use_yn
-                doc.mjr_tg_yn = mjr_tg_yn
-                doc.flags.ignore_mandatory = True
-                doc.save(ignore_permissions=True)
+            if int(curr.use_yn or 0) != api_use_yn:
+                changes['use_yn'] = api_use_yn
+                
+            if int(curr.mjr_tg_yn or 0) != api_mjr_tg:
+                changes['mjr_tg_yn'] = api_mjr_tg
+
+            if changes:
+                frappe.db.set_value("Item Class", curr.name, changes, update_modified=True)
+                updated_count += 1
 
     frappe.db.commit()
-    frappe.msgprint("Item Classes updated successfully", alert=True)
+    
+    # Provide a clear breakdown in the message
+    msg = f"Item Class sync: {new_count} New, {updated_count} Updated."
+    frappe.msgprint(msg, alert=True)
+    
     return True
+
+# def update_item_classes(initialize=False):
+#     """
+#     1. Fetch item classes from API
+#     2. Compare with saved item classes
+#     3. If not saved, insert
+#     4. If saved, update if anything is different
+#     """
+#     data = get_item_classes(initialize)
+
+#     if not data or not data.get("data"):
+#         return
+
+
+#     # If we've reached here, we have a successful response
+#     # Proceed with processing the data
+        
+#     item_class_list = data['data'].get('itemClsList', [])
+
+#     # Fetch all existing item classes
+#     existing_item_classes = {d.name: d for d in frappe.get_all("Item Class", fields=["name", "item_cls_cd", "item_cls_nm"])}
+#     tax_types = {d.custom_cd: d for d in frappe.get_all("Tax Category", fields=["title", "custom_cd"])}
+
+#     # Update Item Classes
+#     for item_class_data in item_class_list:
+#         # Get the tax type title based on the taxTyCd
+#         tax_type_title = None
+#         if item_class_data.get('taxTyCd'):
+#             tax_type = tax_types.get(item_class_data['taxTyCd'])
+#             if tax_type:
+#                 tax_type_title = tax_type.title
+
+#         use_yn = 1 if item_class_data.get('useYn', "Y") == "Y" else 0
+#         mjr_tg_yn = 1 if item_class_data.get('mjrTgYn', "N") == "Y" else 0
+
+#         if item_class_data['itemClsCd'] not in existing_item_classes:
+#             frappe.get_doc({
+#                 "doctype": "Item Class",
+#                 "item_cls_cd": item_class_data['itemClsCd'],
+#                 "item_cls_nm": item_class_data['itemClsNm'],
+#                 "item_cls_lvl": item_class_data.get('itemClsLvl', None),
+#                 "tax_ty_cd": tax_type_title,
+#                 "use_yn": use_yn,
+#                 "mjr_tg_yn": mjr_tg_yn
+#             }).insert(ignore_permissions=True, ignore_mandatory=True)
+#         else:
+#             existing_class = existing_item_classes[item_class_data['itemClsCd']]
+#             if (existing_class.item_cls_nm != item_class_data['itemClsNm'] or 
+#                     existing_class.item_cls_lvl != item_class_data.get('itemClsLvl', None) or 
+#                     existing_class.tax_ty_cd != item_class_data.get('taxTyCd', None) or 
+#                     existing_class.use_yn != use_yn or 
+#                     existing_class.mjr_tg_yn != mjr_tg_yn):
+                
+#                 doc = frappe.get_doc("Item Class", item_class_data['itemClsCd'])
+#                 doc.item_cls_nm = item_class_data['itemClsNm']
+#                 doc.item_cls_lvl = item_class_data.get('itemClsLvl', None)
+#                 doc.tax_type = tax_type_title
+#                 doc.use_yn = use_yn
+#                 doc.mjr_tg_yn = mjr_tg_yn
+#                 doc.flags.ignore_mandatory = True
+#                 doc.save(ignore_permissions=True)
+
+#     frappe.db.commit()
+#     frappe.msgprint("Item Classes updated successfully", alert=True)
+#     return True
 
    
 def get_item_classes(initialize=False):
@@ -3521,21 +3606,24 @@ def get_item_classes(initialize=False):
     }, initialize)
     return validate_api_response(response)
 
+
 def update_codes(initialize=False):
     """ 
-    1. code classes
-        update codes from api
-        fetch code classes from api
-        compare with saved code classes
-        if not saved, insert
-        if saved, update if anything is different
-    2. codes
-        for each code class, iterate through its codes
-        if code not saved, insert
-        if code saved, update if anything is different
+    1. Synchronize classes from API (Item Class or Code Class)
+    2. Synchronize child codes
+    3. Prevents redundant updates by normalizing strings and using direct DB updates.
     """
-    fetched_data = get_codes(initialize)
-    # Check if the API call was successful
+    # fetched_data = get_codes(initialize)
+
+    fetched_data = {"resultCd": "000", "resultMsg": "It is succeeded", "resultDt": "20260407162539", "data": {
+                "clsList": [{"cdCls": "04", "cdClsNm": "Taxation Type", "userDfnNm1": "Tax Rate", "dtlList": [
+                        {"cd": "A", "cdNm": "Standard Rated(16%)", "userDfnCd1": "16"}, 
+                        {"cd": "B", "cdNm": "Minimum Taxable Value (MTV-16%)", "userDfnCd1": "16"}, {"cd": "C1", "cdNm": "Exports(0%)", "userDfnCd1": "0"}, {"cd": "C2", "cdNm": "Zero-rating LPO", "userDfnCd1": "0"}, {"cd": "C3", "cdNm": "Zero-rated by nature", "userDfnCd1": "0"}, {"cd": "D", "cdNm": "Exempt", "userDfnCd1": "0"}, {"cd": "RVAT", "cdNm": "Reverse VAT", "userDfnCd1": "16"}, {"cd": "E", "cdNm": "Disbursement", "userDfnCd1": "0"}, {"cd": "TOT", "cdNm": "TOT", "userDfnCd1": "0"}]}, {"cdCls": "05", "cdClsNm": "Country", "userDfnNm1": None, "dtlList": [{"cd": "AC", "cdNm": "ASCENSION ISLAND ", "userDfnCd1": None}, {"cd": "AX", "cdNm": "ALAND ISLANDS", "userDfnCd1": None}, {"cd": "AD", "cdNm": "ANDORRA", "userDfnCd1": None}, {"cd": "AE", "cdNm": "UNITED ARAB EMIRATES ", "userDfnCd1": None}, {"cd": "AG", "cdNm": "ANTIGUA AND BARBUDA", "userDfnCd1": None}, {"cd": "AI", "cdNm": "ANGUILLA", "userDfnCd1": None}, {"cd": "AL", "cdNm": "ALBANIA ", "userDfnCd1": None}, {"cd": "AM", "cdNm": "ARMENIA", "userDfnCd1": None}, {"cd": "AN", "cdNm": "NETHERLANDS ANTILLES ", "userDfnCd1": None}, {"cd": "AO", "cdNm": "ANGOLA", "userDfnCd1": None}, {"cd": "AQ", "cdNm": "ANTARCTICA", "userDfnCd1": None}, {"cd": "AR", "cdNm": "ARGENTINA", "userDfnCd1": None}, {"cd": "AS", "cdNm": "AMERICAN SAMOA", "userDfnCd1": None}, {"cd": "AT", "cdNm": "AUSTRIA", "userDfnCd1": None}, {"cd": "AU", "cdNm": "AUSTRALIA", "userDfnCd1": None}, {"cd": "AW", "cdNm": "ARUBA", "userDfnCd1": None}, {"cd": "AZ", "cdNm": "AZERBAIJAN", "userDfnCd1": None}, {"cd": "BA", "cdNm": "BOSNIA AND HERZEGOVINA ", "userDfnCd1": None}, {"cd": "BB", "cdNm": "BARBADOS ", "userDfnCd1": None}, {"cd": "BD", "cdNm": "BANGLADESH ", "userDfnCd1": None}, {"cd": "BE", "cdNm": "BELGIUM ", "userDfnCd1": None}, {"cd": "BF", "cdNm": "BURKINA FASO ", "userDfnCd1": None}, {"cd": "BG", "cdNm": "BULGARIA ", "userDfnCd1": None}, {"cd": "BH", "cdNm": "BAHRAIN", "userDfnCd1": None}, {"cd": "BI", "cdNm": "BURUNDI ", "userDfnCd1": None}, {"cd": "BJ", "cdNm": "BENIN ", "userDfnCd1": None}, {"cd": "BM", "cdNm": "BERMUDA ", "userDfnCd1": None}, {"cd": "BN", "cdNm": "BRUNEI DARUSSALAM ", "userDfnCd1": None}, {"cd": "BO", "cdNm": "BOLIVIA ", "userDfnCd1": None}, {"cd": "BR", "cdNm": "BRAZIL ", "userDfnCd1": None}, {"cd": "BS", "cdNm": "BAHAMAS ", "userDfnCd1": None}, {"cd": "BT", "cdNm": "BHUTAN ", "userDfnCd1": None}, {"cd": "BV", "cdNm": "BOUVET ISLAND ", "userDfnCd1": None}, {"cd": "BW", "cdNm": "BOTSWANA ", "userDfnCd1": None}, {"cd": "BY", "cdNm": "BELARUS ", "userDfnCd1": None}, {"cd": "BZ", "cdNm": "BELIZE ", "userDfnCd1": None}, {"cd": "CA", "cdNm": "CANADA ", "userDfnCd1": None}, {"cd": "CC", "cdNm": "COCOS (KEELING) ISLANDS ", "userDfnCd1": None}, {"cd": "CD", "cdNm": "DEMOCRATIC REPUBLIC OF THE CONGO", "userDfnCd1": None}, {"cd": "CF", "cdNm": "CENTRAL AFRICAN REPUBLIC ", "userDfnCd1": None}, {"cd": "CG", "cdNm": "CONGO ", "userDfnCd1": None}, {"cd": "CH", "cdNm": "SWITZERLAND ", "userDfnCd1": None}, {"cd": "CI", "cdNm": "COTE D'IVOIRE (IVORY COAST) ", "userDfnCd1": None}, {"cd": "CK", "cdNm": "COOK ISLANDS ", "userDfnCd1": None}, {"cd": "CL", "cdNm": "CHILE ", "userDfnCd1": None}, {"cd": "CM", "cdNm": "CAMEROON ", "userDfnCd1": None}, {"cd": "CN", "cdNm": "CHINA ", "userDfnCd1": None}, {"cd": "CO", "cdNm": "COLOMBIA ", "userDfnCd1": None}, {"cd": "CR", "cdNm": "COSTA RICA ", "userDfnCd1": None}, {"cd": "CS", "cdNm": "CZECHOSLOVAKIA (FORMER) ", "userDfnCd1": None}, {"cd": "CU", "cdNm": "CUBA ", "userDfnCd1": None}, {"cd": "CV", "cdNm": "CAPE VERDE ", "userDfnCd1": None}, {"cd": "CX", "cdNm": "CHRISTMAS ISLAND ", "userDfnCd1": None}, {"cd": "DT", "cdNm": "DAKATE ", "userDfnCd1": None}, {"cd": "CY", "cdNm": "CYPRUS ", "userDfnCd1": None}, {"cd": "CZ", "cdNm": "CZECH REPUBLIC ", "userDfnCd1": None}, {"cd": "DE", "cdNm": "GERMANY ", "userDfnCd1": None}, {"cd": "DJ", "cdNm": "DJIBOUTI ", "userDfnCd1": None}, {"cd": "DK", "cdNm": "DENMARK ", "userDfnCd1": None}, {"cd": "DM", "cdNm": "DOMINICA ", "userDfnCd1": None}, {"cd": "DO", "cdNm": "DOMINICAN REPUBLIC ", "userDfnCd1": None}, {"cd": "DZ", "cdNm": "ALGERIA", "userDfnCd1": None}, {"cd": "EC", "cdNm": "ECUADOR ", "userDfnCd1": None}, {"cd": "EE", "cdNm": "ESTONIA ", "userDfnCd1": None}, {"cd": "EG", "cdNm": "EGYPT ", "userDfnCd1": None}, {"cd": "EH", "cdNm": "WESTERN SAHARA ", "userDfnCd1": None}, {"cd": "ER", "cdNm": "ERITREA ", "userDfnCd1": None}, {"cd": "ES", "cdNm": "SPAIN ", "userDfnCd1": None}, {"cd": "ET", "cdNm": "ETHIOPIA ", "userDfnCd1": None}, {"cd": "EU", "cdNm": "EUROPEAN UNION ", "userDfnCd1": None}, {"cd": "FI", "cdNm": "FINLAND ", "userDfnCd1": None}, {"cd": "FJ", "cdNm": "FIJI ", "userDfnCd1": None}, {"cd": "FK", "cdNm": "FALKLAND ISLANDS (MALVINAS) ", "userDfnCd1": None}, {"cd": "FM", "cdNm": "MICRONESIA ", "userDfnCd1": None}, {"cd": "FO", "cdNm": "FAROE ISLANDS ", "userDfnCd1": None}, {"cd": "FR", "cdNm": "FRANCE ", "userDfnCd1": None}, {"cd": "FX", "cdNm": "FRANCE, METROPOLITAN ", "userDfnCd1": None}, {"cd": "GA", "cdNm": "GABON ", "userDfnCd1": None}, {"cd": "GB", "cdNm": "GREAT BRITAIN (UK) ", "userDfnCd1": None}, {"cd": "GD", "cdNm": "GRENADA ", "userDfnCd1": None}, {"cd": "GE", "cdNm": "GEORGIA ", "userDfnCd1": None}, {"cd": "GF", "cdNm": "FRENCH GUIANA ", "userDfnCd1": None}, {"cd": "GG", "cdNm": "GUERNSEY ", "userDfnCd1": None}, {"cd": "GH", "cdNm": "GHANA ", "userDfnCd1": None}, {"cd": "GI", "cdNm": "GIBRALTAR ", "userDfnCd1": None}, {"cd": "GL", "cdNm": "GREENLAND ", "userDfnCd1": None}, {"cd": "GM", "cdNm": "GAMBIA ", "userDfnCd1": None}, {"cd": "GN", "cdNm": "GUINEA ", "userDfnCd1": None}, {"cd": "GP", "cdNm": "GUADELOUPE ", "userDfnCd1": None}, {"cd": "GQ", "cdNm": "EQUATORIAL GUINEA ", "userDfnCd1": None}, {"cd": "GR", "cdNm": "GREECE ", "userDfnCd1": None}, {"cd": "GS", "cdNm": "S. GEORGIA AND S. SANDWICH ISLS. ", "userDfnCd1": None}, {"cd": "GT", "cdNm": "GUATEMALA ", "userDfnCd1": None}, {"cd": "GU", "cdNm": "GUAM ", "userDfnCd1": None}, {"cd": "GW", "cdNm": "GUINEA     BISSAU ", "userDfnCd1": None}, {"cd": "GY", "cdNm": "GUYANA ", "userDfnCd1": None}, {"cd": "HK", "cdNm": "HONG KONG ", "userDfnCd1": None}, {"cd": "HM", "cdNm": "HEARD AND MCDONALD ISLANDS ", "userDfnCd1": None}, {"cd": "HN", "cdNm": "HONDURAS ", "userDfnCd1": None}, {"cd": "HR", "cdNm": "CROATIA (HRVATSKA) ", "userDfnCd1": None}, {"cd": "HT", "cdNm": "HAITI ", "userDfnCd1": None}, {"cd": "HU", "cdNm": "HUNGARY ", "userDfnCd1": None}, {"cd": "ID", "cdNm": "INDONESIA ", "userDfnCd1": None}, {"cd": "IE", "cdNm": "IRELAND ", "userDfnCd1": None}, {"cd": "IL", "cdNm": "ISRAEL ", "userDfnCd1": None}, {"cd": "IM", "cdNm": "ISLE OF MAN ", "userDfnCd1": None}, {"cd": "IN", "cdNm": "INDIA ", "userDfnCd1": None}, {"cd": "IO", "cdNm": "BRITISH INDIAN OCEAN TERRITORY ", "userDfnCd1": None}, {"cd": "IQ", "cdNm": "IRAQ ", "userDfnCd1": None}, {"cd": "IR", "cdNm": "IRAN ", "userDfnCd1": None}, {"cd": "IS", "cdNm": "ICELAND ", "userDfnCd1": None}, {"cd": "IT", "cdNm": "ITALY ", "userDfnCd1": None}, {"cd": "JE", "cdNm": "JERSEY ", "userDfnCd1": None}, {"cd": "JM", "cdNm": "JAMAICA ", "userDfnCd1": None}, {"cd": "JO", "cdNm": "JORDAN ", "userDfnCd1": None}, {"cd": "JP", "cdNm": "JAPAN ", "userDfnCd1": None}, {"cd": "KE", "cdNm": "KENYA ", "userDfnCd1": None}, {"cd": "KG", "cdNm": "KYRGYZSTAN ", "userDfnCd1": None}, {"cd": "KH", "cdNm": "CAMBODIA ", "userDfnCd1": None}, {"cd": "KI", "cdNm": "KIRIBATI ", "userDfnCd1": None}, {"cd": "KM", "cdNm": "COMOROS ", "userDfnCd1": None}, {"cd": "KN", "cdNm": "SAINT KITTS AND NEVIS ", "userDfnCd1": None}, {"cd": "KP", "cdNm": "NORTH KOREA", "userDfnCd1": None}, {"cd": "KR", "cdNm": "SOUTH KOREA", "userDfnCd1": None}, {"cd": "KW", "cdNm": "KUWAIT ", "userDfnCd1": None}, {"cd": "KY", "cdNm": "CAYMAN ISLANDS ", "userDfnCd1": None}, {"cd": "KZ", "cdNm": "KAZAKHSTAN ", "userDfnCd1": None}, {"cd": "LA", "cdNm": "LAOS ", "userDfnCd1": None}, {"cd": "LB", "cdNm": "LEBANON ", "userDfnCd1": None}, {"cd": "LC", "cdNm": "SAINT LUCIA ", "userDfnCd1": None}, {"cd": "LI", "cdNm": "LIECHTENSTEIN ", "userDfnCd1": None}, {"cd": "LK", "cdNm": "SRI LANKA ", "userDfnCd1": None}, {"cd": "LR", "cdNm": "LIBERIA ", "userDfnCd1": None}, {"cd": "LS", "cdNm": "LESOTHO ", "userDfnCd1": None}, {"cd": "LT", "cdNm": "LITHUANIA ", "userDfnCd1": None}, {"cd": "LU", "cdNm": "LUXEMBOURG ", "userDfnCd1": None}, {"cd": "LV", "cdNm": "LATVIA ", "userDfnCd1": None}, {"cd": "LY", "cdNm": "LIBYA ", "userDfnCd1": None}, {"cd": "MA", "cdNm": "MOROCCO ", "userDfnCd1": None}, {"cd": "MC", "cdNm": "MONACO ", "userDfnCd1": None}, {"cd": "MD", "cdNm": "MOLDOVA ", "userDfnCd1": None}, {"cd": "ME", "cdNm": "MONTENEGRO ", "userDfnCd1": None}, {"cd": "MG", "cdNm": "MADAGASCAR ", "userDfnCd1": None}, {"cd": "MH", "cdNm": "MARSHALL ISLANDS ", "userDfnCd1": None}, {"cd": "MK", "cdNm": "F.Y.R.O.M. (MACEDONIA) ", "userDfnCd1": None}, {"cd": "ML", "cdNm": "MALI ", "userDfnCd1": None}, {"cd": "MM", "cdNm": "MYANMAR ", "userDfnCd1": None}, {"cd": "MN", "cdNm": "MONGOLIA ", "userDfnCd1": None}, {"cd": "MO", "cdNm": "MACAU ", "userDfnCd1": None}, {"cd": "MP", "cdNm": "NORTHERN MARIANA ISLANDS ", "userDfnCd1": None}, {"cd": "MQ", "cdNm": "MARTINIQUE ", "userDfnCd1": None}, {"cd": "MR", "cdNm": "MAURITANIA ", "userDfnCd1": None}, {"cd": "MS", "cdNm": "MONTSERRAT ", "userDfnCd1": None}, {"cd": "MT", "cdNm": "MALTA ", "userDfnCd1": None}, {"cd": "MU", "cdNm": "MAURITIUS ", "userDfnCd1": None}, {"cd": "MV", "cdNm": "MALDIVES ", "userDfnCd1": None}, {"cd": "MW", "cdNm": "MALAWI ", "userDfnCd1": None}, {"cd": "MX", "cdNm": "MEXICO ", "userDfnCd1": None}, {"cd": "MY", "cdNm": "MALAYSIA ", "userDfnCd1": None}, {"cd": "MZ", "cdNm": "MOZAMBIQUE ", "userDfnCd1": None}, {"cd": "NA", "cdNm": "NAMIBIA ", "userDfnCd1": None}, {"cd": "NC", "cdNm": "NEW CALEDONIA ", "userDfnCd1": None}, {"cd": "NE", "cdNm": "NIGER ", "userDfnCd1": None}, {"cd": "NF", "cdNm": "NORFOLK ISLAND ", "userDfnCd1": None}, {"cd": "NG", "cdNm": "NIGERIA ", "userDfnCd1": None}, {"cd": "NI", "cdNm": "NICARAGUA ", "userDfnCd1": None}, {"cd": "NL", "cdNm": "NETHERLANDS ", "userDfnCd1": None}, {"cd": "NO", "cdNm": "NORWAY ", "userDfnCd1": None}, {"cd": "NP", "cdNm": "NEPAL ", "userDfnCd1": None}, {"cd": "NR", "cdNm": "NAURU ", "userDfnCd1": None}, {"cd": "NT", "cdNm": "NEUTRAL ZONE ", "userDfnCd1": None}, {"cd": "NU", "cdNm": "NIUE ", "userDfnCd1": None}, {"cd": "NZ", "cdNm": "NEW ZEALAND (AOTEAROA) ", "userDfnCd1": None}, {"cd": "OM", "cdNm": "OMAN ", "userDfnCd1": None}, {"cd": "PA", "cdNm": "PANAMA ", "userDfnCd1": None}, {"cd": "PE", "cdNm": "PERU ", "userDfnCd1": None}, {"cd": "PF", "cdNm": "FRENCH POLYNESIA ", "userDfnCd1": None}, {"cd": "PG", "cdNm": "PAPUA NEW GUINEA ", "userDfnCd1": None}, {"cd": "PH", "cdNm": "PHILIPPINES ", "userDfnCd1": None}, {"cd": "PK", "cdNm": "PAKISTAN ", "userDfnCd1": None}, {"cd": "PL", "cdNm": "POLAND ", "userDfnCd1": None}, {"cd": "PM", "cdNm": "ST. PIERRE AND MIQUELON ", "userDfnCd1": None}, {"cd": "PN", "cdNm": "PITCAIRN ", "userDfnCd1": None}, {"cd": "PR", "cdNm": "PUERTO RICO ", "userDfnCd1": None}, {"cd": "PS", "cdNm": "PALESTINIAN TERRITORY, OCCUPIED ", "userDfnCd1": None}, {"cd": "PT", "cdNm": "PORTUGAL ", "userDfnCd1": None}, {"cd": "PW", "cdNm": "PALAU ", "userDfnCd1": None}, {"cd": "PY", "cdNm": "PARAGUAY ", "userDfnCd1": None}, {"cd": "QA", "cdNm": "QATAR ", "userDfnCd1": None}, {"cd": "RE", "cdNm": "REUNION ", "userDfnCd1": None}, {"cd": "RO", "cdNm": "ROMANIA ", "userDfnCd1": None}, {"cd": "RS", "cdNm": "SERBIA ", "userDfnCd1": None}, {"cd": "RU", "cdNm": "RUSSIAN FEDERATION ", "userDfnCd1": None}, {"cd": "RW", "cdNm": "RWANDA ", "userDfnCd1": None}, {"cd": "SA", "cdNm": "SAUDI ARABIA ", "userDfnCd1": None}, {"cd": "SB", "cdNm": "SOLOMON ISLANDS ", "userDfnCd1": None}, {"cd": "SC", "cdNm": "SEYCHELLES ", "userDfnCd1": None}, {"cd": "SD", "cdNm": "SUDAN ", "userDfnCd1": None}, {"cd": "SE", "cdNm": "SWEDEN ", "userDfnCd1": None}, {"cd": "SG", "cdNm": "SINGAPORE ", "userDfnCd1": None}, {"cd": "SH", "cdNm": "ST. HELENA ", "userDfnCd1": None}, {"cd": "SI", "cdNm": "SLOVENIA ", "userDfnCd1": None}, {"cd": "SJ", "cdNm": "SVALBARD  MAYEN ISLANDS ", "userDfnCd1": None}, {"cd": "SK", "cdNm": "SLOVAK REPUBLIC ", "userDfnCd1": None}, {"cd": "SL", "cdNm": "SIERRA LEONE ", "userDfnCd1": None}, {"cd": "SM", "cdNm": "SAN MARINO ", "userDfnCd1": None}, {"cd": "SN", "cdNm": "SENEGAL ", "userDfnCd1": None}, {"cd": "SO", "cdNm": "SOMALIA ", "userDfnCd1": None}, {"cd": "SR", "cdNm": "SURINAME ", "userDfnCd1": None}, {"cd": "ST", "cdNm": "SAO TOME AND PRINCIPE ", "userDfnCd1": None}, {"cd": "SU", "cdNm": "USSR (FORMER) ", "userDfnCd1": None}, {"cd": "SV", "cdNm": "EL SALVADOR ", "userDfnCd1": None}, {"cd": "SY", "cdNm": "SYRIA ", "userDfnCd1": None}, {"cd": "SZ", "cdNm": "SWAZILAND ", "userDfnCd1": None}, {"cd": "TC", "cdNm": "TURKS AND CAICOS ISLANDS ", "userDfnCd1": None}, {"cd": "TD", "cdNm": "CHAD ", "userDfnCd1": None}, {"cd": "TF", "cdNm": "FRENCH SOUTHERN TERRITORIES ", "userDfnCd1": None}, {"cd": "TG", "cdNm": "TOGO ", "userDfnCd1": None}, {"cd": "TH", "cdNm": "THAILAND ", "userDfnCd1": None}, {"cd": "TJ", "cdNm": "TAJIKISTAN ", "userDfnCd1": None}, {"cd": "TK", "cdNm": "TOKELAU ", "userDfnCd1": None}, {"cd": "TM", "cdNm": "TURKMENISTAN ", "userDfnCd1": None}, {"cd": "TN", "cdNm": "TUNISIA ", "userDfnCd1": None}, {"cd": "TO", "cdNm": "TONGA ", "userDfnCd1": None}, {"cd": "TP", "cdNm": "EAST TIMOR ", "userDfnCd1": None}, {"cd": "TR", "cdNm": "TURKEY ", "userDfnCd1": None}, {"cd": "TT", "cdNm": "TRINIDAD AND TOBAGO ", "userDfnCd1": None}, {"cd": "TV", "cdNm": "TUVALU ", "userDfnCd1": None}, {"cd": "TW", "cdNm": "TAIWAN ", "userDfnCd1": None}, {"cd": "TZ", "cdNm": "TANZANIA ", "userDfnCd1": None}, {"cd": "UA", "cdNm": "UKRAINE ", "userDfnCd1": None}, {"cd": "UG", "cdNm": "UGANDA ", "userDfnCd1": None}, {"cd": "UK", "cdNm": "UNITED KINGDOM ", "userDfnCd1": None}, {"cd": "UM", "cdNm": "US MINOR OUTLYING ISLANDS ", "userDfnCd1": None}, {"cd": "US", "cdNm": "UNITED STATES ", "userDfnCd1": None}, {"cd": "UY", "cdNm": "URUGUAY ", "userDfnCd1": None}, {"cd": "UZ", "cdNm": "UZBEKISTAN ", "userDfnCd1": None}, {"cd": "VA", "cdNm": "VATICAN CITY STATE (HOLY SEE) ", "userDfnCd1": None}, {"cd": "VC", "cdNm": "SAINT VINCENT  GRENADINES ", "userDfnCd1": None}, {"cd": "VE", "cdNm": "VENEZUELA ", "userDfnCd1": None}, {"cd": "VG", "cdNm": "BRITISH VIRGIN ISLANDS ", "userDfnCd1": None}, {"cd": "VI", "cdNm": "VIRGIN ISLANDS (U.S.) ", "userDfnCd1": None}, {"cd": "VN", "cdNm": "VIET NAM ", "userDfnCd1": None}, {"cd": "VU", "cdNm": "VANUATU ", "userDfnCd1": None}, {"cd": "WF", "cdNm": "WALLIS AND FUTUNA ISLANDS ", "userDfnCd1": None}, {"cd": "WS", "cdNm": "SAMOA ", "userDfnCd1": None}, {"cd": "YE", "cdNm": "YEMEN ", "userDfnCd1": None}, {"cd": "YT", "cdNm": "MAYOTTE ", "userDfnCd1": None}, {"cd": "YU", "cdNm": "SERBIA AND MONTENEGRO (FORMER) ", "userDfnCd1": None}, {"cd": "ZA", "cdNm": "SOUTH AFRICA ", "userDfnCd1": None}, {"cd": "ZM", "cdNm": "ZAMBIA ", "userDfnCd1": None}, {"cd": "ZW", "cdNm": "ZIMBABWE", "userDfnCd1": None}, {"cd": "DKT", "cdNm": "DAKATE ", "userDfnCd1": None}, {"cd": "ZR", "cdNm": "DEMOCRATIC REPUBLIC OF THE CONGO (DRC)", "userDfnCd1": None}]}, {"cdCls": "06", "cdClsNm": "Sale category", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "Normal Invoice", "userDfnCd1": None}, {"cd": "2", "cdNm": "Export", "userDfnCd1": None}, {"cd": "3", "cdNm": "LPO", "userDfnCd1": None}, {"cd": "4", "cdNm": "RVAT", "userDfnCd1": None}]}, {"cdCls": "07", "cdClsNm": "Payment Type", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Cash", "userDfnCd1": None}, {"cd": "02", "cdNm": "Credit", "userDfnCd1": None}, {"cd": "03", "cdNm": "Cash/Credit", "userDfnCd1": None}, {"cd": "04", "cdNm": "Bank cheque", "userDfnCd1": None}, {"cd": "05", "cdNm": "Debit  card", "userDfnCd1": None}, {"cd": "06", "cdNm": "Mobile money", "userDfnCd1": None}, {"cd": "08", "cdNm": "Bank transfer", "userDfnCd1": None}, {"cd": "07", "cdNm": "Other", "userDfnCd1": None}]}, {"cdCls": "09", "cdClsNm": "Branch Status", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Open", "userDfnCd1": None}, {"cd": "02", "cdNm": "Closed", "userDfnCd1": None}]}, {"cdCls": "10", "cdClsNm": "Quantity Unit", "userDfnNm1": None, "dtlList": [{"cd": "4B", "cdNm": "Pair", "userDfnCd1": None}, {"cd": "AV", "cdNm": "Cap", "userDfnCd1": None}, {"cd": "BA", "cdNm": "Barrel", "userDfnCd1": None}, {"cd": "BE", "cdNm": "bundle", "userDfnCd1": None}, {"cd": "BG", "cdNm": "bag", "userDfnCd1": None}, {"cd": "BL", "cdNm": "block", "userDfnCd1": None}, {"cd": "BLL", "cdNm": "BLL Barrel (petroleum) (158,987 dm3)", "userDfnCd1": None}, {"cd": "BX", "cdNm": "box", "userDfnCd1": None}, {"cd": "CA", "cdNm": "Can", "userDfnCd1": None}, {"cd": "CEL", "cdNm": "Cell", "userDfnCd1": None}, {"cd": "CMT", "cdNm": "centimetre", "userDfnCd1": None}, {"cd": "CR", "cdNm": "CARAT", "userDfnCd1": None}, {"cd": "DR", "cdNm": "Drum", "userDfnCd1": None}, {"cd": "DZ", "cdNm": "Dozen", "userDfnCd1": None}, {"cd": "GLL", "cdNm": "Gallon", "userDfnCd1": None}, {"cd": "GRM", "cdNm": "Gram", "userDfnCd1": None}, {"cd": "GRO", "cdNm": "Gross", "userDfnCd1": None}, {"cd": "KG", "cdNm": "Kilo-Gramme", "userDfnCd1": None}, {"cd": "KTM", "cdNm": "kilometre", "userDfnCd1": None}, {"cd": "KWT", "cdNm": "kilowatt", "userDfnCd1": None}, {"cd": "L", "cdNm": "Litre", "userDfnCd1": None}, {"cd": "LBR", "cdNm": "pound", "userDfnCd1": None}, {"cd": "LK", "cdNm": "link", "userDfnCd1": None}, {"cd": "LTR", "cdNm": "Litre", "userDfnCd1": None}, {"cd": "M", "cdNm": "Metre", "userDfnCd1": None}, {"cd": "M2", "cdNm": "Square Metre", "userDfnCd1": None}, {"cd": "M3", "cdNm": "Cubic Metre", "userDfnCd1": None}, {"cd": "MGM", "cdNm": "milligram", "userDfnCd1": None}, {"cd": "MTR", "cdNm": "metre", "userDfnCd1": None}, {"cd": "MWT", "cdNm": "megawatt hour (1000 kW.h)", "userDfnCd1": None}, {"cd": "NO", "cdNm": "Number", "userDfnCd1": None}, {"cd": "NX", "cdNm": "part per thousand", "userDfnCd1": None}, {"cd": "PA", "cdNm": "packet", "userDfnCd1": None}, {"cd": "PG", "cdNm": "plate", "userDfnCd1": None}, {"cd": "PR", "cdNm": "pair", "userDfnCd1": None}, {"cd": "RL", "cdNm": "reel", "userDfnCd1": None}, {"cd": "RO", "cdNm": "roll", "userDfnCd1": None}, {"cd": "SET", "cdNm": "set", "userDfnCd1": None}, {"cd": "ST", "cdNm": "sheet", "userDfnCd1": None}, {"cd": "TNE", "cdNm": "tonne (metric ton)", "userDfnCd1": None}, {"cd": "TU", "cdNm": "tube", "userDfnCd1": None}, {"cd": "U", "cdNm": "Pieces/item [Number]", "userDfnCd1": None}, {"cd": "YRD", "cdNm": "yard", "userDfnCd1": None}, {"cd": "P1", "cdNm": "Pack", "userDfnCd1": None}, {"cd": "EA", "cdNm": "Each", "userDfnCd1": None}, {"cd": "PL", "cdNm": "Pallet", "userDfnCd1": None}, {"cd": "EACH", "cdNm": "Each", "userDfnCd1": None}, {"cd": "Ft", "cdNm": "Feet", "userDfnCd1": None}, {"cd": "MM", "cdNm": "Millimetre", "userDfnCd1": None}, {"cd": "In", "cdNm": "Inches", "userDfnCd1": None}, {"cd": "Oz", "cdNm": "Ounce", "userDfnCd1": None}, {"cd": "YR", "cdNm": "Year", "userDfnCd1": None}, {"cd": "M ", "cdNm": "Month", "userDfnCd1": None}, {"cd": "Wk", "cdNm": "Week", "userDfnCd1": None}, {"cd": "D", "cdNm": "Day", "userDfnCd1": None}, {"cd": "hr", "cdNm": "Hour", "userDfnCd1": None}, {"cd": "ha", "cdNm": "Hectare", "userDfnCd1": None}, {"cd": "yd2", "cdNm": "Square yards", "userDfnCd1": None}, {"cd": "ft2", "cdNm": "Square feet", "userDfnCd1": None}, {"cd": "cm2", "cdNm": "Square centimetre", "userDfnCd1": None}, {"cd": "m2", "cdNm": "Square metre", "userDfnCd1": None}, {"cd": "pt", "cdNm": "Pints", "userDfnCd1": None}, {"cd": "qt", "cdNm": "Quarts", "userDfnCd1": None}, {"cd": "mm", "cdNm": "Millilitre", "userDfnCd1": None}, {"cd": "2X", "cdNm": "Meter/Minute", "userDfnCd1": None}, {"cd": "4G", "cdNm": "Microliter", "userDfnCd1": None}, {"cd": "4O", "cdNm": "Microfarad", "userDfnCd1": None}, {"cd": "4T", "cdNm": "Pikofarad", "userDfnCd1": None}, {"cd": "A", "cdNm": "Ampere", "userDfnCd1": None}, {"cd": "A87", "cdNm": "Gigaohm", "userDfnCd1": None}, {"cd": "A93", "cdNm": "Gram/Cubic meter", "userDfnCd1": None}, {"cd": "ACR", "cdNm": "Acre", "userDfnCd1": None}, {"cd": "B34", "cdNm": "Kilogram/cubic decimeter", "userDfnCd1": None}, {"cd": "B45", "cdNm": "Kilomol", "userDfnCd1": None}, {"cd": "B47", "cdNm": "Kilonewton", "userDfnCd1": None}, {"cd": "B73", "cdNm": "Meganewton", "userDfnCd1": None}, {"cd": "B75", "cdNm": "Megohm", "userDfnCd1": None}, {"cd": "B78", "cdNm": "Megavolt", "userDfnCd1": None}, {"cd": "B84", "cdNm": "Microampere", "userDfnCd1": None}, {"cd": "BAG", "cdNm": "Bag", "userDfnCd1": None}, {"cd": "BAR", "cdNm": "bar", "userDfnCd1": None}, {"cd": "BOT", "cdNm": "Bottle", "userDfnCd1": None}, {"cd": "BQK", "cdNm": "Becquerel/kilogram", "userDfnCd1": None}, {"cd": "C10", "cdNm": "Millifarad", "userDfnCd1": None}, {"cd": "C36", "cdNm": "Mol per cubic meter", "userDfnCd1": None}, {"cd": "C38", "cdNm": "Mol per liter", "userDfnCd1": None}, {"cd": "C39", "cdNm": "Nanoampere", "userDfnCd1": None}, {"cd": "C3S", "cdNm": "Cubic centimeter/second", "userDfnCd1": None}, {"cd": "C41", "cdNm": "Nanofarad", "userDfnCd1": None}, {"cd": "C56", "cdNm": "Newton/Square millimeter", "userDfnCd1": None}, {"cd": "CCM", "cdNm": "Cubic centimeter", "userDfnCd1": None}, {"cd": "CD", "cdNm": "Candela", "userDfnCd1": None}, {"cd": "CDM", "cdNm": "Cubic decimeter", "userDfnCd1": None}, {"cd": "CT", "cdNm": "COUNT", "userDfnCd1": None}, {"cd": "DL", "cdNm": "DEKALITRES", "userDfnCd1": None}, {"cd": "DMT", "cdNm": "DRY METRIC TONNES", "userDfnCd1": None}, {"cd": "EC", "cdNm": "ENGINE CAPACITY", "userDfnCd1": None}, {"cd": "HKH", "cdNm": "HUNDRED KILOWATT HOURS", "userDfnCd1": None}, {"cd": "AG", "cdNm": "METAL PER CENT (GRADE) OF AG - SILVER", "userDfnCd1": None}, {"cd": "AU", "cdNm": "METAL PER CENT (GRADE) OF AU - GOLD", "userDfnCd1": None}, {"cd": "CO", "cdNm": "METAL PER CENT (GRADE) OF CO - COBALT", "userDfnCd1": None}, {"cd": "CU", "cdNm": "METAL PER CENT (GRADE) OF CU - COPPER", "userDfnCd1": None}, {"cd": "MG", "cdNm": "MILIGRAMMES", "userDfnCd1": None}, {"cd": "MAT", "cdNm": "MINUTES OF AIR TIME", "userDfnCd1": None}, {"cd": "P100", "cdNm": "PER ONE HUNDRED", "userDfnCd1": None}, {"cd": "P10", "cdNm": "PER TEN", "userDfnCd1": None}, {"cd": "QL", "cdNm": "QUINTAL", "userDfnCd1": None}]}, {"cdCls": "11", "cdClsNm": "Sale Status", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Pending Approval", "userDfnCd1": None}, {"cd": "02", "cdNm": "Approved", "userDfnCd1": None}, {"cd": "03", "cdNm": "Cancel Requested", "userDfnCd1": None}, {"cd": "04", "cdNm": "Rejected", "userDfnCd1": None}, {"cd": "05", "cdNm": "Credit note", "userDfnCd1": None}, {"cd": "06", "cdNm": "Transferred", "userDfnCd1": None}, {"cd": "07", "cdNm": "Provisional finalized", "userDfnCd1": None}]}, {"cdCls": "12", "cdClsNm": "Stock I/O Type", "userDfnNm1": None, "dtlList": [{"cd": "00", "cdNm": "Incoming", "userDfnCd1": None}, {"cd": "01", "cdNm": "Import", "userDfnCd1": None}, {"cd": "02", "cdNm": "Purchase", "userDfnCd1": None}, {"cd": "03", "cdNm": "Return", "userDfnCd1": None}, {"cd": "04", "cdNm": "Stock Movement", "userDfnCd1": None}, {"cd": "05", "cdNm": "Processing", "userDfnCd1": None}, {"cd": "06", "cdNm": "Adjustment", "userDfnCd1": None}, {"cd": "10", "cdNm": "Outgoing", "userDfnCd1": None}, {"cd": "11", "cdNm": "Sale", "userDfnCd1": None}, {"cd": "12", "cdNm": "Return", "userDfnCd1": None}, {"cd": "13", "cdNm": "Stock Movement", "userDfnCd1": None}, {"cd": "14", "cdNm": "Processing", "userDfnCd1": None}, {"cd": "15", "cdNm": "Disposal", "userDfnCd1": None}, {"cd": "16", "cdNm": "Adjustment", "userDfnCd1": None}]}, {"cdCls": "13", "cdClsNm": "Default information", "userDfnNm1": "Default Value", "dtlList": [{"cd": "1", "cdNm": "Default Customer TPIN", "userDfnCd1": "1000000000"}, {"cd": "2", "cdNm": "lastReqDt", "userDfnCd1": "20231215120000"}]}, {"cdCls": "14", "cdClsNm": "Transaction Type", "userDfnNm1": None, "dtlList": [{"cd": "C", "cdNm": "Copy", "userDfnCd1": None}, {"cd": "N", "cdNm": "Normal", "userDfnCd1": None}, {"cd": "P", "cdNm": "Proforma", "userDfnCd1": None}, {"cd": "T", "cdNm": "Training", "userDfnCd1": None}, {"cd": "CI", "cdNm": "Commercial invoice", "userDfnCd1": None}, {"cd": "PI", "cdNm": "Provisional invoice", "userDfnCd1": None}, {"cd": "F", "cdNm": "Final Invoice", "userDfnCd1": None}]}, {"cdCls": "17", "cdClsNm": "Packing Unit", "userDfnNm1": None, "dtlList": [{"cd": "AM", "cdNm": "Ampoule", "userDfnCd1": None}, {"cd": "BA", "cdNm": "Barrel", "userDfnCd1": None}, {"cd": "BC", "cdNm": "Bottlecrate", "userDfnCd1": None}, {"cd": "BE", "cdNm": "Bundle", "userDfnCd1": None}, {"cd": "BF", "cdNm": "Balloon, non-protected", "userDfnCd1": None}, {"cd": "BG", "cdNm": "Bag", "userDfnCd1": None}, {"cd": "BJ", "cdNm": "Bucket", "userDfnCd1": None}, {"cd": "BK", "cdNm": "Basket", "userDfnCd1": None}, {"cd": "BL", "cdNm": "Bale", "userDfnCd1": None}, {"cd": "BQ", "cdNm": "Bottle, protected cylindrical", "userDfnCd1": None}, {"cd": "BR", "cdNm": "Bar", "userDfnCd1": None}, {"cd": "BV", "cdNm": "Bottle, bulbous", "userDfnCd1": None}, {"cd": "BZ", "cdNm": "Bag", "userDfnCd1": None}, {"cd": "CA", "cdNm": "Can", "userDfnCd1": None}, {"cd": "CH", "cdNm": "Chest", "userDfnCd1": None}, {"cd": "CJ", "cdNm": "Coffin", "userDfnCd1": None}, {"cd": "CL", "cdNm": "Coil", "userDfnCd1": None}, {"cd": "CR", "cdNm": "Wooden Box, Wooden Case", "userDfnCd1": None}, {"cd": "CS", "cdNm": "Cassette", "userDfnCd1": None}, {"cd": "CT", "cdNm": "Carton", "userDfnCd1": None}, {"cd": "CTN", "cdNm": "Container", "userDfnCd1": None}, {"cd": "CY", "cdNm": "Cylinder", "userDfnCd1": None}, {"cd": "DR", "cdNm": "Drum", "userDfnCd1": None}, {"cd": "GT", "cdNm": "Extra Countable Item", "userDfnCd1": None}, {"cd": "HH", "cdNm": "Hand Baggage", "userDfnCd1": None}, {"cd": "IZ", "cdNm": "Ingots", "userDfnCd1": None}, {"cd": "JR", "cdNm": "Jar", "userDfnCd1": None}, {"cd": "JU", "cdNm": "Jug", "userDfnCd1": None}, {"cd": "JY", "cdNm": "Jerry CAN Cylindrical", "userDfnCd1": None}, {"cd": "KZ", "cdNm": "Canester", "userDfnCd1": None}, {"cd": "LZ", "cdNm": "Logs, in bundle/bunch/truss", "userDfnCd1": None}, {"cd": "NT", "cdNm": "Net", "userDfnCd1": None}, {"cd": "OU", "cdNm": "Non-Exterior Packaging Unit", "userDfnCd1": None}, {"cd": "PD", "cdNm": "Poddon", "userDfnCd1": None}, {"cd": "PG", "cdNm": "Plate", "userDfnCd1": None}, {"cd": "PI", "cdNm": "Pipe", "userDfnCd1": None}, {"cd": "PO", "cdNm": "Pilot", "userDfnCd1": None}, {"cd": "PU", "cdNm": "Traypack", "userDfnCd1": None}, {"cd": "RL", "cdNm": "Reel", "userDfnCd1": None}, {"cd": "RO", "cdNm": "Roll", "userDfnCd1": None}, {"cd": "RZ", "cdNm": "Rods, in bundle/bunch/truss", "userDfnCd1": None}, {"cd": "SK", "cdNm": "Skeletoncase", "userDfnCd1": None}, {"cd": "TY", "cdNm": "Tank, cylindrical", "userDfnCd1": None}, {"cd": "VG", "cdNm": "Bulk,gas(at 1031 mbar 15 oC)", "userDfnCd1": None}, {"cd": "VL", "cdNm": "Bulk,liquid(at normal temperature/pressure)", "userDfnCd1": None}, {"cd": "VO", "cdNm": "Bulk, solid, large particles(nodules)", "userDfnCd1": None}, {"cd": "VQ", "cdNm": "Bulk, gas (liquefied at abnormal temperature/pressure)", "userDfnCd1": None}, {"cd": "VR", "cdNm": "Bulk, solid, granular particles(grains)", "userDfnCd1": None}, {"cd": "VT", "cdNm": "Extra Bulk Item", "userDfnCd1": None}, {"cd": "VY", "cdNm": "Bulk, fine particles(powder)", "userDfnCd1": None}, {"cd": "ML", "cdNm": "Mills", "userDfnCd1": None}, {"cd": "TN", "cdNm": "TAN", "userDfnCd1": None}, {"cd": "B/L", "cdNm": "Black Lug", "userDfnCd1": None}, {"cd": "BIN", "cdNm": "Bin", "userDfnCd1": None}, {"cd": "BOTT", "cdNm": "Bottle", "userDfnCd1": None}, {"cd": "BOUQ", "cdNm": "Bouquet", "userDfnCd1": None}, {"cd": "BOWL", "cdNm": "Bowl", "userDfnCd1": None}, {"cd": "BOX", "cdNm": "Box", "userDfnCd1": None}, {"cd": "BUBG", "cdNm": "Budget Bag", "userDfnCd1": None}, {"cd": "BULK", "cdNm": "Bulk Pack", "userDfnCd1": None}, {"cd": "BUNC", "cdNm": "Bunch", "userDfnCd1": None}, {"cd": "BUND", "cdNm": "Bundle", "userDfnCd1": None}, {"cd": "CLEA", "cdNm": "Clear Lid", "userDfnCd1": None}, {"cd": "EA", "cdNm": "Each", "userDfnCd1": None}, {"cd": "EACH", "cdNm": "Each", "userDfnCd1": None}, {"cd": "ECON", "cdNm": "Economy Bag", "userDfnCd1": None}, {"cd": "ECPO", "cdNm": "Econo Poc Sell", "userDfnCd1": None}, {"cd": "G/L", "cdNm": "Green Lugs", "userDfnCd1": None}, {"cd": "KARR", "cdNm": "Karripoc", "userDfnCd1": None}, {"cd": "LABE", "cdNm": "Labels", "userDfnCd1": None}, {"cd": "MESH", "cdNm": "Mesh", "userDfnCd1": None}, {"cd": "NETL", "cdNm": "Netlon", "userDfnCd1": None}, {"cd": "P/KG", "cdNm": "Per Kilogram", "userDfnCd1": None}, {"cd": "PACK", "cdNm": "PACK", "userDfnCd1": None}, {"cd": "PCRT", "cdNm": "PCRT", "userDfnCd1": None}, {"cd": "PILP", "cdNm": "Pilpac", "userDfnCd1": None}, {"cd": "POC", "cdNm": "Pocket", "userDfnCd1": None}, {"cd": "POCS", "cdNm": "Poc Sell", "userDfnCd1": None}, {"cd": "POLY", "cdNm": "Poly Bags", "userDfnCd1": None}, {"cd": "POT", "cdNm": "Pots", "userDfnCd1": None}, {"cd": "PREP", "cdNm": "Prepack", "userDfnCd1": None}, {"cd": "PUND", "cdNm": "Pun DTray", "userDfnCd1": None}, {"cd": "PUNN", "cdNm": "Punnet - Packaging", "userDfnCd1": None}, {"cd": "SLEE", "cdNm": "Sleeve", "userDfnCd1": None}, {"cd": "SOCK", "cdNm": "Sock", "userDfnCd1": None}, {"cd": "TRAY", "cdNm": "Tray", "userDfnCd1": None}, {"cd": "TRSE", "cdNm": "Tray Sell", "userDfnCd1": None}, {"cd": "TUB", "cdNm": "TUB", "userDfnCd1": None}, {"cd": "UNWR", "cdNm": "Unwrap", "userDfnCd1": None}, {"cd": "WRAP", "cdNm": "Wraped", "userDfnCd1": None}, {"cd": "PR", "cdNm": "Pairs", "userDfnCd1": None}, {"cd": "PA", "cdNm": "BALLOON,PROTECTED", "userDfnCd1": None}, {"cd": "BN", "cdNm": "BEER CRATE", "userDfnCd1": None}, {"cd": "SZ", "cdNm": "BOBBIN", "userDfnCd1": None}, {"cd": "CG", "cdNm": "BOLT", "userDfnCd1": None}, {"cd": "RG", "cdNm": "BUTT", "userDfnCd1": None}, {"cd": "JG", "cdNm": "CAGE", "userDfnCd1": None}, {"cd": "BX", "cdNm": "CARBOY,PROTECTED", "userDfnCd1": None}, {"cd": "GZ", "cdNm": "CREEL", "userDfnCd1": None}, {"cd": "BU", "cdNm": "DEMIJOHN,NON-PROTECTED", "userDfnCd1": None}, {"cd": "BB", "cdNm": "FRUIT CRATE", "userDfnCd1": None}, {"cd": "RT", "cdNm": "GAS BOTTLE", "userDfnCd1": None}, {"cd": "CP", "cdNm": "GIRDERS,IN BUNDLE/BUNCH/TRUSS", "userDfnCd1": None}, {"cd": "VA", "cdNm": "HAMPER", "userDfnCd1": None}, {"cd": "BD", "cdNm": "LOOSE", "userDfnCd1": None}, {"cd": "SC", "cdNm": "MULTIWALL SACK", "userDfnCd1": None}, {"cd": "AP", "cdNm": "PAIL", "userDfnCd1": None}, {"cd": "CU", "cdNm": "PALLET", "userDfnCd1": None}, {"cd": "MS", "cdNm": "PITCHER", "userDfnCd1": None}, {"cd": "TR", "cdNm": "REDNET", "userDfnCd1": None}, {"cd": "TB", "cdNm": "SHEETS,IN BUNDLE/BUNCH/TRUSS", "userDfnCd1": None}, {"cd": "BI", "cdNm": "SHRINKWRAPPED", "userDfnCd1": None}, {"cd": "FR", "cdNm": "TIN", "userDfnCd1": None}, {"cd": "CE", "cdNm": "TRUNK", "userDfnCd1": None}, {"cd": "PH", "cdNm": "TUBE", "userDfnCd1": None}, {"cd": "CF", "cdNm": "WICKERBOTTLE", "userDfnCd1": None}, {"cd": "JC", "cdNm": "JERRICAN,RECTANGULAR", "userDfnCd1": None}, {"cd": "BY", "cdNm": "BOARD,IN BUNDLE/BUNCH/TRUSS", "userDfnCd1": None}, {"cd": "EN", "cdNm": "ENVELOPE", "userDfnCd1": None}, {"cd": "NS", "cdNm": "NEST", "userDfnCd1": None}, {"cd": "VP", "cdNm": "VACUUMPACKED", "userDfnCd1": None}, {"cd": "SU", "cdNm": "SUITCASE", "userDfnCd1": None}, {"cd": "VI", "cdNm": "VIAL", "userDfnCd1": None}, {"cd": "KG", "cdNm": "KEG", "userDfnCd1": None}, {"cd": "NE", "cdNm": "UNPACKED OR UNPACKAGED", "userDfnCd1": None}, {"cd": "KWH", "cdNm": "KILOWATTS/HOUR", "userDfnCd1": None}, {"cd": "ST", "cdNm": "SHEET", "userDfnCd1": None}, {"cd": "SM", "cdNm": "SHEETMETAL", "userDfnCd1": None}, {"cd": "MC", "cdNm": "MILK CRATE", "userDfnCd1": None}, {"cd": "AE", "cdNm": "AEROSOL", "userDfnCd1": None}, {"cd": "SE", "cdNm": "SEA-CHEST", "userDfnCd1": None}, {"cd": "TS", "cdNm": "TRUSS", "userDfnCd1": None}, {"cd": "CI", "cdNm": "CANISTER", "userDfnCd1": None}, {"cd": "BO", "cdNm": "BOTTLE, NON PROTECTED, CYLINDRICAL", "userDfnCd1": None}, {"cd": "SH", "cdNm": "SACHET", "userDfnCd1": None}, {"cd": "PN", "cdNm": "PLANK", "userDfnCd1": None}, {"cd": "LG", "cdNm": "LOG", "userDfnCd1": None}, {"cd": "TO", "cdNm": "TUN", "userDfnCd1": None}, {"cd": "MT", "cdNm": "MAT", "userDfnCd1": None}, {"cd": "PC", "cdNm": "PARCEL", "userDfnCd1": None}, {"cd": "SA", "cdNm": "SACK", "userDfnCd1": None}, {"cd": "HG", "cdNm": "HOGSHEAD", "userDfnCd1": None}, {"cd": "FL", "cdNm": "FLASK", "userDfnCd1": None}]}, {"cdCls": "20", "cdClsNm": "Customer type", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Resident", "userDfnCd1": None}, {"cd": "02", "cdNm": "Non-resident", "userDfnCd1": None}, {"cd": "03", "cdNm": " ", "userDfnCd1": None}]}, {"cdCls": "21", "cdClsNm": "Detail information type", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Payment type code", "userDfnCd1": None}, {"cd": "02", "cdNm": "Countries visited", "userDfnCd1": None}, {"cd": "03", "cdNm": "Countries to be visited", "userDfnCd1": None}, {"cd": "04", "cdNm": "Tour package name", "userDfnCd1": None}, {"cd": "05", "cdNm": "Invoice List for Rebate", "userDfnCd1": None}, {"cd": "06", "cdNm": "Provisional Invoice List finalized", "userDfnCd1": None}, {"cd": "07", "cdNm": "Commercial Invoice List acquitted", "userDfnCd1": None}]}, {"cdCls": "22", "cdClsNm": "Travel purpose", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Business", "userDfnCd1": None}, {"cd": "02", "cdNm": "Holiday Travels", "userDfnCd1": None}, {"cd": "03", "cdNm": "Other (Please specify)", "userDfnCd1": None}]}, {"cdCls": "23", "cdClsNm": "Commercial Invoice status", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Pending acquital", "userDfnCd1": None}, {"cd": "02", "cdNm": "Acquitted", "userDfnCd1": None}, {"cd": "03", "cdNm": "Cancelled", "userDfnCd1": None}, {"cd": "04", "cdNm": "Credit note", "userDfnCd1": None}, {"cd": "05", "cdNm": "Reversed", "userDfnCd1": None}]}, {"cdCls": "24", "cdClsNm": "Item Type", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "Raw Material", "userDfnCd1": None}, {"cd": "2", "cdNm": "Finished Product", "userDfnCd1": None}, {"cd": "3", "cdNm": "Service", "userDfnCd1": None}, {"cd": "4", "cdNm": "Rebate", "userDfnCd1": None}]}, {"cdCls": "26", "cdClsNm": "Import Item Status", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "Unsent", "userDfnCd1": None}, {"cd": "2", "cdNm": "Waiting", "userDfnCd1": None}, {"cd": "3", "cdNm": "Approved", "userDfnCd1": None}, {"cd": "4", "cdNm": "Cancelled", "userDfnCd1": None}]}, {"cdCls": "27", "cdClsNm": "Departure Incoterm", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "EXW", "userDfnCd1": None}, {"cd": "02", "cdNm": "Other", "userDfnCd1": None}]}, {"cdCls": "28", "cdClsNm": "Destination Incortem", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "FCA", "userDfnCd1": None}, {"cd": "02", "cdNm": "FAS", "userDfnCd1": None}, {"cd": "03", "cdNm": "FOB", "userDfnCd1": None}, {"cd": "04", "cdNm": "CFR", "userDfnCd1": None}, {"cd": "05", "cdNm": "CIF", "userDfnCd1": None}, {"cd": "06", "cdNm": "CPT", "userDfnCd1": None}, {"cd": "07", "cdNm": "CIP", "userDfnCd1": None}, {"cd": "08", "cdNm": "DAP", "userDfnCd1": None}, {"cd": "09", "cdNm": "DPU", "userDfnCd1": None}, {"cd": "10", "cdNm": "DDP", "userDfnCd1": None}, {"cd": "11", "cdNm": "Other", "userDfnCd1": None}]}, {"cdCls": "29", "cdClsNm": "Export Charges", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Freight Costs", "userDfnCd1": "Freight"}, {"cd": "02", "cdNm": "Handling Costs", "userDfnCd1": "Handling"}, {"cd": "03", "cdNm": "Storage Costs", "userDfnCd1": "Storage"}, {"cd": "04", "cdNm": "Insurance Costs", "userDfnCd1": "Insurance"}, {"cd": "05", "cdNm": "Other Costs", "userDfnCd1": "Other"}]}, {"cdCls": "30", "cdClsNm": "Zambia ports", "userDfnNm1": None, "dtlList": [{"cd": "CGA", "cdNm": "CHINGOLA AIRPORT", "userDfnCd1": None}, {"cd": "CHA", "cdNm": "CHAVUMA", "userDfnCd1": None}, {"cd": "CHD", "cdNm": "CHANIDA", "userDfnCd1": None}, {"cd": "CHE", "cdNm": "CHEMBE", "userDfnCd1": None}, {"cd": "CHG", "cdNm": "CHIPUNGU", "userDfnCd1": None}, {"cd": "CHI", "cdNm": "CHINSALI", "userDfnCd1": None}, {"cd": "CHN", "cdNm": "CHINGOLA", "userDfnCd1": None}, {"cd": "CHO", "cdNm": "CHOMA", "userDfnCd1": None}, {"cd": "CHP", "cdNm": "CHIPATA", "userDfnCd1": None}, {"cd": "CHR", "cdNm": "CHIRUNDU", "userDfnCd1": None}, {"cd": "CHT", "cdNm": "CHIPATA AIRPORT", "userDfnCd1": None}, {"cd": "GWA", "cdNm": "GWEMBE VALLEY", "userDfnCd1": None}, {"cd": "HQO", "cdNm": "HEAD QUARTERS OFFICE", "userDfnCd1": None}, {"cd": "JIM", "cdNm": "JIMBE BRIDGE", "userDfnCd1": None}, {"cd": "KAS", "cdNm": "KASAMA", "userDfnCd1": None}, {"cd": "KIP", "cdNm": "KIPUSHI", "userDfnCd1": None}, {"cd": "KPM", "cdNm": "KAPIRI MPOSHI", "userDfnCd1": None}, {"cd": "KRB", "cdNm": "KARIBA", "userDfnCd1": None}, {"cd": "KSH", "cdNm": "KASHIBA", "userDfnCd1": None}, {"cd": "KSU", "cdNm": "KASUMBALESA", "userDfnCd1": None}, {"cd": "KTA", "cdNm": "KITWE AIRPORT", "userDfnCd1": None}, {"cd": "KTM", "cdNm": "KATIMA MULILO", "userDfnCd1": None}, {"cd": "KTW", "cdNm": "KITWE PORT OFFICE", "userDfnCd1": None}, {"cd": "KZU", "cdNm": "KAZUNGULA", "userDfnCd1": None}, {"cd": "LGA", "cdNm": "LUANGWA", "userDfnCd1": None}, {"cd": "LIA", "cdNm": "LUSAKA INTERNATIONAL AIRPORT", "userDfnCd1": None}, {"cd": "LKA", "cdNm": "LUSAKA PORT OFFICE", "userDfnCd1": None}, {"cd": "LON", "cdNm": "LONSHI BORDER POST", "userDfnCd1": None}, {"cd": "LUF", "cdNm": "LUFUWA BORDER POST", "userDfnCd1": None}, {"cd": "LUK", "cdNm": "LUKWESA", "userDfnCd1": None}, {"cd": "LUM", "cdNm": "LUMI", "userDfnCd1": None}, {"cd": "LUN", "cdNm": "LUNDAZI", "userDfnCd1": None}, {"cd": "LUS", "cdNm": "LUSUNTHA", "userDfnCd1": None}, {"cd": "LVA", "cdNm": "LIVINGSTONE AIRPORT", "userDfnCd1": None}, {"cd": "LVI", "cdNm": "LIVINGSTONE PORT OFFICE", "userDfnCd1": None}, {"cd": "MAS", "cdNm": "MANSA", "userDfnCd1": None}, {"cd": "MAT", "cdNm": "MATANDA", "userDfnCd1": None}, {"cd": "MBA", "cdNm": "MBALA AIRPORT", "userDfnCd1": None}, {"cd": "MFA", "cdNm": "MFUWE AIRPORT", "userDfnCd1": None}, {"cd": "MKA", "cdNm": "MOKAMBO", "userDfnCd1": None}, {"cd": "MLS", "cdNm": "MULIASHI", "userDfnCd1": None}, {"cd": "MOA", "cdNm": "MONGU AIRPORT", "userDfnCd1": None}, {"cd": "MON", "cdNm": "MONGU OFFICE", "userDfnCd1": None}, {"cd": "MPO", "cdNm": "MPOROKOSO", "userDfnCd1": None}, {"cd": "MPU", "cdNm": "MPULUNGU", "userDfnCd1": None}, {"cd": "MWA", "cdNm": "MWAMI BORDER POST", "userDfnCd1": None}, {"cd": "MWI", "cdNm": "MWINILUNGA", "userDfnCd1": None}, {"cd": "NDA", "cdNm": "NDOLA AIRPORT", "userDfnCd1": None}, {"cd": "NDO", "cdNm": "NDOLA PORT OFFICE", "userDfnCd1": None}, {"cd": "NGE", "cdNm": "NCHELENGE", "userDfnCd1": None}, {"cd": "NKO", "cdNm": "NAKONDE", "userDfnCd1": None}, {"cd": "NYA", "cdNm": "NYALA", "userDfnCd1": None}, {"cd": "SKA", "cdNm": "SAKANYA", "userDfnCd1": None}, {"cd": "SOL", "cdNm": "SOLWEZI", "userDfnCd1": None}, {"cd": "SVO", "cdNm": "SIAVONGA", "userDfnCd1": None}, {"cd": "SZE", "cdNm": "SINAZONGWE", "userDfnCd1": None}, {"cd": "VFL", "cdNm": "VICTORIA FALLS", "userDfnCd1": None}, {"cd": "ZOM", "cdNm": "ZOMBE", "userDfnCd1": None}]}, {"cdCls": "32", "cdClsNm": "Credit Note Reason", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Wrong product (s)", "userDfnCd1": None}, {"cd": "02", "cdNm": "Wrong price", "userDfnCd1": None}, {"cd": "03", "cdNm": "Damaged Goods", "userDfnCd1": None}, {"cd": "04", "cdNm": "Wrong Customer invoiced", "userDfnCd1": None}, {"cd": "05", "cdNm": "Duplicated invoice", "userDfnCd1": None}, {"cd": "06", "cdNm": "Excess supplies", "userDfnCd1": None}, {"cd": "07", "cdNm": "Other (Provide other reason in brief)", "userDfnCd1": None}]}, {"cdCls": "33", "cdClsNm": "Currency", "userDfnNm1": None, "dtlList": [{"cd": "AED", "cdNm": "United Arab Emirates dirham", "userDfnCd1": None}, {"cd": "AFN", "cdNm": "Afghan afghani", "userDfnCd1": None}, {"cd": "ALL", "cdNm": "Albanian lek", "userDfnCd1": None}, {"cd": "AMD", "cdNm": "Armenian dram", "userDfnCd1": None}, {"cd": "ANG", "cdNm": "Netherlands Antillean guilder", "userDfnCd1": None}, {"cd": "AOA", "cdNm": "Angolan kwanza", "userDfnCd1": None}, {"cd": "ARS", "cdNm": "Argentine peso", "userDfnCd1": None}, {"cd": "AUD", "cdNm": "Australian dollar", "userDfnCd1": None}, {"cd": "AWG", "cdNm": "Aruban florin", "userDfnCd1": None}, {"cd": "AZN", "cdNm": "Azerbaijani manat", "userDfnCd1": None}, {"cd": "BAM", "cdNm": "Bosnia and Herzegovina convertible mark", "userDfnCd1": None}, {"cd": "BBD", "cdNm": "Barbados dollar", "userDfnCd1": None}, {"cd": "BDT", "cdNm": "Bangladeshi taka", "userDfnCd1": None}, {"cd": "BGN", "cdNm": "Bulgarian lev", "userDfnCd1": None}, {"cd": "BHD", "cdNm": "Bahraini dinar", "userDfnCd1": None}, {"cd": "BIF", "cdNm": "Burundian franc", "userDfnCd1": None}, {"cd": "BMD", "cdNm": "Bermudian dollar", "userDfnCd1": None}, {"cd": "BND", "cdNm": "Brunei dollar", "userDfnCd1": None}, {"cd": "BOB", "cdNm": "Boliviano", "userDfnCd1": None}, {"cd": "BOV", "cdNm": "Bolivian Mvdol (funds code)", "userDfnCd1": None}, {"cd": "BRL", "cdNm": "Brazilian real", "userDfnCd1": None}, {"cd": "BSD", "cdNm": "Bahamian dollar", "userDfnCd1": None}, {"cd": "BTN", "cdNm": "Bhutanese ngultrum", "userDfnCd1": None}, {"cd": "BWP", "cdNm": "Botswana pula", "userDfnCd1": None}, {"cd": "BYN", "cdNm": "New Belarusian ruble", "userDfnCd1": None}, {"cd": "BYR", "cdNm": "Belarusian ruble", "userDfnCd1": None}, {"cd": "BZD", "cdNm": "Belize dollar", "userDfnCd1": None}, {"cd": "CAD", "cdNm": "Canadian dollar", "userDfnCd1": None}, {"cd": "CDF", "cdNm": "Congolese franc", "userDfnCd1": None}, {"cd": "CHE", "cdNm": "WIR Euro (complementary currency)", "userDfnCd1": None}, {"cd": "CHF", "cdNm": "Swiss franc", "userDfnCd1": None}, {"cd": "CHW", "cdNm": "WIR Franc (complementary currency)", "userDfnCd1": None}, {"cd": "CLF", "cdNm": "Unidad de Fomento (funds code)", "userDfnCd1": None}, {"cd": "CLP", "cdNm": "Chilean peso", "userDfnCd1": None}, {"cd": "CNY", "cdNm": "Chinese yuan", "userDfnCd1": None}, {"cd": "COP", "cdNm": "Colombian peso", "userDfnCd1": None}, {"cd": "COU", "cdNm": "Unidad de Valor Real (UVR) (funds code)", "userDfnCd1": None}, {"cd": "CRC", "cdNm": "Costa Rican colon", "userDfnCd1": None}, {"cd": "CUC", "cdNm": "Cuban convertible peso", "userDfnCd1": None}, {"cd": "CUP", "cdNm": "Cuban peso", "userDfnCd1": None}, {"cd": "CVE", "cdNm": "Cape Verde escudo", "userDfnCd1": None}, {"cd": "CZK", "cdNm": "Czech koruna", "userDfnCd1": None}, {"cd": "DJF", "cdNm": "Djiboutian franc", "userDfnCd1": None}, {"cd": "DKK", "cdNm": "Danish krone", "userDfnCd1": None}, {"cd": "DOP", "cdNm": "Dominican peso", "userDfnCd1": None}, {"cd": "DZD", "cdNm": "Algerian dinar", "userDfnCd1": None}, {"cd": "EGP", "cdNm": "Egyptian pound", "userDfnCd1": None}, {"cd": "ERN", "cdNm": "Eritrean nakfa", "userDfnCd1": None}, {"cd": "ETB", "cdNm": "Ethiopian birr", "userDfnCd1": None}, {"cd": "EUR", "cdNm": "Euro", "userDfnCd1": None}, {"cd": "FJD", "cdNm": "Fiji dollar", "userDfnCd1": None}, {"cd": "FKP", "cdNm": "Falkland Islands pound", "userDfnCd1": None}, {"cd": "GBP", "cdNm": "Pound sterling", "userDfnCd1": None}, {"cd": "GEL", "cdNm": "Georgian lari", "userDfnCd1": None}, {"cd": "GHS", "cdNm": "Ghanaian cedi", "userDfnCd1": None}, {"cd": "GIP", "cdNm": "Gibraltar pound", "userDfnCd1": None}, {"cd": "GMD", "cdNm": "Gambian dalasi", "userDfnCd1": None}, {"cd": "GNF", "cdNm": "Guinean franc", "userDfnCd1": None}, {"cd": "GTQ", "cdNm": "Guatemalan quetzal", "userDfnCd1": None}, {"cd": "GYD", "cdNm": "Guyanese dollar", "userDfnCd1": None}, {"cd": "HKD", "cdNm": "Hong Kong dollar", "userDfnCd1": None}, {"cd": "HNL", "cdNm": "Honduran lempira", "userDfnCd1": None}, {"cd": "HRK", "cdNm": "Croatian kuna", "userDfnCd1": None}, {"cd": "HTG", "cdNm": "Haitian gourde", "userDfnCd1": None}, {"cd": "HUF", "cdNm": "Hungarian forint", "userDfnCd1": None}, {"cd": "IDR", "cdNm": "Indonesian rupiah", "userDfnCd1": None}, {"cd": "ILS", "cdNm": "Israeli new shekel", "userDfnCd1": None}, {"cd": "INR", "cdNm": "Indian rupee", "userDfnCd1": None}, {"cd": "IQD", "cdNm": "Iraqi dinar", "userDfnCd1": None}, {"cd": "IRR", "cdNm": "Iranian rial", "userDfnCd1": None}, {"cd": "ISK", "cdNm": "Icelandic kr\u00c3\u00b3na", "userDfnCd1": None}, {"cd": "JMD", "cdNm": "Jamaican dollar", "userDfnCd1": None}, {"cd": "JOD", "cdNm": "Jordanian dinar", "userDfnCd1": None}, {"cd": "JPY", "cdNm": "Japanese yen", "userDfnCd1": None}, {"cd": "KES", "cdNm": "Kenyan shilling", "userDfnCd1": None}, {"cd": "KGS", "cdNm": "Kyrgyzstani som", "userDfnCd1": None}, {"cd": "KHR", "cdNm": "Cambodian riel", "userDfnCd1": None}, {"cd": "KMF", "cdNm": "Comoro franc", "userDfnCd1": None}, {"cd": "KPW", "cdNm": "North Korean won", "userDfnCd1": None}, {"cd": "KRW", "cdNm": "South Korean won", "userDfnCd1": None}, {"cd": "KWD", "cdNm": "Kuwaiti dinar", "userDfnCd1": None}, {"cd": "KYD", "cdNm": "Cayman Islands dollar", "userDfnCd1": None}, {"cd": "KZT", "cdNm": "Kazakhstani tenge", "userDfnCd1": None}, {"cd": "LAK", "cdNm": "Lao kip", "userDfnCd1": None}, {"cd": "LBP", "cdNm": "Lebanese pound", "userDfnCd1": None}, {"cd": "LKR", "cdNm": "Sri Lankan rupee", "userDfnCd1": None}, {"cd": "LRD", "cdNm": "Liberian dollar", "userDfnCd1": None}, {"cd": "LSL", "cdNm": "Lesotho loti", "userDfnCd1": None}, {"cd": "LYD", "cdNm": "Libyan dinar", "userDfnCd1": None}, {"cd": "MAD", "cdNm": "Moroccan dirham", "userDfnCd1": None}, {"cd": "MDL", "cdNm": "Moldovan leu", "userDfnCd1": None}, {"cd": "MGA", "cdNm": "Malagasy ariary", "userDfnCd1": None}, {"cd": "MKD", "cdNm": "Macedonian denar", "userDfnCd1": None}, {"cd": "MMK", "cdNm": "Myanmar kyat", "userDfnCd1": None}, {"cd": "MNT", "cdNm": "Mongolian t\u00c3\u00b6gr\u00c3\u00b6g", "userDfnCd1": None}, {"cd": "MOP", "cdNm": "Macanese pataca", "userDfnCd1": None}, {"cd": "MRO", "cdNm": "Mauritanian ouguiya", "userDfnCd1": None}, {"cd": "MUR", "cdNm": "Mauritian rupee", "userDfnCd1": None}, {"cd": "MVR", "cdNm": "Maldivian rufiyaa", "userDfnCd1": None}, {"cd": "MWK", "cdNm": "Malawian kwacha", "userDfnCd1": None}, {"cd": "MXN", "cdNm": "Mexican peso", "userDfnCd1": None}, {"cd": "MXV", "cdNm": "Mexican Unidad de Inversion (UDI) (funds code)", "userDfnCd1": None}, {"cd": "MYR", "cdNm": "Malaysian ringgit", "userDfnCd1": None}, {"cd": "MZN", "cdNm": "Mozambican metical", "userDfnCd1": None}, {"cd": "NAD", "cdNm": "Namibian dollar", "userDfnCd1": None}, {"cd": "NGN", "cdNm": "Nigerian naira", "userDfnCd1": None}, {"cd": "NIO", "cdNm": "Nicaraguan c\u00c3\u00b3rdoba", "userDfnCd1": None}, {"cd": "NOK", "cdNm": "Norwegian krone", "userDfnCd1": None}, {"cd": "NPR", "cdNm": "Nepalese rupee", "userDfnCd1": None}, {"cd": "NZD", "cdNm": "New Zealand dollar", "userDfnCd1": None}, {"cd": "OMR", "cdNm": "Omani rial", "userDfnCd1": None}, {"cd": "PAB", "cdNm": "Panamanian balboa", "userDfnCd1": None}, {"cd": "PEN", "cdNm": "Peruvian Sol", "userDfnCd1": None}, {"cd": "PGK", "cdNm": "Papua New Guinean kina", "userDfnCd1": None}, {"cd": "PHP", "cdNm": "Philippine peso", "userDfnCd1": None}, {"cd": "PKR", "cdNm": "Pakistani rupee", "userDfnCd1": None}, {"cd": "PLN", "cdNm": "Polish z\u00c5\u201aoty", "userDfnCd1": None}, {"cd": "PYG", "cdNm": "Paraguayan guaran\u00c3\u00ad", "userDfnCd1": None}, {"cd": "QAR", "cdNm": "Qatari riyal", "userDfnCd1": None}, {"cd": "RON", "cdNm": "Romanian leu", "userDfnCd1": None}, {"cd": "RSD", "cdNm": "Serbian dinar", "userDfnCd1": None}, {"cd": "RUB", "cdNm": "Russian ruble", "userDfnCd1": None}, {"cd": "RWF", "cdNm": "Rwandan franc", "userDfnCd1": None}, {"cd": "SAR", "cdNm": "Saudi riyal", "userDfnCd1": None}, {"cd": "SBD", "cdNm": "Solomon Islands dollar", "userDfnCd1": None}, {"cd": "SCR", "cdNm": "Seychelles rupee", "userDfnCd1": None}, {"cd": "SDG", "cdNm": "Sudanese pound", "userDfnCd1": None}, {"cd": "SEK", "cdNm": "Swedish krona/kronor", "userDfnCd1": None}, {"cd": "SGD", "cdNm": "Singapore dollar", "userDfnCd1": None}, {"cd": "SHP", "cdNm": "Saint Helena pound", "userDfnCd1": None}, {"cd": "SLL", "cdNm": "Sierra Leonean leone", "userDfnCd1": None}, {"cd": "SOS", "cdNm": "Somali shilling", "userDfnCd1": None}, {"cd": "SRD", "cdNm": "Surinamese dollar", "userDfnCd1": None}, {"cd": "SSP", "cdNm": "South Sudanese pound", "userDfnCd1": None}, {"cd": "STD", "cdNm": "S\u00c3\u00a3o Tom\u00c3\u00a9 and Pr\u00c3\u00adncipe dobra", "userDfnCd1": None}, {"cd": "SVC", "cdNm": "Salvadoran col\u00c3\u00b3n", "userDfnCd1": None}, {"cd": "SYP", "cdNm": "Syrian pound", "userDfnCd1": None}, {"cd": "SZL", "cdNm": "Swazi lilangeni", "userDfnCd1": None}, {"cd": "THB", "cdNm": "Thai baht", "userDfnCd1": None}, {"cd": "TJS", "cdNm": "Tajikistani somoni", "userDfnCd1": None}, {"cd": "TMT", "cdNm": "Turkmenistani manat", "userDfnCd1": None}, {"cd": "TND", "cdNm": "Tunisian dinar", "userDfnCd1": None}, {"cd": "TOP", "cdNm": "Tongan pa\u00ca\u00bbanga", "userDfnCd1": None}, {"cd": "TRY", "cdNm": "Turkish lira", "userDfnCd1": None}, {"cd": "TTD", "cdNm": "Trinidad and Tobago dollar", "userDfnCd1": None}, {"cd": "TWD", "cdNm": "New Taiwan dollar", "userDfnCd1": None}, {"cd": "TZS", "cdNm": "Tanzanian shilling", "userDfnCd1": None}, {"cd": "UAH", "cdNm": "Ukrainian hryvnia", "userDfnCd1": None}, {"cd": "UGX", "cdNm": "Ugandan shilling", "userDfnCd1": None}, {"cd": "USD", "cdNm": "United States dollar", "userDfnCd1": None}, {"cd": "USN", "cdNm": "United States dollar (next day) (funds code)", "userDfnCd1": None}, {"cd": "UYI", "cdNm": "Uruguay Peso en Unidades Indexadas (URUIURUI) (funds code)", "userDfnCd1": None}, {"cd": "UYU", "cdNm": "Uruguayan peso", "userDfnCd1": None}, {"cd": "UZS", "cdNm": "Uzbekistan som", "userDfnCd1": None}, {"cd": "VEF", "cdNm": "Venezuelan bol\u00c3\u00advar", "userDfnCd1": None}, {"cd": "VND", "cdNm": "Vietnamese dong", "userDfnCd1": None}, {"cd": "VUV", "cdNm": "Vanuatu vatu", "userDfnCd1": None}, {"cd": "WST", "cdNm": "Samoan tala", "userDfnCd1": None}, {"cd": "XAF", "cdNm": "CFA franc BEAC", "userDfnCd1": None}, {"cd": "XAG", "cdNm": "Silver (one troy ounce)", "userDfnCd1": None}, {"cd": "XAU", "cdNm": "Gold (one troy ounce)", "userDfnCd1": None}, {"cd": "XBA", "cdNm": "European Composite Unit (EURCO) (bond market unit)", "userDfnCd1": None}, {"cd": "XBB", "cdNm": "European Monetary Unit (E.M.U.-6) (bond market unit)", "userDfnCd1": None}, {"cd": "XBC", "cdNm": "European Unit of Account 9 (E.U.A.-9) (bond market unit)", "userDfnCd1": None}, {"cd": "XBD", "cdNm": "European Unit of Account 17 (E.U.A.-17) (bond market unit)", "userDfnCd1": None}, {"cd": "XCD", "cdNm": "East Caribbean dollar", "userDfnCd1": None}, {"cd": "XDR", "cdNm": "Special drawing rights", "userDfnCd1": None}, {"cd": "XOF", "cdNm": "CFA franc BCEAO", "userDfnCd1": None}, {"cd": "XPD", "cdNm": "Palladium (one troy ounce)", "userDfnCd1": None}, {"cd": "XPF", "cdNm": "CFP franc (franc Pacifique)", "userDfnCd1": None}, {"cd": "XPT", "cdNm": "Platinum (one troy ounce)", "userDfnCd1": None}, {"cd": "XSU", "cdNm": "SUCRE", "userDfnCd1": None}, {"cd": "XTS", "cdNm": "Code reserved for testing purposes", "userDfnCd1": None}, {"cd": "XUA", "cdNm": "ADB Unit of Account", "userDfnCd1": None}, {"cd": "XXX", "cdNm": "No currency", "userDfnCd1": None}, {"cd": "YER", "cdNm": "Yemeni rial", "userDfnCd1": None}, {"cd": "ZAR", "cdNm": "South African rand", "userDfnCd1": None}, {"cd": "ZMW", "cdNm": "Zambian kwacha", "userDfnCd1": None}, {"cd": "ZWL", "cdNm": "Zimbabwean dollar A/10", "userDfnCd1": None}]}, {"cdCls": "34", "cdClsNm": "Purchase Status", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Pending Approval", "userDfnCd1": None}, {"cd": "02", "cdNm": "Approved", "userDfnCd1": None}, {"cd": "03", "cdNm": "Cancel Requested", "userDfnCd1": None}, {"cd": "04", "cdNm": "Rejected", "userDfnCd1": None}, {"cd": "05", "cdNm": "Credit note", "userDfnCd1": None}, {"cd": "06", "cdNm": "Transferred", "userDfnCd1": None}]}, {"cdCls": "35", "cdClsNm": "Reason of Inventory Adjustment", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Branch Transfer Out", "userDfnCd1": None}, {"cd": "02", "cdNm": "Branch Transfer In", "userDfnCd1": None}, {"cd": "03", "cdNm": "Adjustment In", "userDfnCd1": None}, {"cd": "04", "cdNm": "Adjustment Out", "userDfnCd1": None}, {"cd": "05", "cdNm": "Disposal", "userDfnCd1": None}, {"cd": "06", "cdNm": "Raw Material Processing", "userDfnCd1": None}, {"cd": "07", "cdNm": "Repackaging", "userDfnCd1": None}]}, {"cdCls": "36", "cdClsNm": "Bank", "userDfnNm1": None, "dtlList": [{"cd": "ABB", "cdNm": "AB BANK", "userDfnCd1": None}, {"cd": "BBZ", "cdNm": "ABSA", "userDfnCd1": None}, {"cd": "ACZ", "cdNm": "ACCESS", "userDfnCd1": None}, {"cd": "BOC", "cdNm": "BANK OF CHINA", "userDfnCd1": None}, {"cd": "BOZ", "cdNm": "BANK OF ZAMBIA", "userDfnCd1": None}, {"cd": "CIT", "cdNm": "CITIBANK", "userDfnCd1": None}, {"cd": "ECO", "cdNm": "ECOBANK", "userDfnCd1": None}, {"cd": "FAB", "cdNm": "FAB", "userDfnCd1": None}, {"cd": "FCB", "cdNm": "FCB", "userDfnCd1": None}, {"cd": "FNB", "cdNm": "FNB", "userDfnCd1": None}, {"cd": "IZB", "cdNm": "INDO - ZAMBIA", "userDfnCd1": None}, {"cd": "SBZ", "cdNm": "STANBIC", "userDfnCd1": None}, {"cd": "SCB", "cdNm": "STANCHART", "userDfnCd1": None}, {"cd": "UBA", "cdNm": "UBA", "userDfnCd1": None}, {"cd": "ZIC", "cdNm": "ZICB", "userDfnCd1": None}, {"cd": "ZNC", "cdNm": "ZANACO", "userDfnCd1": None}]}, {"cdCls": "37", "cdClsNm": "Sales Receipt Type", "userDfnNm1": None, "dtlList": [{"cd": "S", "cdNm": "Sale", "userDfnCd1": None}, {"cd": "R", "cdNm": "Credit Note", "userDfnCd1": None}, {"cd": "D", "cdNm": "Debit note", "userDfnCd1": None}, {"cd": "V", "cdNm": "Value credit note", "userDfnCd1": None}]}, {"cdCls": "38", "cdClsNm": "Purchase Receipt Type", "userDfnNm1": None, "dtlList": [{"cd": "P", "cdNm": "Purchase", "userDfnCd1": None}, {"cd": "R", "cdNm": "Credit Note after Purchase", "userDfnCd1": None}]}, {"cdCls": "400", "cdClsNm": "Taxation Type", "userDfnNm1": "Tax Rate", "dtlList": [{"cd": "A", "cdNm": "Standard Rated(16%)", "userDfnCd1": "16"}, {"cd": "B", "cdNm": "Minimum Taxable Value (MTV-16%)", "userDfnCd1": "16"}, {"cd": "C3", "cdNm": "Zero-rated by nature", "userDfnCd1": "0"}, {"cd": "D", "cdNm": "Exempt", "userDfnCd1": "0"}, {"cd": "RVAT", "cdNm": "Reverse VAT", "userDfnCd1": "16"}, {"cd": "E", "cdNm": "Disbursement", "userDfnCd1": "0"}]}, {"cdCls": "42", "cdClsNm": "Smart Invoice Type", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Smart Invoice Client", "userDfnCd1": None}, {"cd": "02", "cdNm": "Online Solution  [Services only]", "userDfnCd1": None}, {"cd": "03", "cdNm": "VSDC", "userDfnCd1": None}, {"cd": "04", "cdNm": "OSDC", "userDfnCd1": None}]}, {"cdCls": "44", "cdClsNm": "Provisional invoice finalization type", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Finalize", "userDfnCd1": None}, {"cd": "02", "cdNm": "Final credit note", "userDfnCd1": None}, {"cd": "03", "cdNm": "Final Tax Invoice", "userDfnCd1": None}]}, {"cdCls": "46", "cdClsNm": "Value Credit Note Type", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Discount", "userDfnCd1": None}, {"cd": "02", "cdNm": "Trade Rebate / Swell Allowance", "userDfnCd1": None}]}, {"cdCls": "48", "cdClsNm": "LOCALE", "userDfnNm1": "Language", "dtlList": [{"cd": "en_GB", "cdNm": "English", "userDfnCd1": "en"}, {"cd": "rw_RW", "cdNm": "Kinyarwanda", "userDfnCd1": "rw"}, {"cd": "fr_FR", "cdNm": "French", "userDfnCd1": "fr"}]}, {"cdCls": "49", "cdClsNm": "Category Level", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "Segement", "userDfnCd1": None}, {"cd": "2", "cdNm": "Family", "userDfnCd1": None}, {"cd": "3", "cdNm": "Class", "userDfnCd1": None}, {"cd": "4", "cdNm": "Commodity", "userDfnCd1": None}, {"cd": "5", "cdNm": "Custom", "userDfnCd1": None}]}, {"cdCls": "55", "cdClsNm": "VAT Type", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "VAT", "userDfnCd1": None}, {"cd": "2", "cdNm": "TOT", "userDfnCd1": None}, {"cd": "3", "cdNm": "RTX", "userDfnCd1": None}, {"cd": "4", "cdNm": "ITX", "userDfnCd1": None}]}, {"cdCls": "56", "cdClsNm": "Value Credit Note Type", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Discount Value Credit Note", "userDfnCd1": None}, {"cd": "02", "cdNm": "Trade Rebate Value Credit Note", "userDfnCd1": None}, {"cd": "03", "cdNm": "Overcharge Value Credit Note", "userDfnCd1": None}]}, {"cdCls": "58", "cdClsNm": "Reason for value credit note", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Wrong Price", "userDfnCd1": None}]}, {"cdCls": "60", "cdClsNm": "Excise duties", "userDfnNm1": None, "dtlList": [{"cd": "ECM", "cdNm": "Excise on Coal", "userDfnCd1": "5"}, {"cd": "EXEEG", "cdNm": "Excise Electricity", "userDfnCd1": "3"}]}, {"cdCls": "61", "cdClsNm": "Insurance Premium Levy[IPL]", "userDfnNm1": None, "dtlList": [{"cd": "IPL1", "cdNm": "Insurance Premium Levy", "userDfnCd1": "5"}, {"cd": "IPL2", "cdNm": "Re-insurance", "userDfnCd1": "0"}]}, {"cdCls": "62", "cdClsNm": "Tourism levy", "userDfnNm1": None, "dtlList": [{"cd": "TL", "cdNm": "Tourism Levy", "userDfnCd1": "1.5"}]}, {"cdCls": "63", "cdClsNm": "Invoice stolution status", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "Pending Registration", "userDfnCd1": None}, {"cd": "2", "cdNm": "Registered", "userDfnCd1": None}, {"cd": "3", "cdNm": "Deactivated", "userDfnCd1": None}, {"cd": "4", "cdNm": "Suspended", "userDfnCd1": None}, {"cd": "5", "cdNm": "Active", "userDfnCd1": None}]}, {"cdCls": "64", "cdClsNm": "Excise tax registration status", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "Excise tax", "userDfnCd1": None}, {"cd": "2", "cdNm": "No excise tax", "userDfnCd1": None}]}, {"cdCls": "65", "cdClsNm": "IPL registration status", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "IPL", "userDfnCd1": None}, {"cd": "2", "cdNm": "No IPL", "userDfnCd1": None}]}, {"cdCls": "66", "cdClsNm": "Tourism levy registration status", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "Tourism levy", "userDfnCd1": None}, {"cd": "2", "cdNm": "No Tourism levy", "userDfnCd1": None}]}, {"cdCls": "67", "cdClsNm": "Reason for Debit note", "userDfnNm1": None, "dtlList": [{"cd": "01", "cdNm": "Wrong quantity invoiced", "userDfnCd1": None}, {"cd": "02", "cdNm": "Wrong invoice amount", "userDfnCd1": None}, {"cd": "03", "cdNm": "Omitted item", "userDfnCd1": None}, {"cd": "04", "cdNm": "Other [specify]", "userDfnCd1": None}]}, {"cdCls": "68", "cdClsNm": "Rental income status", "userDfnNm1": None, "dtlList": [{"cd": "1", "cdNm": "Rental Income", "userDfnCd1": None}, {"cd": "2", "cdNm": "No rental", "userDfnCd1": None}, {"cd": "3", "cdNm": "cars", "userDfnCd1": "3"}]}, {"cdCls": "70", "cdClsNm": "Reported Status", "userDfnNm1": None, "dtlList": [{"cd": "N", "cdNm": "No", "userDfnCd1": None}, {"cd": "Y", "cdNm": "Yes", "userDfnCd1": None}, {"cd": "E", "cdNm": "Error", "userDfnCd1": None}
+                    ]
+                }]
+            }
+        }
+    # --- API ERROR HANDLING ---
     if not fetched_data:
         return None
     
@@ -3546,7 +3634,6 @@ def update_codes(initialize=False):
         error = fetched_data.get('error', None)
 
         if not result_cd:
-            
             if error:
                 error_info = {
                     'status_code': fetched_data.get('status_code', 'ERR'),
@@ -3569,99 +3656,293 @@ def update_codes(initialize=False):
                 'message': fetched_data.get('resultMsg', 'API call was not successful'),
                 'response': str(fetched_data),
                 'environment': get_settings().environment,
-                'suppress_mssgprint': False
+                'suppress_msgprint': False
             }
         
         if 'error_info' in locals():
             error_handler(error_info)
             return
 
-    # If we've reached here, we have a successful response
-    # Proceed with processing the data
-    
+    # --- DATA PROCESSING ---
     cls_list = fetched_data['data'].get('clsList', [])
 
-    # Fetch all existing code classes and codes
-    existing_classes = {d.name: d for d in frappe.get_all("Code Class", fields=["name", "cd_cls_nm", "mapped_doctype"])}
-    existing_codes = {d.name: d for d in frappe.get_all("Code", fields=["name", "cd", "cd_cls", "cd_nm", "user_dfn_cd1"])}
+    # Load existing data with all comparison fields
+    existing_item_classes = {
+        d.item_cls_cd: d for d in frappe.get_all(
+            "Item Class", 
+            fields=["name", "item_cls_cd", "item_cls_nm", "mjr_tg_yn", "item_cls_lvl"]
+        )
+    }
+    
+    existing_code_classes = {
+        d.cd_cls: d for d in frappe.get_all(
+            "Code Class", 
+            fields=["name", "cd_cls", "cd_cls_nm", "mapped_doctype"]
+        )
+    }
 
-    # Update Code Classes
+    existing_codes = {
+        d.name: d for d in frappe.get_all(
+            "Code", 
+            fields=["name", "cd", "cd_cls", "cd_nm", "user_dfn_cd1", "mapped_doctype"]
+        )
+    }
+
     for class_data in cls_list:
-        if class_data['cdCls'] not in existing_classes:
-            frappe.get_doc({
-                "doctype": "Code Class",
-                "cd_cls": class_data['cdCls'],
-                "cd_cls_nm": class_data['cdClsNm'],
-                "usr_dfn_cd1": class_data.get('usrDfnCd1', '')
-            }).insert(ignore_permissions=True, ignore_mandatory=True)
-        else:
-            existing_class = existing_classes[class_data['cdCls']]
-            if existing_class.cd_cls_nm != class_data['cdClsNm']:
-                doc = frappe.get_doc("Code Class", class_data['cdCls'])
-                doc.cd_cls_nm = class_data['cdClsNm']
-                doc.flags.ignore_mandatory=True
-                doc.save(ignore_permissions=True)
-
+        # Normalize core API strings
+        api_cls_cd = str(class_data.get('cdCls') or "").strip()
+        api_cls_nm = (class_data.get('cdClsNm') or "").strip()
+        
         mapped_doctype = None
-        if existing_classes[class_data['cdCls']].mapped_doctype:
-            mapped_doctype = existing_classes[class_data['cdCls']].mapped_doctype
+
+        # --- PHASE 1: ITEM CLASS / CODE CLASS ---
+        
+        # Scenario A: It's an Item Class
+        if api_cls_cd in existing_item_classes or len(api_cls_cd) > 4:
+            api_mjr_tg = int(class_data.get('mjrTgYn') or 0)
+            api_lvl = str(class_data.get('itemClsLvl') or "").strip()
+
+            if api_cls_cd not in existing_item_classes:
+                new_doc = frappe.get_doc({
+                    "doctype": "Item Class",
+                    "item_cls_cd": api_cls_cd,
+                    "item_cls_nm": api_cls_nm,
+                    "mjr_tg_yn": api_mjr_tg,
+                    "item_cls_lvl": api_lvl,
+                    "use_yn": 1
+                }).insert(ignore_permissions=True)
+                existing_item_classes[api_cls_cd] = new_doc
+            else:
+                curr = existing_item_classes[api_cls_cd]
+                item_changes = {}
+
+                if (curr.item_cls_nm or "").strip() != api_cls_nm:
+                    item_changes['item_cls_nm'] = api_cls_nm
+                if int(curr.mjr_tg_yn or 0) != api_mjr_tg:
+                    item_changes['mjr_tg_yn'] = api_mjr_tg
+                if str((curr.item_cls_lvl or "").strip()) != str(api_lvl).strip():
+                    item_changes['item_cls_lvl'] = api_lvl
+                if item_changes:
+                    frappe.db.set_value("Item Class", curr.name, item_changes, update_modified=True)
+        
+        # Scenario B: It's a Code Class
         else:
+            if api_cls_cd not in existing_code_classes:
+                new_doc = frappe.get_doc({
+                    "doctype": "Code Class",
+                    "cd_cls": api_cls_cd,
+                    "cd_cls_nm": api_cls_nm
+                }).insert(ignore_permissions=True)
+                existing_code_classes[api_cls_cd] = new_doc
+            else:
+                curr = existing_code_classes[api_cls_cd]
+                mapped_doctype = curr.get("mapped_doctype")
+                
+                if (curr.cd_cls_nm or "").strip() != api_cls_nm:
+                    frappe.db.set_value("Code Class", curr.name, "cd_cls_nm", api_cls_nm, update_modified=True)
+
+        # Proceed to update child codes only if a mapping exists
+        if not mapped_doctype:
             continue
 
-        # Update Codes
+        # --- PHASE 2: CHILD CODES ---
         for code_data in class_data.get('dtlList', []):
-            # Create a lowercase version of the name for case-insensitive comparison
-            name_lower = f'{class_data["cdCls"]}-{code_data["cd"]}-{code_data["cdNm"]}'.lower()
+            api_cd = (code_data.get("cd") or "").strip()
+            api_cd_nm = (code_data.get("cdNm") or "").strip()
+            api_user_val = (code_data.get("userDfnCd1") or "").strip()
+
+            target_name = f"{api_cls_cd}-{api_cd}-{api_cd_nm}"
             
-            # Find a matching name in existing_codes, ignoring case
-            matching_name = next((key for key in existing_codes if key.lower().strip() == name_lower.strip()), None)
-            
-            # Use the matching name if found, otherwise create a new name
-            name = matching_name if matching_name else f'{class_data["cdCls"]}-{code_data["cd"]}-{code_data["cdNm"]}'
-            
-            try:
-                if matching_name is None:
-                    new_code = frappe.get_doc({
-                        "doctype": "Code",
-                        "cd": code_data['cd'],
-                        "cd_cls": class_data['cdCls'],
-                        "cd_nm": code_data['cdNm'],
-                        "user_dfn_cd1": code_data.get('userDfnCd1', None)
-                    })
-                    if mapped_doctype:
-                        new_code.mapped_doctype = mapped_doctype
-                    new_code.insert(ignore_permissions=True, ignore_mandatory=True)
-                else:
-                    update_code(name, code_data, class_data, existing_codes, mapped_doctype)
-            except frappe.exceptions.DuplicateEntryError as e:
-                update_code(name, code_data, class_data, existing_codes, mapped_doctype)
+            # Find matching key in DB
+            matching_key = next((k for k in existing_codes if k.strip().lower() == target_name.lower()), None)
+
+            if not matching_key:
+                new_code = frappe.get_doc({
+                    "doctype": "Code",
+                    "cd": api_cd,
+                    "cd_cls": api_cls_cd,
+                    "cd_nm": api_cd_nm,
+                    "user_dfn_cd1": api_user_val,
+                    "mapped_doctype": mapped_doctype
+                }).insert(ignore_permissions=True)
+                existing_codes[new_code.name] = new_code
+            else:
+                update_code_optimized(
+                    matching_key, 
+                    api_cd_nm, 
+                    api_user_val, 
+                    mapped_doctype, 
+                    api_cls_cd, 
+                    existing_codes[matching_key]
+                )
+
     frappe.db.commit()
     return True
 
-def update_code(name, code_data, class_data, existing_codes, mapped_doctype=None):
-    existing_code = frappe.get_doc("Code", name)
+def update_code_optimized(doc_name, api_nm, api_val, api_map, api_cls, existing_dict):
+    """
+    Direct SQL update via set_value to prevent redundant saves and silent updates.
+    """
+    changes = {}
+    
+    if (existing_dict.get('cd_nm') or "").strip() != api_nm:
+        changes['cd_nm'] = api_nm
+        
+    if (existing_dict.get('user_dfn_cd1') or "").strip() != (api_val or "").strip():
+        changes['user_dfn_cd1'] = api_val
+        
+    if (existing_dict.get('mapped_doctype') or "").strip() != (api_map or "").strip():
+        changes['mapped_doctype'] = api_map
 
-    if not existing_code:
-        return
+    if (existing_dict.get('cd_cls') or "").strip() != (api_cls or "").strip():
+        changes['cd_cls'] = api_cls
 
-    if (existing_code.cd_cls != class_data['cdCls'] or
-        existing_code.cd_nm != code_data['cdNm'] or
-        existing_code.user_dfn_cd1 != code_data.get('userDfnCd1', None) or
-        existing_code.mapped_doctype != mapped_doctype):
+    if changes:
+        frappe.db.set_value("Code", doc_name, changes, update_modified=True)
 
-        doc = frappe.get_doc("Code", existing_code.name)
-        doc.cd_cls = class_data['cdCls']
-        doc.cd_nm = code_data['cdNm']
-        doc.user_dfn_cd1 = code_data.get('userDfnCd1', None)
-        if mapped_doctype:
-            doc.mapped_doctype = mapped_doctype
-        doc.flags.ignore_mandatory=True
-        try:
-            doc.save(ignore_permissions=True)
-        except frappe.exceptions.LinkValidationError as e:
-            frappe.msgprint(str(e))
-        except Exception as e:
-            frappe.msgprint(str(e))
+# def update_codes(initialize=False):
+#     """ 
+#     1. code classes
+#         update codes from api
+#         fetch code classes from api
+#         compare with saved code classes
+#         if not saved, insert
+#         if saved, update if anything is different
+#     2. codes
+#         for each code class, iterate through its codes
+#         if code not saved, insert
+#         if code saved, update if anything is different
+#     """
+#     fetched_data = get_codes(initialize)
+#     # Check if the API call was successful
+#     if not fetched_data:
+#         return None
+    
+#     if fetched_data.get('response', None):
+#         fetched_data = fetched_data.get('response')
+#     else:
+#         result_cd = fetched_data.get('resultCd', None)
+#         error = fetched_data.get('error', None)
+
+#         if not result_cd:
+            
+#             if error:
+#                 error_info = {
+#                     'status_code': fetched_data.get('status_code', 'ERR'),
+#                     'message': error,
+#                     'response': fetched_data.get('response', 'No details provided.'),
+#                     'environment': get_settings().environment,
+#                     'suppress_msgprint': True
+#                 }
+#             else:
+#                 error_info = {
+#                     'status_code': 'No Result Code',
+#                     'message': 'API response did not include a result code',
+#                     'response': str(fetched_data),
+#                     'environment': get_settings().environment,
+#                     'suppress_msgprint': True
+#                 }
+#         elif result_cd != '000':
+#             error_info = {
+#                 'status_code': result_cd,
+#                 'message': fetched_data.get('resultMsg', 'API call was not successful'),
+#                 'response': str(fetched_data),
+#                 'environment': get_settings().environment,
+#                 'suppress_mssgprint': False
+#             }
+        
+#         if 'error_info' in locals():
+#             error_handler(error_info)
+#             return
+
+#     # If we've reached here, we have a successful response
+#     # Proceed with processing the data
+    
+#     cls_list = fetched_data['data'].get('clsList', [])
+
+#     # Fetch all existing code classes and codes
+#     existing_classes = {d.name: d for d in frappe.get_all("Code Class", fields=["name", "cd_cls_nm", "mapped_doctype"])}
+#     existing_codes = {d.name: d for d in frappe.get_all("Code", fields=["name", "cd", "cd_cls", "cd_nm", "user_dfn_cd1"])}
+
+#     # Update Code Classes
+#     for class_data in cls_list:
+#         cd_cls_key = class_data['cdCls'] # Store key for readability
+#         if cd_cls_key not in existing_classes:
+#             new_cls_doc = frappe.get_doc({
+#                 "doctype": "Code Class",
+#                 "cd_cls": cd_cls_key,
+#                 "cd_cls_nm": class_data['cdClsNm'],
+#                 "usr_dfn_cd1": class_data.get('usrDfnCd1', '')
+#             }).insert(ignore_permissions=True, ignore_mandatory=True)
+#             existing_classes[cd_cls_key] = new_cls_doc
+#         else:
+#             existing_class = existing_classes[cd_cls_key]
+#             if existing_class.cd_cls_nm != class_data['cdClsNm']:
+#                 doc = frappe.get_doc("Code Class", cd_cls_key)
+#                 doc.cd_cls_nm = class_data['cdClsNm']
+#                 doc.flags.ignore_mandatory=True
+#                 doc.save(ignore_permissions=True)
+#                 existing_classes[cd_cls_key] = doc
+
+#         mapped_doctype = existing_classes[cd_cls_key].get('mapped_doctype')
+    
+#         if not mapped_doctype:
+#             continue
+
+#         # Update Codes
+#         for code_data in class_data.get('dtlList', []):
+#             # Create a lowercase version of the name for case-insensitive comparison
+#             name_lower = f'{cd_cls_key}-{code_data["cd"]}-{code_data["cdNm"]}'.lower()
+            
+#             # Find a matching name in existing_codes, ignoring case
+#             matching_name = next((key for key in existing_codes if key.lower().strip() == name_lower.strip()), None)
+            
+#             # Use the matching name if found, otherwise create a new name
+#             name = matching_name if matching_name else f'{cd_cls_key}-{code_data["cd"]}-{code_data["cdNm"]}'
+            
+#             try:
+#                 if matching_name is None:
+#                     new_code = frappe.get_doc({
+#                         "doctype": "Code",
+#                         "cd": code_data['cd'],
+#                         "cd_cls": cd_cls_key,
+#                         "cd_nm": code_data['cdNm'],
+#                         "user_dfn_cd1": code_data.get('userDfnCd1', None)
+#                     })
+#                     if mapped_doctype:
+#                         new_code.mapped_doctype = mapped_doctype
+#                     new_code.insert(ignore_permissions=True, ignore_mandatory=True)
+#                 else:
+#                     update_code(name, code_data, class_data, existing_codes, mapped_doctype)
+#             except frappe.exceptions.DuplicateEntryError as e:
+#                 update_code(name, code_data, class_data, existing_codes, mapped_doctype)
+#     frappe.db.commit()
+#     return True
+
+# def update_code(name, code_data, class_data, existing_codes, mapped_doctype=None):
+#     existing_code = frappe.get_doc("Code", name)
+
+#     if not existing_code:
+#         return
+
+#     if (existing_code.cd_cls != class_data['cdCls'] or
+#         existing_code.cd_nm != code_data['cdNm'] or
+#         existing_code.user_dfn_cd1 != code_data.get('userDfnCd1', None) or
+#         existing_code.mapped_doctype != mapped_doctype):
+
+#         doc = frappe.get_doc("Code", existing_code.name)
+#         doc.cd_cls = class_data['cdCls']
+#         doc.cd_nm = code_data['cdNm']
+#         doc.user_dfn_cd1 = code_data.get('userDfnCd1', None)
+#         if mapped_doctype:
+#             doc.mapped_doctype = mapped_doctype
+#         doc.flags.ignore_mandatory=True
+#         try:
+#             doc.save(ignore_permissions=True)
+#         except frappe.exceptions.LinkValidationError as e:
+#             frappe.msgprint(str(e))
+#         except Exception as e:
+#             frappe.msgprint(str(e))
 
         
 def get_codes(initialize=False, validate=True):
