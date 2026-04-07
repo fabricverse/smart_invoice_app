@@ -78,10 +78,9 @@
    "options": "mapped_doctype"
   }
  ],
- "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-09-29 18:54:26.882858",
+ "modified": "2026-04-07 18:38:34.027337",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Code",
