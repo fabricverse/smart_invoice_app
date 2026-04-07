@@ -58,8 +58,9 @@
    "label": "Total Qty"
   }
  ],
+ "in_create": 1,
  "links": [],
- "modified": "2026-04-06 13:32:26.530367",
+ "modified": "2026-04-07 18:46:04.899603",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "ASYCUDA Verification",
