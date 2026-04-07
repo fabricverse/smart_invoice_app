@@ -2789,10 +2789,10 @@ def create_codes_if_needed(item=None):
         frappe.msgprint("Updated UOM and Packaging Unit codes", indicator='green', alert=True)
 
 
-def get_item_price(item_code, company, price_list="Standard Selling", customer_group="All Customer Groups", qty=1, party=None):
+def get_item_price(item, company, price_list="Standard Selling", customer_group="All Customer Groups", qty=1, party=None):
     from erpnext.utilities.product import get_price
-    price = get_price(item_code, price_list, customer_group, company, qty=1, party=None)
-    return price.price_list_rate if price else 0
+    price = get_price(item.item_code, price_list, customer_group, company, qty=1, party=None)
+    return price.price_list_rate if price else item.valuation_rate
 
 
 from frappe.utils import now, time_diff_in_seconds
@@ -2984,7 +2984,7 @@ def prepare_item_data(item, branch=None):
     for branch in branches:    
         if not branch.get("custom_bhf_id") != "001":
             continue    
-        default_price = get_item_price(item.item_code, branch.get("custom_company"))
+        default_price = get_item_price(item, branch.get("custom_company"))
         unit, pkg_unit = get_unit_code(item, branch.get("custom_company"))
         gen_item_code = item.custom_generated_item_code or generate_item_code(item)
         if not item.custom_generated_item_code:
