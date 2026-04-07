@@ -3776,7 +3776,7 @@ def update_code_optimized(doc_name, api_nm, api_val, api_map, api_cls, existing_
     """
     changes = {}
     
-    if (existing_dict.get('cd_nm') or "").strip() != api_nm:
+    if (existing_dict.get('cd_nm') or "").strip().lower() != api_nm.lower():
         changes['cd_nm'] = api_nm
         
     if (existing_dict.get('user_dfn_cd1') or "").strip() != (api_val or "").strip():
