@@ -753,18 +753,18 @@ def save_purchase_invoice_api(invoice, method=None, branch=None):
         return True
     else:
         if json_data.get('resultMsg', None):
-            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
+            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
         elif json_data.get('error', None):
             if json_data.get('error') in ["VSDC Connection Error", "VSDC timeout"]:
                 retry_message()
             elif json_data.get('text', None):
-                frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure")
+                frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
                 frappe.msgprint("This document will be uploaded once connected to smart invoice", title=f"Smart Invoice Failure")
 
             else:
-                frappe.throw(str(json_data), title=f"Smart Invoice Failure")
+                frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
         else:
-            frappe.throw(str(json_data), title=f"Smart Invoice Failure")
+            frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
 
 
 def get_invoice_data(invoice, branch=None):
@@ -1223,18 +1223,18 @@ def save_invoice_api(invoice, method=None, branch=None):
     else:
         frappe.db.rollback()
         if "LPO" in json_data.get("resultCd"):
-            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
+            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
         elif json_data.get('resultMsg', None):
-            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure - {json_data.get('resultCd')}")
+            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
         elif json_data.get('error', None):
             if json_data.get('error') in ["VSDC Connection Error", "VSDC timeout"]:
                 frappe.msgprint("Smart Invoice: Connection Failure. Retrying in the background ...")
             elif json_data.get('text', None):
-                frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure")
+                frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
             else:
-                frappe.throw(str(json_data), title=f"Smart Invoice Failure")
+                frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
         else:
-            frappe.throw(str(json_data), title=f"Smart Invoice Failure")
+            frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
 
 from erpnext.stock.stock_ledger import get_stock_balance
 def get_stock_master_data(stock_item_data, ledger):
@@ -2820,13 +2820,15 @@ def update_item_api(item, method=None, branch=None):
             reponse_json = json.loads(response)
             if reponse_json.get('resultCd') not in ["000", "001"]:
                 if reponse_json.get('resultCd') == "999":
-                    frappe.msgprint(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="Try using setting Item Class to <strong>Unclassified Product</strong>")
+                    frappe.msgprint(title=f"Smart Invoice Error ({reponse_json.get('resultCd')})", msg="Try using setting Item Class to <strong>Unclassified Product</strong>")
                 elif reponse_json.get('resultCd') == "899":
-                    frappe.msgprint(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="The Smart Invoice virtual device is not misconfigured. Please contact support.")
+                    frappe.msgprint(title=f"Smart Invoice Error ({reponse_json.get('resultCd')})", msg="The Smart Invoice virtual device is not misconfigured. Please contact support.")
+                elif reponse_json.get('resultCd') == "910":
+                    frappe.throw(title=f"Smart Invoice Error ({reponse_json.get('resultCd')})", msg="Invalid Item Class. Try using another <strong>Item Class</strong> that closely matches your item.")
                 else:
-                    frappe.msgprint(title="Smart Invoice Error", msg=reponse_json.get('resultMsg'))
+                    frappe.msgprint(title=f"Smart Invoice Error ({reponse_json.get('resultCd')})", msg=reponse_json.get('resultMsg'))
         except Exception as e:
-            frappe.msgprint(title="Smart Invoice Error", msg=str(e))
+            frappe.msgprint(title=f"Smart Invoice Error ({reponse_json.get('resultCd')})", msg=str(e))
 
     return item_data
 
@@ -3657,12 +3659,12 @@ def update_codes(initialize=False):
     cls_list = fetched_data['data'].get('clsList', [])
 
     # Load existing data with all comparison fields
-    existing_item_classes = {
-        d.item_cls_cd: d for d in frappe.get_all(
-            "Item Class", 
-            fields=["name", "item_cls_cd", "item_cls_nm", "mjr_tg_yn", "item_cls_lvl"]
-        )
-    }
+    # existing_item_classes = {
+    #     d.item_cls_cd: d for d in frappe.get_all(
+    #         "Item Class", 
+    #         fields=["name", "item_cls_cd", "item_cls_nm", "mjr_tg_yn", "item_cls_lvl"]
+    #     )
+    # }
     
     existing_code_classes = {
         d.cd_cls: d for d in frappe.get_all(
@@ -3688,48 +3690,48 @@ def update_codes(initialize=False):
         # --- PHASE 1: ITEM CLASS / CODE CLASS ---
         
         # Scenario A: It's an Item Class
-        if api_cls_cd in existing_item_classes or len(api_cls_cd) > 4:
-            api_mjr_tg = int(class_data.get('mjrTgYn') or 0)
-            api_lvl = str(class_data.get('itemClsLvl') or "").strip()
+        # if api_cls_cd in existing_item_classes or len(api_cls_cd) > 4:
+        #     api_mjr_tg = int(class_data.get('mjrTgYn') or 0)
+        #     api_lvl = str(class_data.get('itemClsLvl') or "").strip()
 
-            if api_cls_cd not in existing_item_classes:
-                new_doc = frappe.get_doc({
-                    "doctype": "Item Class",
-                    "item_cls_cd": api_cls_cd,
-                    "item_cls_nm": api_cls_nm,
-                    "mjr_tg_yn": api_mjr_tg,
-                    "item_cls_lvl": api_lvl,
-                    "use_yn": 1
-                }).insert(ignore_permissions=True)
-                existing_item_classes[api_cls_cd] = new_doc
-            else:
-                curr = existing_item_classes[api_cls_cd]
-                item_changes = {}
+        #     if api_cls_cd not in existing_item_classes:
+        #         new_doc = frappe.get_doc({
+        #             "doctype": "Item Class",
+        #             "item_cls_cd": api_cls_cd,
+        #             "item_cls_nm": api_cls_nm,
+        #             "mjr_tg_yn": api_mjr_tg,
+        #             "item_cls_lvl": api_lvl,
+        #             "use_yn": 1
+        #         }).insert(ignore_permissions=True)
+        #         existing_item_classes[api_cls_cd] = new_doc
+        #     else:
+        #         curr = existing_item_classes[api_cls_cd]
+        #         item_changes = {}
 
-                if (curr.item_cls_nm or "").strip() != api_cls_nm:
-                    item_changes['item_cls_nm'] = api_cls_nm
-                if int(curr.mjr_tg_yn or 0) != api_mjr_tg:
-                    item_changes['mjr_tg_yn'] = api_mjr_tg
-                if str((curr.item_cls_lvl or "").strip()) != str(api_lvl).strip():
-                    item_changes['item_cls_lvl'] = api_lvl
-                if item_changes:
-                    frappe.db.set_value("Item Class", curr.name, item_changes, update_modified=True)
+        #         if (curr.item_cls_nm or "").strip() != api_cls_nm:
+        #             item_changes['item_cls_nm'] = api_cls_nm
+        #         if int(curr.mjr_tg_yn or 0) != api_mjr_tg:
+        #             item_changes['mjr_tg_yn'] = api_mjr_tg
+        #         if str((curr.item_cls_lvl or "").strip()) != str(api_lvl).strip():
+        #             item_changes['item_cls_lvl'] = api_lvl
+        #         if item_changes:
+        #             frappe.db.set_value("Item Class", curr.name, item_changes, update_modified=True)
         
         # Scenario B: It's a Code Class
+        # else:
+        if api_cls_cd not in existing_code_classes:
+            new_doc = frappe.get_doc({
+                "doctype": "Code Class",
+                "cd_cls": api_cls_cd,
+                "cd_cls_nm": api_cls_nm
+            }).insert(ignore_permissions=True)
+            existing_code_classes[api_cls_cd] = new_doc
         else:
-            if api_cls_cd not in existing_code_classes:
-                new_doc = frappe.get_doc({
-                    "doctype": "Code Class",
-                    "cd_cls": api_cls_cd,
-                    "cd_cls_nm": api_cls_nm
-                }).insert(ignore_permissions=True)
-                existing_code_classes[api_cls_cd] = new_doc
-            else:
-                curr = existing_code_classes[api_cls_cd]
-                mapped_doctype = curr.get("mapped_doctype")
-                
-                if (curr.cd_cls_nm or "").strip() != api_cls_nm:
-                    frappe.db.set_value("Code Class", curr.name, "cd_cls_nm", api_cls_nm, update_modified=True)
+            curr = existing_code_classes[api_cls_cd]
+            mapped_doctype = curr.get("mapped_doctype")
+            
+            if (curr.cd_cls_nm or "").strip() != api_cls_nm:
+                frappe.db.set_value("Code Class", curr.name, "cd_cls_nm", api_cls_nm, update_modified=True)
 
         # Proceed to update child codes only if a mapping exists
         if not mapped_doctype:
