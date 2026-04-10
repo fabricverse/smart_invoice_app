@@ -2656,15 +2656,20 @@ def prepare_tax_data(invoice): # TODO: Remove - deprecated
 
 def get_doc_user_data(doc):
     owner_name = frappe.get_cached_value('User', doc.owner, 'full_name')
+    last_modified_by_name = frappe.get_cached_value('User', doc.last_modified_by, 'full_name')
     return {
         "regrId": doc.owner,
         "regrNm": owner_name,
-        "modrId": frappe.session.user,
-        "modrNm": owner_name if frappe.session.user == doc.owner else frappe.get_cached_value('User', frappe.session.user, 'full_name')
+        "modrId": doc.last_modified_by,
+        "modrNm": last_modified_by_name
     }
 
 @frappe.whitelist()
-def get_user_branch(name, user=frappe.session.user):
+def get_user_branch(name, user=None):
+    if frappe.session:
+        user = frappe.session.user
+    else:
+        user = user or "Administrator"
     join = ''
     more_conditions = ''
 
@@ -2686,13 +2691,17 @@ def get_user_branch(name, user=frappe.session.user):
 
 @frappe.whitelist()
 def get_user_branches(name=None, user=None):
+    if not frappe.session:
+        user_name = user or "Administrator"
+    else:
+        user_name = frappe.session.user
     if name:
         branch = get_user_branch(name, user)
         if branch:
             return branch
 
     branches = frappe.get_all("Branch", fields=["branch", "custom_bhf_id", "custom_tpin", "custom_company"], filters={"custom_bhf_id": ["is", "set"]}, limit=0)
-    branch_users = frappe.get_all("Branch User", fields=["*"], filters={"user_id": ("in", [frappe.session.user])}, limit=0)
+    branch_users = frappe.get_all("Branch User", fields=["*"], filters={"user_id": ("in", [user_name])}, limit=0)
 
     branch_data = []
     for branch in branches:
