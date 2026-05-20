@@ -2806,7 +2806,7 @@ def get_item_price(item, company, price_list="Standard Selling", customer_group=
 
 from frappe.utils import now, time_diff_in_seconds
 @frappe.whitelist()
-def update_item_api(item, method=None, branch=None):
+def update_item_api_dep(item, method=None, branch=None):
     if not item:
         return
 
@@ -2822,7 +2822,10 @@ def update_item_api(item, method=None, branch=None):
     item_data = []
     for item in data:
         response_doc = api("/api/method/smart_invoice_api.api.update_item", item)
-        response = response_doc.get('response', None)
+        response = response_doc.get('response:', None)
+        print('response', response)
+        return
+        # does not handle for missing 'response' key in err response
         item_data.append(validate_api_response(response_doc))
 
         try:
@@ -2840,6 +2843,55 @@ def update_item_api(item, method=None, branch=None):
             frappe.msgprint(title=f"Smart Invoice Error ({reponse_json.get('resultCd')})", msg=str(e))
 
     return item_data
+
+
+@frappe.whitelist()
+def update_item_api(item, method=None, branch=None):
+    """
+    Prepares the data payload and hits the local API endpoint.
+    The api() call handles Sync Request generation internally and returns immediately.
+    """
+
+    if not item:
+        return
+
+    if isinstance(item, str):
+        item = frappe.get_cached_doc("Item", item)
+
+    # 1. Print to terminal to ensure this block actually runs
+    print(f"\n!!! [VSDC DEBUG] Target item validated: {item} !!!\n")
+
+    # 2. Publish explicitly to the current active session user
+    frappe.publish_realtime(
+        event="vsdc_hello", 
+        message={
+            "target_item": item,
+            "text": "Hello World from VSDC Backend!"
+        },
+        user=frappe.session.user # <-- This forces routing straight to your browser session
+    )
+    
+    return True
+
+    # Skip if created less than 5 seconds ago
+    if frappe.utils.time_diff_in_seconds(frappe.utils.now(), item.creation) <= 5:
+        return
+
+    # Prepare data payload destined for the VSDC engine
+    data = prepare_item_data(item, branch=branch)
+
+    for item_payload in data:
+        # This call handles Sync Request creation internally and returns immediately
+        response_doc = api("/api/method/smart_invoice_api.api.update_item", item_payload)
+        
+        # Broadcast an early real-time message so the active UI session can render the progress bar
+        frappe.publish_realtime("vsdc_sync_progress", {
+            "item": item.name,
+            "status": "Queued",
+            "message": _("Sync request registered by API wrapper.")
+        })
+        
+    return True
 
 def get_items_api(initialize=False):    
     data = {}
@@ -2903,6 +2955,7 @@ def generate_item_code(item, initialize=False):
 
 @frappe.whitelist()
 def sync_items(initialize=False):
+    """ Syncs all items to smart_invoice """
     r = get_items_api(initialize=True)
     if not r:
         frappe.throw(title="Smart Invoice Error", msg="No data received, try again")
