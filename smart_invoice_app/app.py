@@ -1200,92 +1200,6 @@ def calculate_item_taxes(company, invoice, data, items, country_code=None):
     return data, items
 
 
-@frappe.whitelist()
-def save_invoice_api(invoice, method=None, branch=None):    
-    invoice_data = get_invoice_data(invoice, branch=branch)    
-    endpoint = "/api/method/smart_invoice_api.api.save_sales"
-    save_response = api(endpoint, invoice_data)
-    
-    if save_response.get('error', None):
-        error_handler(save_response)
-        return
-    
-    invoice_data = save_response.get("response", None)
-    if not invoice_data:
-        frappe.msgprint(title="Smart Invoice", msg="Connection Failure. Retrying in the background ...")
-        return
-    json_data = json.loads(invoice_data)
-
-    if json_data.get("resultCd") == "000":
-        frappe.db.commit()
-        data = json_data.get("data")
-        create_qr_code(invoice, data=data)
-    else:
-        frappe.db.rollback()
-        if "LPO" in json_data.get("resultCd"):
-            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-        elif json_data.get('resultMsg', None):
-            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-        elif json_data.get('error', None):
-            if json_data.get('error') in ["VSDC Connection Error", "VSDC timeout"]:
-                frappe.msgprint("Smart Invoice: Connection Failure. Retrying in the background ...")
-            elif json_data.get('text', None):
-                frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-            else:
-                frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-        else:
-            frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-
-from erpnext.stock.stock_ledger import get_stock_balance
-def get_stock_master_data(stock_item_data, ledger):
-    balance = frappe.get_cached_value("Bin", {"item_code": ledger.item_code, "warehouse": ledger.warehouse}, "actual_qty") or 0
-    operation = "add" if ledger.actual_qty > 0 else "sub"
-    if operation == "add":
-        balance += abs(ledger.actual_qty)   
-    else:
-        balance -= abs(ledger.actual_qty)
-
-    stock_master_data = {
-        "tpin": stock_item_data.get("tpin"),
-        "bhfId": stock_item_data.get("bhfId"),
-        "stockItemList": [{
-            "itemCd": ledger.item_code,
-            "rsdQty": balance
-        }]
-    }
-
-    stock_master_data.update(get_doc_user_data(ledger)) # add user info
-    return stock_master_data
-
-def update_stock_movement(ledger, method=None):
-
-    if ledger.voucher_type == "Purchase Invoice":
-        inv = frappe.get_doc(ledger.voucher_type, ledger.voucher_no)
-        # dont update stock if status isnt set 
-        # OR when the invoice is already uploaded
-        if (inv.custom_downloaded == 1 and not inv.custom_invoice_status) or inv.custom_updated_status == 1:
-            return
-    
-    stock_master_data = None
-    if stock_item_data := get_item_data(ledger):
-
-        sync_doc = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
-        response = json.loads(sync_doc.get("response"))
-
-        if response.get("resultCd") == "000" or sync_doc.get('status', None) == "Connection Error":
-            stock_master_data = get_stock_master_data(sync_doc, ledger)
-            
-            saved_stock_master = api("/api/method/smart_invoice_api.api.save_stock_master", stock_master_data)
-            saved_stock_master_response = json.loads(saved_stock_master.get("response"))
-
-        #     if not saved_stock_master_response or saved_stock_master_response.get("resultCd") != "000":
-        #         frappe.msgprint(_(f"Message: {saved_stock_master_response.get('resultMsg')}"), title="Smart Invoice Failure")
-        # elif response.get('error', None):
-        #     frappe.msgprint(title=response.get("text", response.get('error', "Unknown Error: " + str(response))), msg=response.get('error', None))
-        # else:
-        #     frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
-
-
 def get_reconciliation_qty(ledger):
     # Match the SLE voucher_detail_no to the SR Item 'name'
     qty = frappe.db.get_value("Stock Reconciliation Item", ledger.voucher_detail_no, "quantity_difference")
@@ -2845,53 +2759,374 @@ def update_item_api_dep(item, method=None, branch=None):
     return item_data
 
 
+def get_function_name():
+    """Returns the name of the caller function."""
+    return inspect.stack()[1].function
+
+
+def notify_user(doc, message, indicator):
+    """Pushes a final completion event to trigger form reload on the frontend."""
+    frappe.publish_realtime(
+        event="vsdc_sync_complete",
+        message={
+            "status": doc.status,
+            "message": message,
+            "indicator": indicator,
+        },
+        user=doc.modifier,
+        doctype=doc.type,
+        docname=doc.entry
+    )
+
+def update_sync_status(doc, status):
+    if status == "Connection Error":
+        status = "Retrying"
+    elif status == "New":
+        status = "Queued"
+    doc.db_set({"custom_last_sync": frappe.utils.now(), "custom_sync_status": status})
+
+
+
+def get_target_doc(doc):
+    if doc.type and doc.entry:
+        return frappe.get_cached_doc(doc.type, doc.entry)
+    return None
+
+
+    
+def ep(message):
+    """Helper function to print debug messages with a consistent prefix."""
+    frappe.errprint(f"[Smart Invoice] {message}")
+    
+
+import re
+def handle_errors(doc):
+    """
+    Parses and handles error responses from the Smart Invoice SDK.
+    Refines raw SDK error messages into polished, user-friendly text.
+    """
+
+    response_json = {}
+    # 1. Guard clauses for early exit
+    if doc.response:
+        try:
+            response_json = json.loads(doc.response)
+        except Exception as e:
+            notify_user(doc, "Failed to parse SDK response JSON.", "red")
+            return
+    else:
+        # ep("No response to process or status indicates no error.")
+        notify_user(doc, "No response from VSDC. Contact support.", "red")
+
+    
+    # Extract results safely
+    result_cd = response_json.get('resultCd', None)
+    sdk_msg = response_json.get('resultMsg', '')
+
+     # 2. Skip successful or empty lookup codes
+    if result_cd in ["000", "001"]:
+        return
+
+   
+    # 3. Comprehensive refined error mapping
+    error_messages = {
+        # Transmission & Reporting (800s)
+        "801": "There is no data available to retransmit.",
+        "802": "Data transmission is currently pending. Please try again after the current transfer finishes.",
+        "803": "The data transfer report is already complete.",
+        "804": "There is no data found to generate this report.",
+        "805": "Corresponding retransmission data already exists.",
+        
+        # Validation & Configuration
+        "834": f"Invalid Sales Type or Receipt Type provided. Please verify your inputs conform to standard codes (NS, NR, ND, TS, TR, TD, CS, CR, CD, PS).",
+        "836": "Your document sequences have been altered. Please connect to the ZRA API to sync and retrieve the correct sequences.",
+        "838": "Could not establish a connection to the Smart Invoice API. Please check your internet or network settings.",
+        "884": "The customer TPIN provided is invalid. Please double-check the digits and try again.",
+        
+        # Internal Request Construction (890s)
+        "891": "An internal system error occurred while generating the request URL.",
+        "892": "An internal system error occurred while building the request headers.",
+        "893": "An internal system error occurred while preparing the data package body.",
+        "894": "A communications error occurred while trying to reach the Smart Invoice server.",
+        "895": "An invalid request method was used. Please contact system support.",
+        "896": "An unexpected or unhandled request status was received.",
+        "899": "A client-side error occurred with the system software configuration.",
+        
+        # Device & Header Issues (900s)
+        "900": "The request missing required transmission header information.",
+        "901": "The virtual or physical device being used is invalid or unauthorized.",
+        "902": "This device configuration has already been installed or activated.",
+        "903": "Verification is limited strictly to VSDC devices.",
+        
+        # API Schema Issues (910s)
+        "910": sdk_msg,
+        "911": "The request body was received empty or incomplete by the server.",
+        "912": "The server rejected the data due to an invalid request protocol/method.",
+        "913": "One of the request parameters contains an invalid code value.",
+        
+        # Invoice / Sales Flow (920s)
+        "921": "The declared sales or sales invoice data could not be processed by the server.",
+        "922": "Sales invoice data can only be submitted after the primary sales data has been received.",
+        "924": "This CIS Invoice number already exists in the system database.",
+        
+        # Credit Notes & Modifications (930s)
+        "930": f"The specified original invoice could not be found. Please verify the original invoice number [orgInvcNo] and try again.",
+        "931": f"Credit note validation failed: The credit amount exceeds the remaining balance of the original invoice item.",
+        "932": f"Credit note validation failed: The specified item [itemCd] does not exist on the original invoice.",
+        "934": f"Credit note validation failed: The quantity specified exceeds the quantity available on the original invoice.",
+        "935": "Credit note validation failed: The provided details do not match the history of the original invoice data.",
+        
+        # General Server Issues (990s)
+        "990": "The maximum number of data views or requests has been exceeded. Please wait a moment before trying again.",
+        "991": "A database error occurred during registration.",
+        "992": "A database error occurred while modifying the record.",
+        "993": "A database error occurred during deletion.",
+        "994": "Submission failed: Overlapping or duplicate data detected in the system.",
+        "995": "The requested download file could not be found on the server.",
+        "999": "An unknown system error occurred on the server side. Please contact your IT administrator."
+    }
+    
+    # 4. Handle specific business logic exceptions first
+    if result_cd == "999" and doc.type == "Item":
+        frappe.throw(
+            title=f"Smart Invoice Error - {result_cd}", 
+            msg="The server rejected the item. Try setting the Item Class to <strong>Unclassified Product</strong>."
+        )
+    
+    elif result_cd == "899":
+        frappe.throw(
+            title=f"Smart Invoice Error - {result_cd}", 
+            msg="The Smart Invoice virtual device configuration is missing or incorrect. Please contact system support."
+        )
+
+    elif result_cd == "910": # and "TPIN" in sdk_msg:
+        match = re.search(r"'(\d{10,11})'", sdk_msg)
+        tpin = match.group(1)
+        notify_user(doc, f"Your branch <strong>TPIN {tpin}</strong> is invalid. Double-check the digits and try again.", "red")
+    else:
+        # 5. Fallback cleanly to the mapping, or use the raw server message if code is brand new
+
+        display_msg = f"<strong>Error {result_cd}:</strong> {error_messages.get(result_cd)}"
+        
+        if display_msg:
+            # frappe.msgprint(title=f"Smart Invoice Error1 ({result_cd})", msg=display_msg)
+            notify_user(doc, display_msg, "red")
+        else:
+            # Fallback for undocumented codes
+            fallback_msg = sdk_msg or "An unexpected response code was returned by the server."
+            notify_user(doc, fallback_msg, "red")
+
+
+def after_sync_process(doc, method=None):
+
+    if doc.type and doc.entry:
+        t_doc = frappe.get_cached_doc(doc.type, doc.entry)
+
+        # process each unique response based on doctype and function
+        # save results within server but prompt form to refresh
+        if t_doc:
+            if doc.type == "Item" and doc.function in ["update_item_api", "save_item_api"]:
+                update_sync_status(t_doc, doc.status)
+
+            if doc.type == "Sales Invoice" and doc.function in ["update_invoice_api", "save_invoice_api"]:
+                update_sync_status(t_doc, doc.status)
+                finish_invoice_sync(invoice=t_doc, request=doc)
+
+            frappe.publish_realtime(event="reload_form", user=doc.modifier)
+
+
+    # Early exit: Do absolutely nothing if the document is still in the "New" state
+    if doc.status == "New":
+        return
+
+
+    # Handle specific status actions
+    if doc.status == "Success":
+        frappe.publish_progress(100, title=_('Smart Invoice'), description=_('Synchronised'))
+        notify_user(doc, "Synchronised", "green")
+        
+    elif doc.status == "Connection Error":
+        # Let the background worker function explicitly handle progress bar feedback for retries
+        pass
+        
+    elif doc.status == "Do not Retry":
+        notify_user(doc, "Sync permanently halted: Max retries exceeded.", "red")
+        frappe.publish_progress(80, title=_('Smart Invoice'), description=_('Sync Stopped'))
+        
+    else:
+        frappe.publish_progress(80, title=_('Smart Invoice'), description=_('Something went wrong.'))
+        handle_errors(doc)
+
+    
+from erpnext.stock.stock_ledger import get_stock_balance
+def get_stock_master_data(stock_item_data, ledger):
+    return # skip for now - need to re-architect to handle async nature of stock movement sync better
+    balance = frappe.get_cached_value("Bin", {"item_code": ledger.item_code, "warehouse": ledger.warehouse}, "actual_qty") or 0
+    operation = "add" if ledger.actual_qty > 0 else "sub"
+    if operation == "add":
+        balance += abs(ledger.actual_qty)   
+    else:
+        balance -= abs(ledger.actual_qty)
+
+    stock_master_data = {
+        "tpin": stock_item_data.get("tpin"),
+        "bhfId": stock_item_data.get("bhfId"),
+        "stockItemList": [{
+            "itemCd": ledger.item_code,
+            "rsdQty": balance
+        }]
+    }
+
+    stock_master_data.update(get_doc_user_data(ledger)) # add user info
+    return stock_master_data
+
+
+def update_stock_movement(ledger, method=None):
+    return # skip for now - need to re-architect to handle async nature of stock movement sync better
+
+    if ledger.voucher_type == "Purchase Invoice":
+        inv = frappe.get_doc(ledger.voucher_type, ledger.voucher_no)
+        # dont update stock if status isnt set 
+        # OR when the invoice is already uploaded
+        if (inv.custom_downloaded == 1 and not inv.custom_invoice_status) or inv.custom_updated_status == 1:
+            return
+    
+    stock_master_data = None
+    if stock_item_data := get_item_data(ledger):
+
+        sync_doc = api("/api/method/smart_invoice_api.api.save_stock_items", stock_item_data)
+        response = json.loads(sync_doc.get("response"))
+
+        if response.get("resultCd") == "000" or sync_doc.get('status', None) == "Connection Error":
+            stock_master_data = get_stock_master_data(sync_doc, ledger)
+            
+            saved_stock_master = api("/api/method/smart_invoice_api.api.save_stock_master", stock_master_data)
+            saved_stock_master_response = json.loads(saved_stock_master.get("response"))
+
+        #     if not saved_stock_master_response or saved_stock_master_response.get("resultCd") != "000":
+        #         frappe.msgprint(_(f"Message: {saved_stock_master_response.get('resultMsg')}"), title="Smart Invoice Failure")
+        # elif response.get('error', None):
+        #     frappe.msgprint(title=response.get("text", response.get('error', "Unknown Error: " + str(response))), msg=response.get('error', None))
+        # else:
+        #     frappe.msgprint(_(f"Message: {saved_stock_items.get('resultMsg')}"), title="Smart Invoice Failure")
+
+
+from smart_invoice_api.api import update_item as api_update_item
 @frappe.whitelist()
 def update_item_api(item, method=None, branch=None):
     """
     Prepares the data payload and hits the local API endpoint.
-    The api() call handles Sync Request generation internally and returns immediately.
     """
-
     if not item:
         return
 
     if isinstance(item, str):
         item = frappe.get_cached_doc("Item", item)
 
-    # 1. Print to terminal to ensure this block actually runs
-    print(f"\n!!! [VSDC DEBUG] Target item validated: {item} !!!\n")
-
-    # 2. Publish explicitly to the current active session user
-    frappe.publish_realtime(
-        event="vsdc_hello", 
-        message={
-            "target_item": item,
-            "text": "Hello World from VSDC Backend!"
-        },
-        user=frappe.session.user # <-- This forces routing straight to your browser session
-    )
-    
-    return True
-
     # Skip if created less than 5 seconds ago
     if frappe.utils.time_diff_in_seconds(frappe.utils.now(), item.creation) <= 5:
         return
 
-    # Prepare data payload destined for the VSDC engine
     data = prepare_item_data(item, branch=branch)
 
-    for item_payload in data:
-        # This call handles Sync Request creation internally and returns immediately
-        response_doc = api("/api/method/smart_invoice_api.api.update_item", item_payload)
-        
-        # Broadcast an early real-time message so the active UI session can render the progress bar
-        frappe.publish_realtime("vsdc_sync_progress", {
-            "item": item.name,
-            "status": "Queued",
-            "message": _("Sync request registered by API wrapper.")
-        })
-        
+    meta={"function": get_function_name(), "doctype": "Item", "entry_name": item.name, "creator": item.owner, "modifier": item.modified_by}
+
+    for item_data in data:
+        # Internally creates the Sync Request and fires `on_update`        
+        api_update_item(item_data, meta)
+
+    frappe.publish_progress(10, title=_('Smart Invoice'), description=_('Preparing data...'))
+
     return True
+
+
+
+from smart_invoice_api.api import save_sales as api_save_sales
+@frappe.whitelist()
+def save_invoice_api(invoice, method=None, branch=None):    
+    invoice_data = get_invoice_data(invoice, branch=branch)
+
+    meta={"function": get_function_name(), "doctype": invoice.doctype, "entry_name": invoice.name, "creator": invoice.owner, "modifier": invoice.modified_by}
+    api_save_sales(invoice_data, meta)
+
+ def finish_invoice_sync(invoice, request):
+    notify_user(invoice, "Finalising invoice data...", "blue")
+    return # skip for now - need to re-architect to handle async nature of invoice sync better
+    
+    if save_response.get('error', None):
+        error_handler(save_response)
+        return
+    
+    invoice_data = save_response.get("response", None)
+    if not invoice_data:
+        frappe.msgprint(title="Smart Invoice", msg="Connection Failure. Retrying in the background ...")
+        return
+    json_data = json.loads(invoice_data)
+
+    if json_data.get("resultCd") == "000":
+        frappe.db.commit()
+        data = json_data.get("data")
+        create_qr_code(invoice, data=data)
+    else:
+        frappe.db.rollback()
+        if "LPO" in json_data.get("resultCd"):
+            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
+        elif json_data.get('resultMsg', None):
+            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
+        elif json_data.get('error', None):
+            if json_data.get('error') in ["VSDC Connection Error", "VSDC timeout"]:
+                frappe.msgprint("Smart Invoice: Connection Failure. Retrying in the background ...")
+            elif json_data.get('text', None):
+                frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
+            else:
+                frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
+        else:
+            frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
+
+
+from smart_invoice_api.api import save_item as api_save_item
+@frappe.whitelist()
+def save_item_api(item, method=None, branch=None):
+    if not item:
+        return
+
+    if type(item) == str:
+        item = frappe.get_cached_doc("Item", item)
+    data = prepare_item_data(item, branch=branch)
+    if not data:
+        return False
+    item_data = []
+
+    meta={"function": get_function_name(), "doctype": "Item", "entry_name": item.name, "creator": item.owner, "modifier": item.modified_by}
+
+    for item_data in data:
+        # Internally creates the Sync Request and fires `on_update`        
+        api_save_item(item_data, meta)
+
+    frappe.publish_progress(10, title=_('Smart Invoice'), description=_('Preparing data...'))
+
+    return True
+
+    # add to err handling
+
+    for item in data:
+        response_doc = api("/api/method/smart_invoice_api.api.save_item", item)
+        response = response_doc.get('response', None)
+        item_data.append(validate_api_response(response_doc))
+
+        try:
+            reponse_json = json.loads(response)
+            if reponse_json.get('resultCd') not in ["000", "001"]:
+                if reponse_json.get('resultCd') == "999":
+                    frappe.throw(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="Try using setting Item Class to <strong>Unclassified Product</strong>")
+                elif reponse_json.get('resultCd') == "899":
+                    frappe.throw(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="The Smart Invoice virtual device is not misconfigured. Please contact support.")
+                else:
+                    frappe.msgprint(title="Smart Invoice Error", msg=reponse_json.get('resultMsg'))
+        except Exception as e:
+            frappe.msgprint(title="Smart Invoice Error", msg=str(e))
+        
+    return item_data
 
 def get_items_api(initialize=False):    
     data = {}
@@ -3088,36 +3323,6 @@ def prepare_item_data(item, branch=None):
             "modrId": frappe.session.user
         }
         item_data.append(data)
-    return item_data
-
-@frappe.whitelist()
-def save_item_api(item, method=None, branch=None):
-    if not item:
-        return
-
-    if type(item) == str:
-        item = frappe.get_cached_doc("Item", item)
-    data = prepare_item_data(item, branch=branch)
-    if not data:
-        return False
-    item_data = []
-    for item in data:
-        response_doc = api("/api/method/smart_invoice_api.api.save_item", item)
-        response = response_doc.get('response', None)
-        item_data.append(validate_api_response(response_doc))
-
-        try:
-            reponse_json = json.loads(response)
-            if reponse_json.get('resultCd') not in ["000", "001"]:
-                if reponse_json.get('resultCd') == "999":
-                    frappe.throw(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="Try using setting Item Class to <strong>Unclassified Product</strong>")
-                elif reponse_json.get('resultCd') == "899":
-                    frappe.throw(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="The Smart Invoice virtual device is not misconfigured. Please contact support.")
-                else:
-                    frappe.msgprint(title="Smart Invoice Error", msg=reponse_json.get('resultMsg'))
-        except Exception as e:
-            frappe.msgprint(title="Smart Invoice Error", msg=str(e))
-        
     return item_data
 
 
