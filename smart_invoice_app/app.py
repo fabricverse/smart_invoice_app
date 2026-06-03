@@ -364,13 +364,21 @@ def get_saved_branches():
         return [branch]
     return branches
 
-def get_branches(initialize=False): # review
+from smart_invoice_api.api import select_branches as api_select_branches
+def get_branches(initialize=False): 
+    """ Get all branches for all companies
+        Smart Invoice returns all company branches using branch code 000
+    """
 
-    response = api("/api/method/smart_invoice_api.api.select_branches", {
-        "bhf_id": "000"
-    }, initialize)
+    companies = get_companies_with_tpin()
+    meta={"function": get_function_name(), "doctype": "Branch", "entry_name": "Headquarter"}
 
-    return validate_api_response(response)
+    for company in companies.values():
+        data = {
+            "bhf_id": "000",
+            "tpin": company.tax_id
+        }
+        api_select_branches(data, meta, initialize)
 
 
 @frappe.whitelist()
@@ -711,6 +719,10 @@ def retry_message():
     frappe.msgprint(title="Smart Invoice", msg="Connection Failure. Retrying in the background ...")
 
 def update_purchase_invoice_api(invoice, method=None, branch=None):
+    # TODO: Document relevance of function
+    # Likely called by ASYCUDA
+    # OR updating downloaded invoices
+    # - Does stock control need updating?
     if invoice.custom_updated_status == 1:
         return
 
@@ -725,6 +737,7 @@ def update_purchase_invoice_api(invoice, method=None, branch=None):
         frappe.db.rollback()
     
 
+from smart_invoice_api.api import save_purchase as api_save_purchase
 @frappe.whitelist()
 def save_purchase_invoice_api(invoice, method=None, branch=None):
     if frappe.flags.dont_sync == 1 or invoice.custom_asycuda == 1:
@@ -735,39 +748,16 @@ def save_purchase_invoice_api(invoice, method=None, branch=None):
         frappe.throw("Please <strong>Accept</strong> or <strong>Reject</strong> the purchase")
     
     invoice_data = get_invoice_data(invoice, branch=branch)    
-    endpoint = "/api/method/smart_invoice_api.api.save_purchase"
+    # endpoint = "/api/method/smart_invoice_api.api.save_purchase"
+    
+    api_save_purchase(invoice_data, {
+        "function": get_function_name(), "doctype": invoice.doctype, 
+        "entry_name": invoice.name, "creator": invoice.owner, 
+        "modifier": invoice.modified_by
+    })
 
-    save_response = api(endpoint, invoice_data)
-
-    if not validate_api_response(save_response):
-        if save_response.get("error", None):
-            retry_message()
-            return
-
-    invoice_data = save_response.get("response", None)
-    if not invoice_data:
-        retry_message()
-        return
-    json_data = json.loads(invoice_data)
-
-    if json_data.get("resultCd") in ["000", "000"]:
-        frappe.msgprint("Saved to Smart Invoice", alert=True, indicator="success")
-        return True
-    else:
-        if json_data.get('resultMsg', None):
-            frappe.throw(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-        elif json_data.get('error', None):
-            if json_data.get('error') in ["VSDC Connection Error", "VSDC timeout"]:
-                retry_message()
-            elif json_data.get('text', None):
-                frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-                frappe.msgprint("This document will be uploaded once connected to smart invoice", title=f"Smart Invoice Failure")
-
-            else:
-                frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-        else:
-            frappe.throw(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-
+    start_sync_msg()
+    return True
 
 def get_invoice_data(invoice, branch=None):
     if isinstance(invoice, str):
@@ -2898,10 +2888,16 @@ def handle_errors(doc):
         )
     
     elif result_cd == "899":
+        if doc.type == "Branch" and doc.function == "update_user_api":
+            if '"001"' in doc.request:
+                notify_user(doc, "<p>Smart Invoice doesnt yet allow updating users for non-HQ branches. However, you should continue making updates for your users to use related features.</p><p>No further action related to this error is required.</p>", "orange")
+                return
+
         frappe.throw(
             title=f"Smart Invoice Error - {result_cd}", 
-            msg="The Smart Invoice virtual device configuration is missing or incorrect. Please contact system support."
+            msg="Smart Invoice is likely misconfigured. Contact support."
         )
+        # Ensure VSDC is up-to-date and properly configured, as this error often indicates client-side setup issues.
 
     # elif result_cd == "910": # and "TPIN" in sdk_msg:
     #     match = re.search(r"'(\d{10,11})'", sdk_msg)
@@ -2937,7 +2933,7 @@ def after_sync_process(doc, method=None):
             if doc.type == "Item" and doc.function in ["update_item_api", "save_item_api"]:
                 update_sync_status(t_doc, doc.status)
 
-            elif doc.type == "Sales Invoice" and doc.function in ["save_invoice_api"]:
+            elif doc.type in ["Sales Invoice", "Purchase Invoice"] and doc.function in ["save_invoice_api", "save_purchase_invoice_api", "update_purchase_invoice_api"]:
                 update_sync_status(t_doc, doc.status)
                 if doc.status == "Success":
                     finish_invoice_sync(invoice=t_doc, request=doc)
@@ -2947,13 +2943,22 @@ def after_sync_process(doc, method=None):
                     finish_stock_movement(t_doc, request=doc)        
                 elif doc.function == "save_stock_items" and doc.status == "Success":
                     sync_success_msg(doc)
+            elif doc.type == "Branch":
+                if doc.function == "get_branches" and doc.status == "Success":
+                    finish_branch_updates(request=doc)
+                elif doc.function == "get_branches_testing":
+                    if doc.status == "Success":
+                        notify_user(doc, "Connected to Smart Invoice", "green")
+                    else:
+                        notify_user(doc, "Connection failed", "red")
+
             
             # reload form to reflect sync state
             frappe.publish_realtime(event="reload_form", user=doc.modifier)
 
     # Handle final status actions UI/Feedback updates cleanly
     if doc.status == "Success":
-        if doc.type not in ["Stock Ledger Entry"]:
+        if doc.type not in ["Stock Ledger Entry"] and doc.function not in ["get_branches_testing"]:
             sync_success_msg(doc)
         return 
 
@@ -3002,7 +3007,7 @@ def update_stock_movement(ledger, method=None):
     if ledger.voucher_type == "Purchase Invoice":
         inv = frappe.get_doc(ledger.voucher_type, ledger.voucher_no)
         # dont update stock if status isnt set 
-        # OR when the invoice is already uploaded
+        # OR when the invoice was downloaded from smart invoice
         if (inv.custom_downloaded == 1 and not inv.custom_invoice_status) or inv.custom_updated_status == 1:
             return
     
@@ -3074,25 +3079,32 @@ def save_invoice_api(invoice, method=None, branch=None):
 def start_sync_msg():
     frappe.msgprint("Connecting to Smart Invoice", indicator='blue', alert=True)
 
-def finish_invoice_sync(invoice, request):
-    json_data = {}
 
-    if not request.response:
+def to_json(request):
+    if not request:
         notify_user(request, "Empty response received, contact support.", "orange")
         return
 
     try:
-        json_data = json.loads(request.response)
+        return json.loads(request.response)
     except json.JSONDecodeError:
         notify_user(request, "Invalid JSON response:", "red")
         return
 
+
+def finish_invoice_sync(invoice, request):
+    json_data = to_json(request)
+
     if json_data.get("resultCd") == "000":
         frappe.db.commit()
-        create_qr_code(invoice, data=json_data.get("data"))
+        if invoice.doctype == "Sales Invoice":
+            create_qr_code(invoice, data=json_data.get("data"))
 
+        if invoice.doctype == "Purchase Invoice" and invoice.custom_downloaded == 1:
+            return
+            
         # get and process stock ledger entries for the invoice, use queue?
-        sl_entries = frappe.get_all("Stock Ledger Entry", filters={"voucher_no": invoice.name, "voucher_type": "Sales Invoice"}, order_by="creation asc", limit=0)
+        sl_entries = frappe.get_all("Stock Ledger Entry", filters={"voucher_no": invoice.name, "voucher_type": invoice.doctype}, order_by="creation asc", limit=0)
         for sl in sl_entries:
             sl_doc = frappe.get_doc("Stock Ledger Entry", sl.name)
             update_stock_movement(sl_doc)
@@ -3524,6 +3536,7 @@ def save_customer_api(customer, company=None, branch=None):
     return validate_api_response(response)
 
 
+from smart_invoice_api.api import save_branche_user as api_save_branche_user
 def update_user_api(branch, user, use_yn):
     users = {d.name: d for d in frappe.get_all("User", fields=["name", "full_name"])}
     data = {
@@ -3538,16 +3551,17 @@ def update_user_api(branch, user, use_yn):
         "modrNm": users[frappe.session.user].full_name,
         "modrId": frappe.session.user
         }
-
-    response = api("/api/method/smart_invoice_api.api.save_branche_user", data)
-    validate_api_response(response)
-    return json.loads(response.get('response'))
+    meta={"function": get_function_name(), "doctype": "Branch", "entry_name": branch.name, "creator": branch.owner, "modifier": branch.modified_by}
+    api_save_branche_user(data, meta)
+    # response = api(data, meta)
+    # validate_api_response(response)
+    # return json.loads(response.get('response'))
 
 
 @frappe.whitelist()
-def update_api_users(branch):
+def update_smart_invoice_users(branch):
 
-    doc = frappe.get_cached_doc("Branch", branch)
+    doc = frappe.get_doc("Branch", branch)
     user_list = [user.user_id for user in doc.custom_branch_users]
 
     user_string = ", ".join(user_list)
@@ -3562,17 +3576,18 @@ def update_api_users(branch):
     for user in user_changes:
         if user.get("change_type") == "added":
             # Enable user in the API
-            update = update_user_api(doc, user, "Y")
+            update_user_api(doc, user, "Y")
         elif user.get("change_type") == "removed":
             # Disable user in the API
-            update = update_user_api(doc, user, "N")
+            update_user_api(doc, user, "N")
 
-        if update.get("resultCd") not in ("000", "001", "801", "802", "803", "804", "805"):
-            frappe.msgprint(f"Failed to {user.get('change_type')} {user.get('user_name')} on Smart Invoice", indicator='red', alert=True)
-        else:
-            frappe.msgprint(f"{user.get('change_type').title()} {user.get('user_name')} on Smart Invoice", indicator='green', alert=True)
+        # if update.get("resultCd") not in ("000", "001", "801", "802", "803", "804", "805"):
+        #     frappe.msgprint(f"Failed to {user.get('change_type')} {user.get('user_name')} on Smart Invoice", indicator='red', alert=True)
+        # else:
+        #     frappe.msgprint(f"{user.get('change_type').title()} {user.get('user_name')} on Smart Invoice", indicator='green', alert=True)
         
-    return user_string
+    doc.db_set({"custom_previous_branch_users": user_string})
+    frappe.db.commit()
 
 def get_user_changes(doc, user_list):
 
@@ -3638,16 +3653,6 @@ def sync_dependancies():
     else:
         frappe.msgprint("Update incomplete", indicator='orange', alert=True)   
 
-
-
-@frappe.whitelist()
-def sync_branches():
-    updated_branches = update_branches()    
-    if updated_branches:
-        frappe.msgprint("Updated", alert=True)
-    else:
-        frappe.msgprint("Update incomplete", indicator='orange', alert=True)
-
 def get_company_by_tpin(tpin):
     companies = {d.tax_id: d for d in frappe.get_all("Company", fields=["name", "tax_id"])}
 
@@ -3658,12 +3663,28 @@ def get_company_by_tpin(tpin):
         return None
         
 
-def update_branches(initialize=False):
-    data = get_branches(initialize=True)
 
-    if not data:
-        return
-    if data.get("resultCd") not in ("000", "001", "801", "802", "803", "805") or data.get("data") == None:
+@frappe.whitelist()
+def sync_branches(initialize=True):
+    update_branches(initialize)
+
+def get_companies_with_tpin():
+    companies = {d.tax_id: d for d in frappe.get_all("Company", fields=["name", "tax_id"], filters={"tax_id": ["is", "set"]})}
+    return companies
+
+def update_branches(initialize=False):
+    # TODO: Update all dependant methods
+    data = get_branches(initialize)
+
+
+@frappe.whitelist()
+def finish_branch_updates(request=None):
+
+    data = to_json(request)
+
+    # string = """{"resultCd": "000", "resultMsg": "It is succeeded", "resultDt": "20260602125735", "data": {"bhfList": [{"tpin": "1003905487", "bhfId": "000", "bhfNm": "Headquarter", "bhfSttsCd": "01", "prvncNm": "LUSAKA PROVINCE", "dstrtNm": "ISMTO_Lusaka", "sctrNm": "Lusaka", "locDesc": null, "mgrNm": "OKAVANGO FOODS LIMITED", "mgrTelNo": "0977785716", "mgrEmail": "okavangofoods@gmail.com", "hqYn": "Y"}]}}"""
+    # data = json.loads(string)
+    if data.get("resultCd") not in ("000", "001", "801", "802", "803", "805"):
         return
 
     # check if branches already exist, if not, insert
@@ -3692,12 +3713,14 @@ def update_branches(initialize=False):
         if status_cd:
             status = statuses.get(status_cd).name
 
-        if branch_data['bhfNm'] not in existing_branches:
+        full_branch_name = f"{branch_data['bhfNm']} - {tpin}"
+
+        if full_branch_name not in existing_branches:
 
             new_branch = frappe.get_doc({
                 "doctype": "Branch",
                 "custom_company": company,
-                "branch": branch_data['bhfNm'],
+                "branch": full_branch_name,
                 "custom_bhf_id": branch_data['bhfId'],
                 "custom_tpin": tpin,
                 "custom_hq_yn": is_hq,
@@ -3714,20 +3737,20 @@ def update_branches(initialize=False):
             new_branch.flags.ignore_mandatory = True
             new_branch.insert(ignore_permissions=True)
         else:
-            if existing_branches[branch_data['bhfNm']]:
-                if (existing_branches[branch_data['bhfNm']].custom_bhf_id != branch_data['bhfId'] or 
-                    existing_branches[branch_data['bhfNm']].custom_tpin != tpin or 
-                    existing_branches[branch_data['bhfNm']].custom_hq_yn != is_hq or 
-                    existing_branches[branch_data['bhfNm']].status != status or 
-                    existing_branches[branch_data['bhfNm']].custom_prvnc_nm != branch_data.get('prvncNm', None) or 
-                    existing_branches[branch_data['bhfNm']].custom_dstrt_nm != branch_data.get('dstrtNm', None) or 
-                    existing_branches[branch_data['bhfNm']].custom_sctr_nm != branch_data.get('sctrNm', None) or 
-                    existing_branches[branch_data['bhfNm']].custom_loc_desc != branch_data.get('locDesc', None) or 
-                    existing_branches[branch_data['bhfNm']].custom_mgr_nm != branch_data.get('mgrNm', None) or 
-                    existing_branches[branch_data['bhfNm']].custom_mgr_tel_no != branch_data.get('mgrTelNo', None) or 
-                    existing_branches[branch_data['bhfNm']].custom_mgr_email != branch_data.get('mgrEmail', None)):
+            if existing_branches[full_branch_name]:
+                if (existing_branches[full_branch_name].custom_bhf_id != branch_data['bhfId'] or 
+                    existing_branches[full_branch_name].custom_tpin != tpin or 
+                    existing_branches[full_branch_name].custom_hq_yn != is_hq or 
+                    existing_branches[full_branch_name].status != status or 
+                    existing_branches[full_branch_name].custom_prvnc_nm != branch_data.get('prvncNm', None) or 
+                    existing_branches[full_branch_name].custom_dstrt_nm != branch_data.get('dstrtNm', None) or 
+                    existing_branches[full_branch_name].custom_sctr_nm != branch_data.get('sctrNm', None) or 
+                    existing_branches[full_branch_name].custom_loc_desc != branch_data.get('locDesc', None) or 
+                    existing_branches[full_branch_name].custom_mgr_nm != branch_data.get('mgrNm', None) or 
+                    existing_branches[full_branch_name].custom_mgr_tel_no != branch_data.get('mgrTelNo', None) or 
+                    existing_branches[full_branch_name].custom_mgr_email != branch_data.get('mgrEmail', None)):
 
-                    branch = frappe.get_doc("Branch", branch_data['bhfNm'])
+                    branch = frappe.get_doc("Branch", full_branch_name)
                     branch.update({
                         "custom_bhf_id": branch_data['bhfId'],
                         "custom_company": company,
