@@ -371,7 +371,7 @@ def get_branches(initialize=False):
     """
 
     companies = get_companies_with_tpin()
-    meta={"function": get_function_name(), "doctype": "Branch", "entry_name": "Headquarter"}
+    meta={"function": get_function_name(), "doctype": "Branch"}
 
     for company in companies.values():
         data = {
@@ -2943,18 +2943,27 @@ def after_sync_process(doc, method=None):
                     finish_stock_movement(t_doc, request=doc)        
                 elif doc.function == "save_stock_items" and doc.status == "Success":
                     sync_success_msg(doc)
-            elif doc.type == "Branch":
-                if doc.function == "get_branches" and doc.status == "Success":
-                    finish_branch_updates(request=doc)
-                elif doc.function == "get_branches_testing":
-                    if doc.status == "Success":
-                        notify_user(doc, "Connected to Smart Invoice", "green")
-                    else:
-                        notify_user(doc, "Connection failed", "red")
 
-            
             # reload form to reflect sync state
             frappe.publish_realtime(event="reload_form", user=doc.modifier)
+    else:
+        # for lists and non-doc requests
+        if doc.type == "Branch":
+            if doc.function == "get_branches" and doc.status == "Success":
+                finish_branch_updates(request=doc)
+            elif doc.function == "get_branches_testing":
+                if doc.status == "Success":
+                    notify_user(doc, "Connected to Smart Invoice", "green")
+                else:
+                    notify_user(doc, "Connection failed", "red")
+        elif doc.type == "Asycuda Verification":
+            if doc.function == "select_import_items":
+                if doc.status == "Success":
+                    notify_user(doc, "Asycuda data synced successfully", "green")
+                else:
+                    notify_user(doc, "Failed to sync Asycuda data", "red")
+
+        
 
     # Handle final status actions UI/Feedback updates cleanly
     if doc.status == "Success":
