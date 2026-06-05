@@ -19,19 +19,14 @@ let is_fetching_branch_context = false;  // Mutex flag preventing concurrent par
 let initiation_timeout = null;          // Debounce timer ID controlling initial modal rendering delay
 
 /**
- * Core middleware synchronization logic. Hydrates local memory states from server-persisted user
- * defaults on application boot, and evaluates whether a branch context selection must be enforced.
+ * Core middleware synchronization logic. Evaluates whether a volatile Redis cache 
+ * branch context selection must be enforced or recovered.
  */
 function enforce_branch_context() {
-    // PERSISTENCE FALLBACK: Extract database values injected into frappe.boot on hard page reload
-    if (frappe.boot && frappe.boot.user && frappe.boot.user.defaults) {
-        let defaults = frappe.boot.user.defaults;
-        if (defaults.custom_active_branch && !frappe.session.custom_active_branch) {
-            frappe.session.custom_active_branch = defaults.custom_active_branch;
-            frappe.session.custom_active_branch_name = defaults.custom_active_branch_name;
-            frappe.session.tpin = defaults.custom_tpin;
-            frappe.session.branch_code = defaults.custom_active_branch;
-        }
+    // FIX: Clear any pending timer immediately to prevent stale overlapping loops on quick page changes/refreshes
+    if (initiation_timeout) {
+        clearTimeout(initiation_timeout);
+        initiation_timeout = null;
     }
 
     // EVALUATION RULE: Enforce modal check workflow only if a valid user is logged in (ignores Guests)
@@ -44,16 +39,14 @@ function enforce_branch_context() {
             return; 
         }
 
-        if (initiation_timeout) {
-            clearTimeout(initiation_timeout);
-        }
-
-        // Debounce prompt configuration processing by 3 seconds to let desk workspace render smoothly
+        // PRESERVED FEATURE (2): Debounce prompt configuration processing by 3 seconds to let desk workspace render smoothly
         initiation_timeout = setTimeout(function() {
             if (!frappe.session.custom_active_branch && !is_fetching_branch_context) {
-                initialize_session_context();
+                // Check the backend cache automatically on script initialization after delay (is_manual = false)
+                initialize_session_context(false);
             }
         }, 3000);
+        
     } else if (frappe.session.custom_active_branch) {
         // Stable State: Context is set. Render active switcher widget (Cyan/Blue status state indicator)
         render_navbar_branch_switcher(true, frappe.session.custom_active_branch_name);
@@ -62,20 +55,14 @@ function enforce_branch_context() {
 
 /**
  * UI COMPONENT: Native UI Workspace Injector
- * Builds or refreshes the branch switching component inside Frappe's primary right-hand workspace utility tray.
- * Uses exact native layout node selectors to guarantee seamless element flow integration.
- * * @param {boolean} show_switcher - Toggle directive to mount or strip the element block from view.
- * @param {string|null} forced_label - Optional custom text override string (e.g. Assigned Active Branch Name).
  */
 function render_navbar_branch_switcher(show_switcher, forced_label = null) {
-    // Target notification bell item directly to avoid layout replication across multiple navbar lists
     let $notifications_nav = $('.dropdown-notifications').closest('li');
     if (!$notifications_nav.length) return;
 
     let $switcher = $('#navbar-branch-switcher');
     let $separator = $('#navbar-branch-separator');
 
-    // Safe disposal path when branch context features are not allowed or unconfigured
     if (!show_switcher) {
         $switcher.remove();
         $separator.remove();
@@ -84,8 +71,6 @@ function render_navbar_branch_switcher(show_switcher, forced_label = null) {
     
     let is_set = !!frappe.session.custom_active_branch;
     let label_text = forced_label || (is_set ? (frappe.session.custom_active_branch_name || __('Branch Active')) : __('Set Branch'));
-    
-    // UI Theme Palette: Cyan/Blue implies operational readiness; Pink implies an action item is required
     let icon_color = is_set ? '#17a2b8' : 'pink'; 
 
     let switcher_html = `
@@ -98,17 +83,19 @@ function render_navbar_branch_switcher(show_switcher, forced_label = null) {
         <li class="vertical-bar d-none d-sm-block" id="navbar-branch-separator"></li>
     `;
 
-    // DOM Inject Manipulation Hook
     if ($switcher.length === 0) {
         $(switcher_html).insertBefore($notifications_nav);
         
-        // Manual change trigger registration
         $('#navbar-branch-switcher button').on('click', function(e) {
             e.preventDefault();
-            initialize_session_context();
+            // If the user manually clicks the button, clear any running background timers and run instantly
+            if (initiation_timeout) {
+                clearTimeout(initiation_timeout);
+            }
+            // PRESERVED NEW FEATURE: Pass `true` to force open selection choices on manual navbar button interaction click
+            initialize_session_context(true);
         });
     } else {
-        // Performance optimization: prevent complete redraws by targeting sub-properties directly
         $switcher.find('.branch-icon-element').css('color', icon_color);
         $switcher.find('.branch-label').text(label_text);
     }
@@ -116,39 +103,48 @@ function render_navbar_branch_switcher(show_switcher, forced_label = null) {
 
 /**
  * SYSTEM LIFE-CYCLE HOOKS
- * Hooks code execution hooks directly into general browser loading cycles and single-page routing trends.
  */
 $(document).ready(function() {
     enforce_branch_context();
     
-    // Re-verify session constraints on internal route navigation changes
+    // Track internal route navigation changes
     $(document).on('page-change', function() {
         enforce_branch_context();
+    });
+    
+    $(document).on('click', 'button[onclick*="frappe.ui.toolbar.clear_cache()"]', function() {
+        // Drop client runtime variables instantly before the page forces a window reload
+        frappe.session.custom_active_branch = null;
+        frappe.session.custom_active_branch_name = null;
+        frappe.session.tpin = null;
+        frappe.session.branch_code = null;
+        
+        frappe.call({
+            method: "smart_invoice_app.scripts.setup.clear_session_branch_cache",
+            async: false, // Force synchronous execution so the backend clears BEFORE the page reloads
+            callback: function(r) {
+                // The backend cache key is now gone; Frappe's native reload flow takes over safely
+            }
+        });
     });
 });
 
 /**
  * CENTRALIZED GLOBAL ALERT
- * Provides a standardized visual green check prompt across all manual and auto-assignment routines.
- * @param {string} branch_display_name - Display title name of the branch.
- * @param {boolean} is_auto - If true, displays an informative contextual message for auto-assignment.
  */
 function show_branch_success_alert(branch_display_name, is_auto = false) {
     let alert_message = is_auto 
         ? __(`Auto-assigned sole branch: <b>${branch_display_name}</b>`)
         : __(`Branch set to: <b>${branch_display_name}</b>`);
 
-    frappe.show_alert({
-        message: alert_message,
-        indicator: 'green'
-    });
+    frappe.show_alert({ message: alert_message, indicator: 'green' });
 }
 
 /**
- * REMOTE DISPATCHER: Fetch Permission Records
- * Requests authorization payload details from the server backend to determine visibility logic.
+ * REMOTE DISPATCHER: Fetch Permission Records & Cache Properties
+ * @param {boolean} is_manual - If true, bypasses automatic background restoration to show choice popups
  */
-function initialize_session_context() {
+function initialize_session_context(is_manual = false) {
     is_fetching_branch_context = true; 
 
     frappe.call({
@@ -162,30 +158,36 @@ function initialize_session_context() {
 
             let status = r.message;
 
-            // NO BRANCHES SETUP CONDITION
+            // 1. RECOVERY PATH: Only intercept automatically on background load checks if NOT a manual click action
+            if (status.active_branch_id && !is_manual) {
+                frappe.session.custom_active_branch = status.active_branch_id;
+                frappe.session.custom_active_branch_name = status.active_branch_name;
+                frappe.session.tpin = status.active_tpin;
+                frappe.session.branch_code = status.active_branch_id;
+                
+                render_navbar_branch_switcher(true, status.active_branch_name);
+                is_fetching_branch_context = false;
+                return;
+            }
+
+            // 2. NO BRANCHES SETUP CONDITION
             if (!status.branches_setup) {
                 is_fetching_branch_context = false; 
                 render_navbar_branch_switcher(false);
 
                 if (frappe.get_route_str() === 'List/Branch') return;
 
-                // RULE: If the logged-in user is the System Administrator, do NOT freeze their desk workspace.
-                // Instead, issue a non-blocking notification so they can navigate to configuration screens.
                 if (frappe.session.user === 'Administrator') {
                     frappe.warn(
                         __('Smart Invoice'),
                         __('No branches with valid configurations were detected. Please navigate to the <b>Branch</b> list to set up Smart Invoice branches.'),
-                        () => {
-                            // Action to take if they click the primary button (e.g., take them directly to setup)
-                            frappe.set_route('List', 'Branch');
-                        },
-                        __('Go to Branch Setup'), // Primary button label
-                        true // Makes it a non-dismissible/sticky modal if set to true, or omit for default close behavior
+                        () => { frappe.set_route('List', 'Branch'); },
+                        __('Go to Branch Setup'),
+                        true
                     );
                     return;
                 }
 
-                // Lock workspace overlay to prompt administrative configurations
                 if ($("#freeze-setup-notice").length === 0) {
                     $('<div id="freeze-setup-notice" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; justify-content: center; align-items: center; color: white; text-align: center; font-family: sans-serif;">' +
                         '<div>' +
@@ -198,7 +200,7 @@ function initialize_session_context() {
                 return;
             }
 
-            // If backend auto-assigned a single available branch, consume variables immediately and skip dialog prompt
+            // 3. AUTO-ASSIGN PATH: If system assigned a single choice option layout context automatically
             if (status.auto_selected && status.branches && status.branches.length === 1) {
                 frappe.session.custom_active_branch = status.active_branch_id;
                 frappe.session.custom_active_branch_name = status.active_branch_name;
@@ -206,14 +208,13 @@ function initialize_session_context() {
                 frappe.session.branch_code = status.active_branch_id;
                 
                 render_navbar_branch_switcher(true, status.active_branch_name);
-                
-                // FIX: Pass true flag downstream to output the detailed informative variant string
                 show_branch_success_alert(status.active_branch_name, true);
                 
                 is_fetching_branch_context = false;
                 return;
             }
 
+            // 4. MULTI-CHOICE PATH: Present Selection Dialog
             render_navbar_branch_switcher(true);
             show_branch_selection_dialog(status.branches);
         },
@@ -225,8 +226,6 @@ function initialize_session_context() {
 
 /**
  * MODAL RENDERING: Multi-Branch Choice Selection Prompt
- * Generates and structures options within the choice prompt.
- * @param {Array} branches - Map array of allowed branch dict items sent by the backend logic.
  */
 function show_branch_selection_dialog(branches) {
     if (active_branch_dialog && active_branch_dialog.display) return;
@@ -244,30 +243,27 @@ function show_branch_selection_dialog(branches) {
                 fieldname: 'branch_doc_name',
                 label: __('Branch'),
                 options: branch_options,
-                // Default value binds to index [0], which backend automatically populates with user-defined defaults
                 default: branches[0] ? branches[0].name : "", 
                 reqd: 1
             }
         ],
         primary_action_label: __('Save'),
-        primary_action: function() {
-            let selected_name = active_branch_dialog.get_value('branch_doc_name');
+        primary_action: function(values) {
+            let selected_name = values ? values.branch_doc_name : this.get_value('branch_doc_name');
             let selected_branch = branches.find(b => b.name === selected_name);
             
             if (selected_branch) {
-                set_session_branch(selected_branch, active_branch_dialog);
+                set_session_branch(selected_branch, this);
             }
         }
     });
 
-    // BACKDROP ESCAPE LOCKOUT: If session state remains unassigned, freeze modal interaction escape paths
     if (!frappe.session.custom_active_branch) {
         active_branch_dialog.$wrapper.find('.modal-header .close').hide(); 
         active_branch_dialog.get_close_btn().hide();                       
         active_branch_dialog.backdrop = 'static';                          
         active_branch_dialog.keyboard = false;                             
 
-        // Trap close actions sent via unexpected browser modal event bubbling routines
         active_branch_dialog.$wrapper.on('hide.bs.modal', function(e) {
             if (!frappe.session.custom_active_branch) {
                 e.preventDefault();
@@ -282,9 +278,6 @@ function show_branch_selection_dialog(branches) {
 
 /**
  * REMOTE CALL: Commit Session Updates
- * Dispatches values to the server database database defaults backend cache engine.
- * * @param {Object} branch_data - Target data mapping parameters dictionary.
- * @param {Object} dialog - Current dialog modal reference payload.
  */
 function set_session_branch(branch_data, dialog) {
     frappe.call({
@@ -296,21 +289,19 @@ function set_session_branch(branch_data, dialog) {
         }, 
         callback: function(r) {
             if (!r.error && r.message) {
-                // Update active local javascript memory runtime scopes
                 frappe.session.custom_active_branch = r.message.branch_id; 
                 frappe.session.custom_active_branch_name = r.message.branch_display_name; 
                 frappe.session.tpin = r.message.tpin;
                 frappe.session.branch_code = r.message.branch_id;
 
-                // Display standardized message confirmation
                 show_branch_success_alert(r.message.branch_display_name);
 
-                // Unbind backdrop blocks and clear tracking flags smoothly
-                active_branch_dialog.$wrapper.off('hide.bs.modal');
+                if (active_branch_dialog) {
+                    active_branch_dialog.$wrapper.off('hide.bs.modal');
+                }
                 dialog.hide();
                 active_branch_dialog = null;
                 
-                // Repaint widget layout item states (Transitions configuration indicator from Pink to Cyan)
                 render_navbar_branch_switcher(true, r.message.branch_display_name);
             }
         }
