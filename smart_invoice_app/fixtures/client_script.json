@@ -147,10 +147,10 @@
   "doctype": "Client Script",
   "dt": "Branch",
   "enabled": 1,
-  "modified": "2026-06-02 14:59:42.504182",
+  "modified": "2026-06-05 10:49:52.421608",
   "module": "Smart Invoice App",
   "name": "Smart Invoice - Branch List",
-  "script": "frappe.listview_settings['Branch'] = {\n    refresh: function(listview) {\n        listview.page.add_inner_button(__(\"Synchronize Branches\"), function() {\n            frappe.call({\n                method: \"smart_invoice_app.app.sync_branches\",\n                args: {\n                    initialize: true\n                },\n        \t\tfreeze: true,\n        \t\tfreeze_message: __(\"Updating all branches from Smart Invoice ...\"),\n                callback: (r)=>{\n                    // frm.reload_doc();\n                }\n            });\n             \n        }, __(\"Smart Invoice\"));\n        listview.page.get_inner_group_button(\"Smart Invoice\")\n                .find(\"button\")\n                .removeClass(\"btn-default\")\n                .addClass(\"btn-info\");\n    }\n};",
+  "script": "frappe.listview_settings['Branch'] = {\n    refresh: function(listview) {\n        listview.page.add_inner_button(__(\"Synchronize Branches\"), function() {\n            frappe.call({\n                method: \"smart_invoice_app.app.sync_branches\",\n                args: {\n                    initialize: true\n                },\n        \t\tfreeze: true,\n        \t\tfreeze_message: __(\"Updating all branches from Smart Invoice ...\"),\n                callback: (r)=>{\n                    listview.refresh();\n                }\n            });\n             \n        }, __(\"Smart Invoice\"));\n        listview.page.get_inner_group_button(\"Smart Invoice\")\n                .find(\"button\")\n                .removeClass(\"btn-default\")\n                .addClass(\"btn-info\");\n    }\n};",
   "view": "List"
  }
 ]
