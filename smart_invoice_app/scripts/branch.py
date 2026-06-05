@@ -49,32 +49,30 @@ def get_branch_doc(name):
 
 
 @frappe.whitelist()
-def check_default_branch_conflicts(current_branch, child_table_rows):
-    """
-    Pass 1: Inspects the incoming rows for default conflicts across other branches.
-    Returns a structured list of conflicts without raising a validation error.
-    """
+def check_default_branch_conflicts(current_branch, child_table_rows, company=None):
     if isinstance(child_table_rows, str):
         child_table_rows = json.loads(child_table_rows)
 
-    # Filter out only rows where is_default is checked and a user is selected
     default_users = [
         row.get("user_id") for row in child_table_rows 
         if (row.get("is_default") == 1 or row.get("is_default") is True) and row.get("user_id")
     ]
 
-    if not default_users:
+    # If it is STILL empty (e.g., a brand new unsaved branch with no company picked), abort safely
+    if not default_users or not company:
         return {"has_conflicts": False, "conflicts": []}
 
-    # Direct database scan across all other branches
+    # Direct database scan matching by user, active default state, and shared company
     conflicts = frappe.db.sql("""
-        SELECT bu.parent as branch, bu.user_id
+        SELECT bu.parent as branch, bu.user_id, b.company
         FROM `tabBranch User` bu
+        JOIN `tabBranch` b ON b.name = bu.parent
         WHERE bu.user_id IN %s 
           AND bu.parenttype = 'Branch'
           AND bu.is_default = 1
           AND bu.parent != %s
-    """, (tuple(default_users), current_branch or "NEW_RECORD"), as_dict=True)
+          AND b.custom_company = %s
+    """, (tuple(default_users), current_branch or "NEW_RECORD", company), as_dict=True)
 
     if conflicts:
         return {"has_conflicts": True, "conflicts": conflicts}
@@ -83,26 +81,27 @@ def check_default_branch_conflicts(current_branch, child_table_rows):
 
 
 @frappe.whitelist()
-def resolve_and_save_branch_conflicts(current_branch, user_ids):
+def resolve_and_save_branch_conflicts(current_branch, user_ids, company):
     """
-    Pass 2: Atomic resolution transaction.
-    Strips the default status from old branches for the confirmed users.
+    Pass 2: Strip the default status from old branches for the confirmed users,
+    scoped strictly to the target company layout.
     """
     if isinstance(user_ids, str):
         user_ids = json.loads(user_ids)
 
-    if not user_ids:
+    if not user_ids or not company:
         return {"success": True}
 
-    # Strip default status from all conflicting records across other branches
+    # Clear default settings only on branches matching this specific company profile context
     frappe.db.sql("""
-        UPDATE `tabBranch User`
-        SET is_default = 0
-        WHERE user_id IN %s 
-          AND parenttype = 'Branch'
-          AND parent != %s
-    """, (tuple(user_ids), current_branch or "NEW_RECORD"))
+        UPDATE `tabBranch User` bu
+        JOIN `tabBranch` b ON b.name = bu.parent
+        SET bu.is_default = 0
+        WHERE bu.user_id IN %s 
+          AND bu.parenttype = 'Branch'
+          AND bu.parent != %s
+          AND b.custom_company = %s
+    """, (tuple(user_ids), current_branch or "NEW_RECORD", company))
     
-    # Commit changes safely before returning control
     frappe.db.commit()
     return {"success": True}
