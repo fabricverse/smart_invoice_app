@@ -1,4 +1,4 @@
-console.log('loaded: apps/smart_invoice_app/smart_invoice_app/public/js/smart_invoice_setup.js');
+// console.log('loaded: apps/smart_invoice_app/smart_invoice_app/public/js/smart_invoice_setup.js');
 
 /**
  * UTILITY: External Style Asset Injection
