@@ -130,11 +130,16 @@ $(document).ready(function() {
 /**
  * CENTRALIZED GLOBAL ALERT
  * Provides a standardized visual green check prompt across all manual and auto-assignment routines.
- * * @param {string} branch_display_name - Display title name of the branch.
+ * @param {string} branch_display_name - Display title name of the branch.
+ * @param {boolean} is_auto - If true, displays an informative contextual message for auto-assignment.
  */
-function show_branch_success_alert(branch_display_name) {
+function show_branch_success_alert(branch_display_name, is_auto = false) {
+    let alert_message = is_auto 
+        ? __(`Auto-assigned sole branch: <b>${branch_display_name}</b>`)
+        : __(`Branch set to: <b>${branch_display_name}</b>`);
+
     frappe.show_alert({
-        message: __(`Branch set to: ${branch_display_name}`),
+        message: alert_message,
         indicator: 'green'
     });
 }
@@ -201,7 +206,9 @@ function initialize_session_context() {
                 frappe.session.branch_code = status.active_branch_id;
                 
                 render_navbar_branch_switcher(true, status.active_branch_name);
-                show_branch_success_alert(status.active_branch_name);
+                
+                // FIX: Pass true flag downstream to output the detailed informative variant string
+                show_branch_success_alert(status.active_branch_name, true);
                 
                 is_fetching_branch_context = false;
                 return;
@@ -219,7 +226,7 @@ function initialize_session_context() {
 /**
  * MODAL RENDERING: Multi-Branch Choice Selection Prompt
  * Generates and structures options within the choice prompt.
- * * @param {Array} branches - Map array of allowed branch dict items sent by the backend logic.
+ * @param {Array} branches - Map array of allowed branch dict items sent by the backend logic.
  */
 function show_branch_selection_dialog(branches) {
     if (active_branch_dialog && active_branch_dialog.display) return;

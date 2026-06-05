@@ -42,7 +42,7 @@ def get_initial_session_status():
               AND b.custom_branch_status IS NOT NULL
         """, (user,), as_dict=True)
 
-    if allowed_branches:
+    if not allowed_branches:
         return {"branches_setup": False}
 
     # 2. Rule: If user only has one branch, select it by default instantly
