@@ -13,7 +13,7 @@
   "user_id",
   "user_name",
   "column_break_fmod",
-  "adrs"
+  "is_default"
  ],
  "fields": [
   {
@@ -45,16 +45,6 @@
    "label": "Name"
   },
   {
-   "fetch_from": "user_id.location",
-   "fetch_if_empty": 1,
-   "fieldname": "adrs",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "in_preview": 1,
-   "label": "Address",
-   "options": "Address"
-  },
-  {
    "fieldname": "column_break_edfr",
    "fieldtype": "Column Break"
   },
@@ -65,12 +55,21 @@
   {
    "fieldname": "section_break_djua",
    "fieldtype": "Section Break"
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_preview": 1,
+   "label": "Default"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2024-09-27 08:08:27.961896",
+ "modified": "2026-06-05 15:31:51.017615",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Branch User",

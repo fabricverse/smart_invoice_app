@@ -10,11 +10,11 @@ def test_branches(branch, method):
     print('check_branches_setup', check_branches_setup())
     
 @frappe.whitelist()
-def get_branches_with_setup():
+def get_fully_branches_setup():
     branches = frappe.get_all("Branch", filters={
         "custom_bhf_id": ["is", "set"],
         "custom_bhf_stts_cd": ["is", "set"]
-    }, fields=["name"])
+    }, fields=["name", "custom_bhf_id", "custom_tpin"])
     return branches
 
 def check_branches_setup():
@@ -23,7 +23,7 @@ def check_branches_setup():
 
     :return: True if any branch has setup values, otherwise None.
     """
-    branch_list = get_branches_with_setup()
+    branch_list = get_fully_branches_setup()
     
     return bool(branch_list)
 
