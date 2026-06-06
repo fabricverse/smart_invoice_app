@@ -101,10 +101,8 @@ class ASYCUDAVerification(Document):
 
     def update_import_items(self):
         """ Updates the status of ASYCUDA items on Smart Invoice """
-        return
         
         items = []
-
         tasks = {
             item.task_code: item 
             for item in self.items 
@@ -439,7 +437,7 @@ def clean_branch_name(name, tpin):
     
 def create_imports(request, data, from_list):  
     branch = get_selected_branch()
-    c_branch_name = clean_branch_name(branch.get("branch_name"), branch.get("tpin"))  or branch.get("branch_name")
+    c_branch_name = clean_branch_name(branch.get("branch_name"), branch.get("tpin")) or branch.get("branch_name")
 
     if data and data.get('resultCd', False)=="000":
         items = data.get('data', {'itemList': None}).get('itemList')
