@@ -2945,29 +2945,31 @@ def after_sync_process(doc, method=None):
                     sync_success_msg(doc)
 
             # reload form to reflect sync state
-            frappe.publish_realtime(event="reload_form", user=doc.modifier)
+            
     else:
         # for lists and non-doc requests
+
         if doc.type == "Branch":
             if doc.function == "get_branches" and doc.status == "Success":
                 finish_branch_updates(request=doc)
             elif doc.function == "get_branches_testing":
+                # Called from VSDC connection test
                 if doc.status == "Success":
                     notify_user(doc, "Connected to Smart Invoice", "green")
                 else:
                     notify_user(doc, "Connection failed", "red")
         elif doc.type == "Asycuda Verification":
-            if doc.function == "select_import_items":
+            if doc.function == "get_import_items":
                 if doc.status == "Success":
-                    notify_user(doc, "Asycuda data synced successfully", "green")
-                else:
-                    notify_user(doc, "Failed to sync Asycuda data", "red")
-
+                    from smart_invoice_app.smart_invoice_app.doctype.asycuda_verification.asycuda_verification import finish_get_import_items
+                    finish_get_import_items(doc)
+        
+    frappe.publish_realtime(event="reload_form", user=doc.modifier)
         
 
     # Handle final status actions UI/Feedback updates cleanly
     if doc.status == "Success":
-        if doc.type not in ["Stock Ledger Entry"] and doc.function not in ["get_branches_testing"]:
+        if doc.type not in ["Stock Ledger Entry"] and doc.function not in ["get_branches_testing", "get_import_items"]:
             sync_success_msg(doc)
         return 
 
@@ -2986,7 +2988,6 @@ def sync_success_msg(doc=None):
 
 from erpnext.stock.stock_ledger import get_stock_balance
 def get_stock_master_data(stock_item_data, ledger):
-    print('getting stock master data', stock_item_data)
     balance = frappe.get_cached_value("Bin", {"item_code": ledger.item_code, "warehouse": ledger.warehouse}, "actual_qty") or 0
     operation = "add" if ledger.actual_qty > 0 else "sub"
     if operation == "add":
@@ -3688,7 +3689,8 @@ def update_branches(initialize=False):
 
 @frappe.whitelist()
 def finish_branch_updates(request=None):
-
+    """ Update local branches based on API response, called from the Sync Request after receiving the response from the API"""
+    
     data = to_json(request)
 
     # string = """{"resultCd": "000", "resultMsg": "It is succeeded", "resultDt": "20260602125735", "data": {"bhfList": [{"tpin": "1003905487", "bhfId": "000", "bhfNm": "Headquarter", "bhfSttsCd": "01", "prvncNm": "LUSAKA PROVINCE", "dstrtNm": "ISMTO_Lusaka", "sctrNm": "Lusaka", "locDesc": null, "mgrNm": "OKAVANGO FOODS LIMITED", "mgrTelNo": "0977785716", "mgrEmail": "okavangofoods@gmail.com", "hqYn": "Y"}]}}"""

@@ -9,7 +9,6 @@ from smart_invoice_app.app import (api, validate_api_response,
     get_user_branches)
 from frappe.utils import today, flt
 
-
 class ASYCUDAVerification(Document):
     def validate(self):
         self.update_import_items()
@@ -52,9 +51,9 @@ class ASYCUDAVerification(Document):
 
         currency, conversion_rate = self.get_currency_and_exchange_rate()
 
-        branches = get_user_branches()
-        branch = branches[0].get('branch') if branches else "000"
-        
+        selected_branch = get_selected_branch()
+        branch = selected_branch.get("branch") if selected_branch else "000"
+
         doc = frappe.new_doc(doctype)        
         doc.update({
             "supplier": supplier,
@@ -101,6 +100,9 @@ class ASYCUDAVerification(Document):
             
 
     def update_import_items(self):
+        """ Updates the status of ASYCUDA items on Smart Invoice """
+        return
+        
         items = []
 
         tasks = {
@@ -110,10 +112,10 @@ class ASYCUDAVerification(Document):
         }
 
         for task in tasks:
-
-            task_key = ("000", tasks[task].task_code,  tasks[task].declaration_date)
+            # TODO: Using fixed branch code "000" for now, but this can be dynamic based on user or company settings
+            task_key = (current_branch, tasks[task].task_code,  tasks[task].declaration_date)
             request_data = {
-                "bhfId": "000",
+                "bhfId": current_branch or "000",
                 "taskCd":  tasks[task].task_code,
                 "dclDe": api_date_format( tasks[task].declaration_date, date_only=True),
                 "importItemList": []
@@ -123,7 +125,7 @@ class ASYCUDAVerification(Document):
             task_items = []
 
             for item in self.items:
-                item_key = ("000", item.task_code, item.declaration_date)
+                item_key = (current_branch or "000", item.task_code, item.declaration_date)
                 if task_key == item_key: # ensure item belongs to a task 
                     if item.accepted and item.status_code == "New": # ensure hasnt been updated to the api and and has been updated by the user
                         count+=1
@@ -142,7 +144,7 @@ class ASYCUDAVerification(Document):
                 request_data.update({"importItemList": task_items})
                 
                 # --- TESTING BLOCK ---
-                USE_MOCK = False  # Flip this to False when you have API access
+                USE_MOCK = True  # Flip this to False when you have API access
                 if USE_MOCK:
                     # Simulate a successful API response
                     response_data = get_mock_response() #"SUCCESS") 
@@ -370,32 +372,87 @@ def get_status_code(status):
     }
     return codes.get(status, "2")
 
-def select_import_items():
-    response = api( "/api/method/smart_invoice_api.api.select_import_items", {
-            "bhf_id": "000"
-        }, 
-        initialize=True,
-    )
-    validate_api_response(response)
-    return json.loads(response.get('response'))
+import inspect
+def get_function_name():
+    """Returns the name of the caller function."""
+    return inspect.stack()[1].function
 
+def get_selected_branch():
+    user = frappe.session.user
+    if user:
+        current_branch = frappe.cache.hget(f"session_branch:{user}", "custom_active_branch")
+        current_branch_name = frappe.cache.hget(f"session_branch:{user}", "custom_active_branch_name")
+        current_tpin = frappe.cache.hget(f"session_branch:{user}", "custom_tpin")
+    return {
+        "branch": current_branch,
+        "branch_name": current_branch_name,
+        "tpin": current_tpin
+    }
+
+from smart_invoice_api.api import select_import_items as api_select_import_items
 @frappe.whitelist()
-def get(from_list=False):
-    data = select_import_items()
-    create_imports(data, from_list)
-    return data
+def get_import_items(from_list=False):
+    """ Starts the process of creating import items from Smart Invoice. Called from List """
+    branch_data = get_selected_branch()
+    data={
+        "bhf_id": branch_data.get("branch"), 
+        "tpin": branch_data.get("tpin")
+    }
 
-def create_imports(data, from_list):    
+    api_select_import_items(data, initialize=True, meta={
+        "function": get_function_name(), "doctype": "Asycuda Verification"
+    })
+
+def finish_get_import_items(request, from_list=False):
+    """ Completes the process of creating import items from Smart Invoice by processing the API response. 
+    Called after receiving API response via Sync Request -> app.py -> after_sync_process
+    Receives Sync Request doc
+    """
+    response = request.response
+    try:
+        data = json.loads(response)
+    except Exception as e:
+        notify_user(request, f"Failed to parse API response: {str(e)}", indicator="Red")
+
+    create_imports(request, data, from_list)
+
+def notify_user(doc, message, indicator):
+    """Pushes a final completion event to trigger form reload on the frontend."""
+    frappe.publish_realtime(
+        event="sync_progress",
+        message={
+            "status": doc.status,
+            "message": message,
+            "indicator": indicator,
+            "name": doc.name
+        },
+        user=doc.modifier,
+        doctype=doc.type,
+        docname=doc.entry
+    )
+
+def clean_branch_name(name, tpin):
+    if not name or not tpin:
+        return name
+    return name.replace(f" - {tpin}", "").strip()
+
+    
+def create_imports(request, data, from_list):  
+    branch = get_selected_branch()
+    c_branch_name = clean_branch_name(branch.get("branch_name"), branch.get("tpin"))  or branch.get("branch_name")
+
     if data and data.get('resultCd', False)=="000":
         items = data.get('data', {'itemList': None}).get('itemList')
-        if not items:
-            frappe.msgprint("No new imports", indicator="Blue", alert=True)
+        if not items or len(items) == 0:
+            branch = get_selected_branch()
+            notify_user(request, f"No new imports for <b>{c_branch_name}</b> branch", indicator="blue")
             return
         create_doc(items)
     else:
-        if from_list:
-            frappe.msgprint("No new imports", indicator="Blue", alert=True)
-            return
+        branch = get_selected_branch()
+        notify_user(request, f"No new imports for <b>{c_branch_name}</b> branch", indicator="blue")
+
+    # notify_user(request, "end", indicator="Red")
 
 """
 {
