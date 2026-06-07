@@ -483,6 +483,8 @@ def create_doc(request, item_data):
     and creates new ASYCUDA Verification documents cleanly grouped by currency.
     """
     
+    item_data = [{'taskCd': '810000591', 'dclDe': '20240812', 'itemSeq': 1, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'EPSON PROJECTOR', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'USD', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000592', 'dclDe': '20240812', 'itemSeq': 2, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'DELL DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000593', 'dclDe': '20240812', 'itemSeq': 3, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'HP DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZMW', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000594', 'dclDe': '20240812', 'itemSeq': 4, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'IPHONE 14 DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZMW', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000595', 'dclDe': '20240812', 'itemSeq': 5, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'EPSON PROJECTOR', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000596', 'dclDe': '20240812', 'itemSeq': 6, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'DELL DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000597', 'dclDe': '20240812', 'itemSeq': 7, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'HP DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000598', 'dclDe': '20240812', 'itemSeq': 8, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'IPHONE 14 DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}]
+
     db_items = frappe.db.sql(
         """
             SELECT
@@ -590,6 +592,12 @@ def create_doc(request, item_data):
             })
             doc.flags.ignore_permissions = True
             doc.insert(ignore_permissions=True)
+            
+        
+        msg = f"Added {len(currency_groups)} new import document"
+        if len(currency_groups) > 1:
+            msg = f"Added {len(currency_groups)} new import documents"
+        notify_user(request, msg, "green")
     else:
         company_short_name = shorten_company_name(branch_details.get("company"))
         no_new_items_msg(request, company_short_name, branch_details.get("branch_name"))
