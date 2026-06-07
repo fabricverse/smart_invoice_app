@@ -24,11 +24,11 @@ frappe.listview_settings['ASYCUDA Verification'] = {
 
             
         
-            let indicator = data.indicator;
+            let indicator = data.indicator.toLowerCase();
             let message = data.message || __("Sync failure without an explicit error message.");
             console.log(message); // Debug log to inspect incoming data structure
         
-            if (indicator.toLowerCase() === "red") {
+            if (indicator === "red") {
                 frappe.warn(
                     __("Smart Invoice encountered the following error:"),
                     `${message}<br>`, // Message body
@@ -38,15 +38,25 @@ frappe.listview_settings['ASYCUDA Verification'] = {
                     },
                     __("Open"),
                 );
-            } else {
-                frappe.show_alert({ message: message, indicator: indicator}, 2);
+            } 
+            else if (indicator === "orange"){
+                frappe.show_alert({ message: message, indicator: indicator}, 4);
+            }
+            else {
+                frappe.show_alert({ message: message, indicator: indicator}, 3);
             }
         });
         
         // Listen for final logic execution to reload the document details
         frappe.realtime.on("reload_form", function(data) {
             // Optional verification to confirm context matches session modifier/document
-            listview.refresh();
+            // delay for 2 seconds
+            // setTimeout(function() {
+            //     listview.refresh();
+            //     console.log('refresh');
+            // }, 500);
+
+                listview.refresh();
         });
     },
     unload: function(frm) {
@@ -63,7 +73,8 @@ function download_imports(listview){
             from_list: true
         },
         callback: (r) => {
-            listview.refresh();
+            // listview.refresh();
+            // console.log('refresh');
         }
     });
 }

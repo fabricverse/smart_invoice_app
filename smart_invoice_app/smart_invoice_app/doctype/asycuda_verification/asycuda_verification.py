@@ -434,23 +434,29 @@ def clean_branch_name(name, tpin):
         return name
     return name.replace(f" - {tpin}", "").strip()
 
+def shorten_company_name(name):
+    """ return first word in company name string """
+    return name.split()[0] if name else name
+    
+
+def no_new_items_msg(request, company_name, branch_name):
+    notify_user(request, f"{company_name}'s <b>{branch_name}</b> branch has no imports", indicator="blue")
     
 def create_imports(request, data, from_list):  
-    branch = get_selected_branch()
-    c_branch_name = clean_branch_name(branch.get("branch_name"), branch.get("tpin")) or branch.get("branch_name")
+    branch_details = get_branch_details_from_request(request)
+
+    c_branch_name = clean_branch_name(branch_details.get("branch_name"), branch_details.get("tpin")) or branch_details.get("branch_name")
+    
+    company_short_name = shorten_company_name(branch_details.get("company"))
 
     if data and data.get('resultCd', False)=="000":
         items = data.get('data', {'itemList': None}).get('itemList')
         if not items or len(items) == 0:
-            branch = get_selected_branch()
-            notify_user(request, f"No new imports for <b>{c_branch_name}</b> branch", indicator="blue")
+            no_new_items_msg(request, company_short_name, c_branch_name)
             return
-        create_doc(items)
+        create_doc(request, items)
     else:
-        branch = get_selected_branch()
-        notify_user(request, f"No new imports for <b>{c_branch_name}</b> branch", indicator="blue")
-
-    # notify_user(request, "end", indicator="Red")
+        no_new_items_msg(request, company_short_name, c_branch_name)
 
 """
 {
@@ -462,49 +468,33 @@ def create_imports(request, data, from_list):
     'invcFcurExcrt': 1.17, 'dclRefNum': None
 }
 """
-def create_doc(item_data):
-    items = []
-    total_qty = 0
+
+def create_doc(request, item_data):
+    """Processes incoming item data, filters out existing duplicates, 
+    and creates new ASYCUDA Verification documents cleanly grouped by currency.
+    """
     
     db_items = frappe.db.sql(
         """
             SELECT
-                i.name as row_name,
-                i.task_code,
-                i.declaration_date,
-                i.declaration_number,
-                i.declaration_reference,
-                i.hs_code,
-                i.item_name,
-                i.status_code,
-                i.country_of_origin,
-                i.export_code,
-                i.number_of_packages,
-                i.package_unit,
-                i.qty,
-                i.qty_unit,
-                i.total_weight,
-                i.net_weight,
-                i.supplier,
-                i.agent_name,
-                i.amount,
-                i.currency,
-                i.exchange_rate,
-                d.creation,
-                d.name as docname
+                i.name as row_name, i.task_code, i.declaration_date, i.declaration_number,
+                i.declaration_reference, i.hs_code, i.item_name, i.status_code,
+                i.country_of_origin, i.export_code, i.number_of_packages, i.package_unit,
+                i.qty, i.qty_unit, i.total_weight, i.net_weight, i.supplier,
+                i.agent_name, i.amount, i.currency, i.exchange_rate, d.creation, d.name as docname
             FROM `tabASYCUDA Items` as i
-            LEFT JOIN `tabASYCUDA Verification` as d 
-            ON d.name = i.parent
+            LEFT JOIN `tabASYCUDA Verification` as d ON d.name = i.parent
             ORDER BY d.creation DESC
-            LIMIT 600
         """, as_dict=1)
 
-    # db_dict = { (item.task_code, item.item_name, item.qty, item.amount): item for item in db_items }
     db_dict = {
         (item.task_code, item.hs_code, item.item_name, item.qty, item.amount, item.status_code): item 
         for item in reversed(db_items)
         if item.task_code
     }
+
+    # Clean dictionary grouping structure
+    currency_groups = {}
 
     for item in item_data:        
         task_code = item.get('taskCd', None)
@@ -517,29 +507,41 @@ def create_doc(item_data):
         export_code = item.get('exptNatCd', None)
         number_of_packages = item.get('pkg', None)
         package_unit = item.get('pkgUnitCd', None)
-        qty = float(item.get('qty', None))
         qty_unit = item.get('qtyUnitCd', None)
         total_weight = item.get('totWt', None)
         net_weight = item.get('netWt', None)
         supplier = item.get('spplrNm', None)
         agent_name = item.get('agntNm', None)
-        amount = item.get('invcFcurAmt', None)
-        currency = item.get('invcFcurCd', None)
         exchange_rate = item.get('invcFcurExcrt', None)
         status_code = item.get('imptItemsttsCd', None)
         item_sequence = item.get('itemSeq', None)
 
-        status = get_status_by_code(status_code) or "New"
-        qty = float(item.get('qty', None))
-        total_qty += qty
+        # CRITICAL: Force strictly isolated conversions per item
+        current_qty = float(item.get('qty', 0) or 0)
+        current_amount = float(item.get('invcFcurAmt', 0) or 0)
+        currency_code = item.get('invcFcurCd', "Unknown")
 
-        item_key = (task_code, hs_code, item_name, qty, amount, status)
+        status = get_status_by_code(status_code) or "New"
+
+        item_key = (task_code, hs_code, item_name, current_qty, current_amount, status)
         
-        # skip existing records and continue to the next record       
+        # Skip existing records       
         if item_key in db_dict:
             continue
 
-        items.append({
+        # Initialize the currency block dynamically if it's the first time seeing it
+        if currency_code not in currency_groups:
+            currency_groups[currency_code] = {
+                "items": [],
+                "total_qty": 0.0,
+                "total_amt": 0.0
+            }
+
+        # Add values ONLY to this specific currency bucket
+        currency_groups[currency_code]["total_qty"] += current_qty
+        currency_groups[currency_code]["total_amt"] += current_amount
+        
+        currency_groups[currency_code]["items"].append({
             'task_code': task_code,
             'declaration_date': format_date_only(declaration_date),
             'declaration_number': declaration_number,
@@ -551,26 +553,62 @@ def create_doc(item_data):
             'export_code': export_code,
             'number_of_packages': number_of_packages,
             'package_unit': package_unit,
-            'qty': qty,
+            'qty': current_qty,
             'qty_unit': qty_unit,
             'total_weight': total_weight,
             'net_weight': net_weight,
             'supplier': supplier,
             'agent_name': agent_name,
-            'amount': amount,
-            'currency': currency,
+            'amount': current_amount,
+            'currency': currency_code,
             'exchange_rate': exchange_rate,
             'item_sequence': item_sequence
         })
+    
+    branch_details = get_branch_details_from_request(request)
 
-    if items:
-        doc = frappe.new_doc("ASYCUDA Verification")
-        doc.update({
-            "items": items,
-            "total_qty": total_qty
-        })
-        
-        doc.flags.ignore_permissions=True
-        doc.insert(ignore_permissions=True)
+    # Process each currency group into its own separate document
+    if currency_groups:
+        for currency, data in currency_groups.items():
+            doc = frappe.new_doc("ASYCUDA Verification")
+            doc.update({
+                "company": branch_details.get("company"),
+                "branch": branch_details.get("branch_name"),
+                "items": data["items"],
+                "total_qty": data["total_qty"],
+                "total_amt": data["total_amt"], # Now 100% localized to this loop currency
+                "currency": currency,
+            })
+            doc.flags.ignore_permissions = True
+            doc.insert(ignore_permissions=True)
     else:
-        frappe.msgprint("Smart Invoice: No new imports", indicator="Blue", alert=True)
+        company_short_name = shorten_company_name(branch_details.get("company"))
+        no_new_items_msg(request, company_short_name, branch_details.get("branch_name"))
+
+def get_branch_details_from_request(request):
+    """Extracts and returns branch details (code, name, tpin, and company) from the incoming request payload."""
+    if not request or not request.request:
+        return None
+        
+    try:
+        data = json.loads(request.request)
+        branch = data.get("bhfId", "000")
+        tpin = data.get("tpin")
+        
+        # Optimization 5: Cached string queries are fast, but ensure fields are indexed in DocType
+        branch_data = frappe.db.get_values(
+            "Branch", 
+            {"custom_bhf_id": branch, "custom_tpin": tpin}, 
+            ["custom_company", "name"],
+            as_dict=True,
+            cache=True
+        )
+        
+        return {
+            "branch": branch,
+            "branch_name": branch_data[0].name,
+            "tpin": tpin,
+            "company": branch_data[0].custom_company
+        }
+    except (json.JSONDecodeError, TypeError):
+        return None

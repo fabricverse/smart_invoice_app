@@ -2889,8 +2889,12 @@ def handle_errors(doc):
     
     elif result_cd == "899":
         if doc.type == "Branch" and doc.function == "update_user_api":
-            if '"001"' in doc.request:
+            if  '"bhfId": "000"' not in doc.request:
                 notify_user(doc, "<p>Smart Invoice doesnt yet allow updating users for non-HQ branches. However, you should continue making updates for your users to use related features.</p><p>No further action related to this error is required.</p>", "orange")
+                return
+        elif doc.type == "Asycuda Verification" and doc.function == "get_import_items":
+            if  '"bhfId": "000"' not in doc.request:
+                notify_user(doc, "ASYCUDA only supports HQ branch", "orange")
                 return
 
         frappe.throw(
@@ -2924,7 +2928,6 @@ def after_sync_process(doc, method=None):
     # Early exit: Do absolutely nothing if the document is still in the "New" state
     if doc.status == "New":
         return
-        
 
     if doc.type and doc.entry:
         t_doc = frappe.get_cached_doc(doc.type, doc.entry)
@@ -2964,7 +2967,9 @@ def after_sync_process(doc, method=None):
                     from smart_invoice_app.smart_invoice_app.doctype.asycuda_verification.asycuda_verification import finish_get_import_items
                     finish_get_import_items(doc)
         
-    frappe.publish_realtime(event="reload_form", user=doc.modifier)
+    user = doc.modifier or frappe.session.user
+    if user:
+        frappe.publish_realtime(event="reload_form", user=doc.modifier)
         
 
     # Handle final status actions UI/Feedback updates cleanly
