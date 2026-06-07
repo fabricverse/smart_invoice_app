@@ -52,7 +52,7 @@ class ASYCUDAVerification(Document):
         currency, conversion_rate = self.get_currency_and_exchange_rate()
 
         selected_branch = get_selected_branch()
-        branch = selected_branch.get("branch") if selected_branch else "000"
+        branch = selected_branch.get("branch_code") if selected_branch else "000"
 
         doc = frappe.new_doc(doctype)        
         doc.update({
@@ -101,6 +101,8 @@ class ASYCUDAVerification(Document):
 
     def update_import_items(self):
         """ Updates the status of ASYCUDA items on Smart Invoice """
+
+        selected_branch = get_selected_branch()
         
         items = []
         tasks = {
@@ -376,15 +378,22 @@ def get_function_name():
     return inspect.stack()[1].function
 
 def get_selected_branch():
+    """ Returns the selected branch from cache. 
+    
+        Return:
+           dict: branch, branch_name, tpin
+    """
     user = frappe.session.user
     if user:
-        current_branch = frappe.cache.hget(f"session_branch:{user}", "custom_active_branch")
-        current_branch_name = frappe.cache.hget(f"session_branch:{user}", "custom_active_branch_name")
-        current_tpin = frappe.cache.hget(f"session_branch:{user}", "custom_tpin")
+        branch_code = frappe.cache.hget(f"session_branch:{user}", "branch_code")
+        branch_doc_name = frappe.cache.hget(f"session_branch:{user}", "branch_doc_name")
+        tpin = frappe.cache.hget(f"session_branch:{user}", "tpin")
+        company = frappe.cache.hget(f"session_branch:{user}", "company")
     return {
-        "branch": current_branch,
-        "branch_name": current_branch_name,
-        "tpin": current_tpin
+        "branch_code": branch_code,
+        "branch_doc_name": branch_doc_name,
+        "tpin": tpin,
+        "company": company
     }
 
 from smart_invoice_api.api import select_import_items as api_select_import_items
@@ -393,7 +402,7 @@ def get_import_items(from_list=False):
     """ Starts the process of creating import items from Smart Invoice. Called from List """
     branch_data = get_selected_branch()
     data={
-        "bhf_id": branch_data.get("branch"), 
+        "bhf_id": branch_data.get("branch_code"), 
         "tpin": branch_data.get("tpin")
     }
 

@@ -30,7 +30,7 @@ function enforce_branch_context() {
     }
 
     // EVALUATION RULE: Enforce modal check workflow only if a valid user is logged in (ignores Guests)
-    if (frappe.session.user && frappe.session.user !== 'Guest' && !frappe.session.custom_active_branch) {
+    if (frappe.session.user && frappe.session.user !== 'Guest' && !frappe.session.branch_doc_name) {
         // Render unassigned state switcher widget (Pink alert condition indicator)
         render_navbar_branch_switcher(true);
 
@@ -41,15 +41,15 @@ function enforce_branch_context() {
 
         // PRESERVED FEATURE (2): Debounce prompt configuration processing by 3 seconds to let desk workspace render smoothly
         initiation_timeout = setTimeout(function() {
-            if (!frappe.session.custom_active_branch && !is_fetching_branch_context) {
+            if (!frappe.session.branch_doc_name && !is_fetching_branch_context) {
                 // Check the backend cache automatically on script initialization after delay (is_manual = false)
                 initialize_session_context(false);
             }
         }, 3000);
         
-    } else if (frappe.session.custom_active_branch) {
+    } else if (frappe.session.branch_doc_name) {
         // Stable State: Context is set. Render active switcher widget (Cyan/Blue status state indicator)
-        render_navbar_branch_switcher(true, frappe.session.custom_active_branch_name);
+        render_navbar_branch_switcher(true, frappe.session.branch_doc_name);
     }
 }
 
@@ -69,8 +69,8 @@ function render_navbar_branch_switcher(show_switcher, forced_label = null) {
         return;
     }
     
-    let is_set = !!frappe.session.custom_active_branch;
-    let label_text = forced_label || (is_set ? (frappe.session.custom_active_branch_name || __('Branch Active')) : __('Set Branch'));
+    let is_set = !!frappe.session.branch_doc_name;
+    let label_text = forced_label || (is_set ? (frappe.session.branch_doc_name || __('Branch Active')) : __('Set Branch'));
     let icon_color = is_set ? '#17a2b8' : 'pink'; 
 
     let switcher_html = `
@@ -114,8 +114,8 @@ $(document).ready(function() {
     
     $(document).on('click', 'button[onclick*="frappe.ui.toolbar.clear_cache()"]', function() {
         // Drop client runtime variables instantly before the page forces a window reload
-        frappe.session.custom_active_branch = null;
-        frappe.session.custom_active_branch_name = null;
+        frappe.session.company = null;
+        frappe.session.branch_doc_name = null;
         frappe.session.tpin = null;
         frappe.session.branch_code = null;
         
@@ -132,10 +132,10 @@ $(document).ready(function() {
 /**
  * CENTRALIZED GLOBAL ALERT
  */
-function show_branch_success_alert(branch_display_name, is_auto = false) {
+function show_branch_success_alert(branch_doc_name, is_auto = false) {
     let alert_message = is_auto 
-        ? __(`Auto-assigned sole branch: <b>${branch_display_name}</b>`)
-        : __(`Branch set to: <b>${branch_display_name}</b>`);
+        ? __(`Auto-assigned sole branch: <b>${branch_doc_name}</b>`)
+        : __(`Branch set to: <b>${branch_doc_name}</b>`);
 
     frappe.show_alert({ message: alert_message, indicator: 'green' });
 }
@@ -159,13 +159,13 @@ function initialize_session_context(is_manual = false) {
             let status = r.message;
 
             // 1. RECOVERY PATH: Only intercept automatically on background load checks if NOT a manual click action
-            if (status.active_branch_id && !is_manual) {
-                frappe.session.custom_active_branch = status.active_branch_id;
-                frappe.session.custom_active_branch_name = status.active_branch_name;
-                frappe.session.tpin = status.active_tpin;
-                frappe.session.branch_code = status.active_branch_id;
+            if (status.branch_code && !is_manual) {
+                frappe.session.company = status.company;
+                frappe.session.branch_doc_name = status.branch_doc_name;
+                frappe.session.tpin = status.tpin;
+                frappe.session.branch_code = status.branch_code;
                 
-                render_navbar_branch_switcher(true, status.active_branch_name);
+                render_navbar_branch_switcher(true, status.branch_doc_name);
                 is_fetching_branch_context = false;
                 return;
             }
@@ -202,13 +202,13 @@ function initialize_session_context(is_manual = false) {
 
             // 3. AUTO-ASSIGN PATH: If system assigned a single choice option layout context automatically
             if (status.auto_selected && status.branches && status.branches.length === 1) {
-                frappe.session.custom_active_branch = status.active_branch_id;
-                frappe.session.custom_active_branch_name = status.active_branch_name;
-                frappe.session.tpin = status.active_tpin;
-                frappe.session.branch_code = status.active_branch_id;
+                frappe.session.company = status.company;
+                frappe.session.branch_doc_name = status.branch_doc_name;
+                frappe.session.tpin = status.tpin;
+                frappe.session.branch_code = status.branch_code;
                 
-                render_navbar_branch_switcher(true, status.active_branch_name);
-                show_branch_success_alert(status.active_branch_name, true);
+                render_navbar_branch_switcher(true, status.branch_doc_name);
+                show_branch_success_alert(status.branch_doc_name, true);
                 
                 is_fetching_branch_context = false;
                 return;
@@ -231,8 +231,8 @@ function show_branch_selection_dialog(branches) {
     if (active_branch_dialog && active_branch_dialog.display) return;
 
     let branch_options = branches.map(branch => ({ 
-        label: branch.name, 
-        value: branch.name 
+        label: branch.branch_doc_name, 
+        value: branch.branch_doc_name 
     }));
 
     active_branch_dialog = new frappe.ui.Dialog({
@@ -243,14 +243,14 @@ function show_branch_selection_dialog(branches) {
                 fieldname: 'branch_doc_name',
                 label: __('Branch'),
                 options: branch_options,
-                default: branches[0] ? branches[0].name : "", 
+                default: branches[0] ? branches[0].branch_doc_name : "", 
                 reqd: 1
             }
         ],
         primary_action_label: __('Save'),
         primary_action: function(values) {
             let selected_name = values ? values.branch_doc_name : this.get_value('branch_doc_name');
-            let selected_branch = branches.find(b => b.name === selected_name);
+            let selected_branch = branches.find(b => b.branch_doc_name === selected_name);
             
             if (selected_branch) {
                 set_session_branch(selected_branch, this);
@@ -258,14 +258,14 @@ function show_branch_selection_dialog(branches) {
         }
     });
 
-    if (!frappe.session.custom_active_branch) {
+    if (!frappe.session.branch_doc_name) {
         active_branch_dialog.$wrapper.find('.modal-header .close').hide(); 
         active_branch_dialog.get_close_btn().hide();                       
         active_branch_dialog.backdrop = 'static';                          
         active_branch_dialog.keyboard = false;                             
 
         active_branch_dialog.$wrapper.on('hide.bs.modal', function(e) {
-            if (!frappe.session.custom_active_branch) {
+            if (!frappe.session.branch_doc_name) {
                 e.preventDefault();
                 e.stopPropagation();
                 return false;
@@ -283,18 +283,19 @@ function set_session_branch(branch_data, dialog) {
     frappe.call({
         method: "smart_invoice_app.scripts.setup.set_branch",
         args: {
-            branch_doc_name: branch_data.name,
-            branch_id: branch_data.custom_bhf_id,
-            tpin: branch_data.custom_tpin
+            branch_doc_name: branch_data.branch_doc_name,
+            branch_code: branch_data.branch_code,
+            tpin: branch_data.tpin,
+            company: branch_data.company
         }, 
         callback: function(r) {
             if (!r.error && r.message) {
-                frappe.session.custom_active_branch = r.message.branch_id; 
-                frappe.session.custom_active_branch_name = r.message.branch_display_name; 
+                frappe.session.company = r.message.company; 
+                frappe.session.branch_doc_name = r.message.branch_doc_name; 
                 frappe.session.tpin = r.message.tpin;
-                frappe.session.branch_code = r.message.branch_id;
+                frappe.session.branch_code = r.message.branch_doc_name;
 
-                show_branch_success_alert(r.message.branch_display_name);
+                show_branch_success_alert(r.message.branch_doc_name);
 
                 if (active_branch_dialog) {
                     active_branch_dialog.$wrapper.off('hide.bs.modal');
@@ -302,7 +303,7 @@ function set_session_branch(branch_data, dialog) {
                 dialog.hide();
                 active_branch_dialog = null;
                 
-                render_navbar_branch_switcher(true, r.message.branch_display_name);
+                render_navbar_branch_switcher(true, r.message.branch_doc_name);
             }
         }
     });

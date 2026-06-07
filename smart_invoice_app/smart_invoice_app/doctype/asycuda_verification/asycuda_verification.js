@@ -5,7 +5,6 @@ frappe.ui.form.on("ASYCUDA Verification", {
 	refresh(frm) {
         frm.clear_custom_buttons();
         add_create_buttons(frm);
-        console.log("refresh buttons");
 	},
 });
 
