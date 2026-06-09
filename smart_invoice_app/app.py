@@ -3049,6 +3049,7 @@ def get_stock_master_data(stock_item_data, ledger):
 from smart_invoice_api.api import save_stock_items as api_save_stock_items
 def update_stock_movement(ledger, method=None):
     # Skip if it is created against a Sales Invoice or Purchase Invoice, or if called from a hook to avoid recursion
+
     if ledger.voucher_type in ["Sales Invoice", "Purchase Invoice"] and method:
         return
 

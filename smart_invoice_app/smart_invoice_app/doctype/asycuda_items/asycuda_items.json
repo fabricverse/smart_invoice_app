@@ -199,7 +199,7 @@
    "in_list_view": 1,
    "label": "Accepted",
    "options": "\nYes\nNo",
-   "read_only_depends_on": "eval: doc.status_code !== \"New\" || !doc.status_code"
+   "read_only_depends_on": "eval:doc.status_code !== \"New\";"
   },
   {
    "fieldname": "column_break_hmke",
@@ -318,7 +318,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-04-06 15:57:27.948059",
+ "modified": "2026-06-09 20:08:19.382164",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "ASYCUDA Items",

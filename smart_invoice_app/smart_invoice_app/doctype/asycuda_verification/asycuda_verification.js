@@ -5,63 +5,17 @@ frappe.ui.form.on("ASYCUDA Verification", {
 	refresh: function(frm) {
         frm.clear_custom_buttons();
         add_create_buttons(frm);
+        setup_field_filters(frm);
     },
-	// onload: function(frm) {
-    //     // Prevent layout shifting and wobbling when global progress overlays load
-    //     document.documentElement.style.scrollbarGutter = "stable";
-
-       
-
-    //     // 2. Clear any lingering identical listeners before registering fresh ones
-    //     // frappe.realtime.off("sync_progress");
-    //     // frappe.realtime.off("reload_form");
-
-        
-    //     // Listen for final logic to trigger alerts and reload the specific form
-    //     frappe.realtime.on("sync_progress", function(data) {
-    //         // 1. Scoping Guard: Ensure this event belongs to the active document on screen
-    //         if (!data.name) {
-    //             return; 
-    //         }
-
-    //         let indicator = data.indicator.toLowerCase();
-    //         let message = data.message || __("Sync failure without an explicit error message.");
-        
-    //         if (indicator === "red") {
-    //             frappe.warn(
-    //                 __("Smart Invoice encountered the following error:"),
-    //                 `${message}<br>`, // Message body
-    //                 () => {
-    //                     // Primary Action: Redirect to the sync log document if name exists
-    //                     frappe.set_route("Form", "Sync Request", data.name);
-    //                 },
-    //                 __("Open"),
-    //             );
-    //         } 
-    //         else if (indicator === "print"){
-    //             console.log(message)
-    //         }
-    //         else if (indicator === "orange"){
-    //             frappe.show_alert({ message: message, indicator: indicator}, 4);
-    //         }
-    //         else {
-    //             frappe.show_alert({ message: message, indicator: indicator}, 3);
-    //         }
-    //     });
-        
-    //     frappe.realtime.on("reload_form", function(data) {
-    //         frm.reload_doc()
-    //     });
-    // }
 });
 
-function unload(frm){
-    frappe.realtime.off("sync_progress");
-    frappe.realtime.off("reload_form");
-    console.log('custom unload')
-
+function setup_field_filters(frm){
+    // item_class field in child table should only allow level 3 classes
+    frm.fields_dict['items'].grid.get_field('item_class').get_query = function(doc, cdt, cdn) {
+        let row = locals[cdt][cdn];
+        return { filters: {'item_cls_lvl': "3"} };
+    }
 }
-
 
 function add_create_buttons(frm){
 

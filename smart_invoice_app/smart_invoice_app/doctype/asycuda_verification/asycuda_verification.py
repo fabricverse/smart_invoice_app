@@ -84,11 +84,7 @@ class ASYCUDAVerification(Document):
     def get_purchase_items(self):
         items = []
         for item in self.items:
-            # If you want to ALLOW "New" items, remove this block.
-            # If you only want "Accepted" items, keep it but check against "Accepted".
-            
-            # Change: Only skip if it is specifically Rejected or empty
-            if not item.accepted or (not item.status_code or item.status_code == "Rejected"):
+            if item.accepted != "Yes" or not item.item_class:
                 continue
                 
             try:
@@ -248,7 +244,6 @@ class ASYCUDAVerification(Document):
             local_key = (item.task_code, item.hs_code, item.item_name, flt(item.qty))
             
             if local_key not in api_item_keys:
-                prints('keys')
                 # Item is no longer in the "Pending" API list, 
                 # so we sync it to its "Accepted/Rejected" state
                 if item.status_code not in ["Accepted", "Rejected"]:
@@ -301,6 +296,8 @@ class ASYCUDAVerification(Document):
             WHERE i.item_code = %s OR LOWER(i.item_name) = %s OR LOWER(i.item_code) = %s OR LOWER(i.item_name) = %s
         """, (name, name.lower(), name.lower(), name.lower()), as_dict=1)
 
+        maintain_stock = 1 if (item.status_code=="Accepted" or item.accepted=="Yes") else 0
+
         if db_item:
             return {
                 'item_code': db_item[0].item_code,
@@ -317,7 +314,7 @@ class ASYCUDAVerification(Document):
             new.item_code = name
             new.item_name = name
 
-            new.is_stock_item = 1 if item.status_code == "Accepted" else 0
+            new.is_stock_item = maintain_stock
             new.valuation_rate = price
             new.item_group = "Products"
             new.custom_item_cls = item.item_class or company.custom_default_item_class
