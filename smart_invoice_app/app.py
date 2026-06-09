@@ -2760,12 +2760,14 @@ def get_function_name():
 def notify_user(doc, message, indicator):
     """Pushes a final completion event to trigger form reload on the frontend."""
     frappe.publish_realtime(
-        event="sync_progress",
+        event="smart_invoice_event",
         message={
             "status": doc.status,
             "message": message,
             "indicator": indicator,
-            "name": doc.name
+            "name": doc.entry,
+            "doctype": doc.type,
+            "type": "progress"
         },
         user=doc.modifier,
         doctype=doc.type,
@@ -2923,70 +2925,101 @@ def handle_errors(doc):
             fallback_msg = sdk_msg or "An unexpected response code was returned by the server."
             notify_user(doc, fallback_msg, "red")
 
+def trigger_reload(doc, name=None):
+    frappe.publish_realtime(
+        event="smart_invoice_event",
+        message={
+            "type": "reload",
+            "name": name or doc.entry,
+            "doctype": doc.type or doc.doctype
+        },
+        user=doc.modifier or doc.modified_by
+    )
 
-def after_sync_process(doc, method=None):
+def prints(data):
+    frappe.publish_realtime(
+        event="smart_invoice_event",
+        message={
+            "message": str(data),
+            "indicator": "print",
+            "name": "print",
+            "type": "print"
+        },
+        user=frappe.session.user
+    )
+
+def after_sync_process(request_doc, method=None):
     # Early exit: Do absolutely nothing if the document is still in the "New" state
-    if doc.status == "New":
+    if request_doc.status == "New":
         return
-
-    if doc.type and doc.entry:
-        t_doc = frappe.get_cached_doc(doc.type, doc.entry)
+    if request_doc.type and request_doc.entry:
+        t_doc = frappe.get_cached_doc(request_doc.type, request_doc.entry)
 
         if t_doc:
-            if doc.type == "Item" and doc.function in ["update_item_api", "save_item_api"]:
-                update_sync_status(t_doc, doc.status)
-
-            elif doc.type in ["Sales Invoice", "Purchase Invoice"] and doc.function in ["save_invoice_api", "save_purchase_invoice_api", "update_purchase_invoice_api"]:
-                update_sync_status(t_doc, doc.status)
-                if doc.status == "Success":
-                    finish_invoice_sync(invoice=t_doc, request=doc)
-
-            elif doc.type == "Stock Ledger Entry":
-                if doc.function == "update_stock_movement" and doc.status == "Success":
-                    finish_stock_movement(t_doc, request=doc)        
-                elif doc.function == "save_stock_items" and doc.status == "Success":
-                    sync_success_msg(doc)
+            if request_doc.type == "Item" and request_doc.function in ["update_item_api", "save_item_api"]:
+                update_sync_status(t_doc, request_doc.status)
+            
+            elif request_doc.type in ["Sales Invoice", "Purchase Invoice"] and request_doc.function in ["save_invoice_api", "save_purchase_invoice_api", "update_purchase_invoice_api"]:
+                update_sync_status(t_doc, request_doc.status)
+                if request_doc.status == "Success":
+                    finish_invoice_sync(invoice=t_doc, request=request_doc)
+            
+            elif request_doc.type == "Stock Ledger Entry":
+                if request_doc.function == "update_stock_movement" and request_doc.status == "Success":
+                    finish_stock_movement(t_doc, request=request_doc)        
+                elif request_doc.function == "save_stock_items" and request_doc.status == "Success":
+                    sync_success_msg(request_doc)
+            elif request_doc.type == "ASYCUDA Verification":
+                if request_doc.function == "this_update_import_items" and request_doc.status != "Success":
+                    t_doc.finish_importing_items(request_doc)
+                     
+                elif request_doc.function == "update_item_status" and request_doc.status != "Success":
+                    t_doc.update_item_status(request_doc)
+                    # frappe.publish_realtime(event="reload_form", user=request_doc.modifier, doctype=request_doc.type)
+                    trigger_reload(request_doc)
+                
+                return 
 
             # reload form to reflect sync state
             
     else:
         # for lists and non-doc requests
 
-        if doc.type == "Branch":
-            if doc.function == "get_branches" and doc.status == "Success":
-                finish_branch_updates(request=doc)
-            elif doc.function == "get_branches_testing":
+        if request_doc.type == "Branch":
+            if request_doc.function == "get_branches" and request_doc.status == "Success":
+                finish_branch_updates(request=request_doc)
+            elif request_doc.function == "get_branches_testing":
                 # Called from VSDC connection test
-                if doc.status == "Success":
-                    notify_user(doc, "Connected to Smart Invoice", "green")
+                if request_doc.status == "Success":
+                    notify_user(request_doc, "Connected to Smart Invoice", "green")
                 else:
-                    notify_user(doc, "Connection failed", "red")
-        elif doc.type == "Asycuda Verification":
-            if doc.function == "get_import_items":
-                if doc.status == "Success":
+                    notify_user(request_doc, "Connection failed", "red")
+        elif request_doc.type == "ASYCUDA Verification":
+            if request_doc.function == "get_import_items":
+                if request_doc.status == "Success":
                     from smart_invoice_app.smart_invoice_app.doctype.asycuda_verification.asycuda_verification import finish_get_import_items
-                    finish_get_import_items(doc)
+                    finish_get_import_items(request_doc)
         
-    user = doc.modifier or frappe.session.user
-    if user:
-        frappe.publish_realtime(event="reload_form", user=doc.modifier)
-        
+    user = request_doc.modifier or frappe.session.user
+    if user and request_doc.function not in ["this_update_import_items"]:
+        # frappe.publish_realtime(event="reload_form", user=request_doc.modifier, doctype=request_doc.type)
+        trigger_reload(request_doc)        
 
     # Handle final status actions UI/Feedback updates cleanly
-    if doc.status == "Success":
-        if doc.type not in ["Stock Ledger Entry"] and doc.function not in ["get_branches_testing", "get_import_items"]:
-            sync_success_msg(doc)
+    if request_doc.status == "Success":
+        if request_doc.type not in ["Stock Ledger Entry"] and request_doc.function not in ["get_branches_testing", "get_import_items"]:
+            sync_success_msg(request_doc)
         return 
 
-    elif doc.status == "Connection Error":
+    elif request_doc.status == "Connection Error":
         return
         
-    elif doc.status == "Do not Retry":
-        notify_user(doc, "Sync permanently halted: Max retries exceeded.", "red")
+    elif request_doc.status == "Do not Retry":
+        notify_user(request_doc, "Sync permanently halted: Max retries exceeded.", "red")
         return
         
     else:
-        handle_errors(doc)
+        handle_errors(request_doc)
 
 def sync_success_msg(doc=None):
     notify_user(doc, "Synchronised with Smart Invoice", 'green')

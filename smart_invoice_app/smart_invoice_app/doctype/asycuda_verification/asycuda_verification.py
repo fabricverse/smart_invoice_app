@@ -8,10 +8,12 @@ from smart_invoice_app.app import (api, validate_api_response,
     get_uom_by_zra_unit, get_industry_tax_type, get_tax_template_by_tax_code,
     get_user_branches)
 from frappe.utils import today, flt
+from smart_invoice_api.api import update_import_items as api_update_import_items
 
 class ASYCUDAVerification(Document):
     def validate(self):
-        self.update_import_items()
+        # prints('validate')
+        self.this_update_import_items()
 
     def on_update(self):
         self.get_purchase_items()
@@ -98,11 +100,12 @@ class ASYCUDAVerification(Document):
                 
         return items
             
-
-    def update_import_items(self):
+    
+    def this_update_import_items(self):
         """ Updates the status of ASYCUDA items on Smart Invoice """
 
-        selected_branch = get_selected_branch()
+        branch = self.branch_code
+        tpin = self.tpin
         
         items = []
         tasks = {
@@ -112,10 +115,10 @@ class ASYCUDAVerification(Document):
         }
 
         for task in tasks:
-            # TODO: Using fixed branch code "000" for now, but this can be dynamic based on user or company settings
-            task_key = (current_branch, tasks[task].task_code,  tasks[task].declaration_date)
+            task_key = (branch, tasks[task].task_code,  tasks[task].declaration_date)
             request_data = {
-                "bhfId": current_branch or "000",
+                "bhfId": "branch",
+                "tpin": tpin,
                 "taskCd":  tasks[task].task_code,
                 "dclDe": api_date_format( tasks[task].declaration_date, date_only=True),
                 "importItemList": []
@@ -125,7 +128,7 @@ class ASYCUDAVerification(Document):
             task_items = []
 
             for item in self.items:
-                item_key = (current_branch or "000", item.task_code, item.declaration_date)
+                item_key = (branch, item.task_code, item.declaration_date)
                 if task_key == item_key: # ensure item belongs to a task 
                     if item.accepted and item.status_code == "New": # ensure hasnt been updated to the api and and has been updated by the user
                         count+=1
@@ -142,62 +145,73 @@ class ASYCUDAVerification(Document):
 
             if count > 0:
                 request_data.update({"importItemList": task_items})
+
+                meta={"function": get_function_name(), "doctype": self.doctype, "entry_name": self.name, "creator": self.owner, "modifier": self.modified_by}
+                api_update_import_items(request_data, meta)
                 
-                # --- TESTING BLOCK ---
-                USE_MOCK = True  # Flip this to False when you have API access
-                if USE_MOCK:
-                    # Simulate a successful API response
-                    response_data = get_mock_response() #"SUCCESS") 
-                    # We wrap it in a mock response object to mimic the real 'api' return
-                    response = {"response": json.dumps(response_data)}
-                    print(request_data)
-                else:
-                    # REAL API CALL
-                    response = api("/api/method/smart_invoice_api.api.update_import_items", request_data)
-                # --- END TESTING BLOCK ---
-
-                # response = api( "/api/method/smart_invoice_api.api.update_import_items", request_data )
-                validate_api_response(response)
-                response_data = json.loads(response.get('response'))
                 
-                if response_data:  
-                    result_code = response_data.get("resultCd")                  
-                    if response_data.get("resultCd") =="000":
-                        self.update_item_status()   
-                        frappe.msgprint(f"Smart Invoice: {response_data.get('resultMsg')}", indicator='Success', alert=True)
-                    if response_data.get("resultCd") == "001":
-                        frappe.msgprint(f"Smart Invoice: {response_data.get('resultMsg')}", indicator='Warn', alert=True)
-                    else:
-                        frappe.msgprint(f"Cannot connect to Smart Invoice ({result_code}). Please try again later.", indicator="Red", alert=True)
+    def finish_importing_items(self, request_doc):
 
-    
-    def update_item_status(self):
+        data = {}
+        # --- TESTING BLOCK ---
+        USE_MOCK = True  # Flip this to False when you have API access
+        if USE_MOCK:
+            # Simulate a successful API response
+            data = get_mock_response() #"SUCCESS") 
+            # We wrap it in a mock response object to mimic the real 'api' return
+            response = {"response": json.dumps(data)}
+            # print(request_data)
+            # prints(str(data))
+            
+        else:
+            data = json.loads(request_doc.response)
+        
+        if data:  
+            result_code = data.get("resultCd")                  
+            if data.get("resultCd") == "000":
+                self.verify_item_status(request_doc)
 
-        rs = select_import_items()
+    def verify_item_status(self, request_doc):
+        """ Get import items again and pass them to update_item_status to complete verification and updating of the doc 
+            An intermediate function passing latest asycuda status to update_item_status from app.after_sync_process triggered by update of sync_request doc on success
+        """
+        
+        get_import_items(function="update_item_status", request_doc=request_doc)
+        
+
+    def trigger_reload(self, doc, name=None):
+        frappe.publish_realtime(
+            event="smart_invoice_event",
+            message={
+                "type": "reload",
+                "name": name or doc.name,
+                "doctype": doc.doctype  # <-- REQUIRED for the list view match check
+            },
+            user=doc.modifier
+        )
+
+    def update_item_status(self, request_doc):
+        """ Checks whether item has updated on smart invoice and updates it in the doc 
+            Called by update event in Sync Request -> app.after_sync_process
+        """
+        
         # Use this to simulate the 'rs' variable in update_item_status
-        # rs = {
-        #     "resultCd": "000",
-        #     "resultMsg": "It is succeeded",
-        #     "data": {
-        #         "itemList": [
-        #             # Record 1 (LG TV) is GONE from this list because processing is finished
-        #             {
-        #                 "taskCd": "84013245",
-        #                 "hsCd": "58071005",
-        #                 "itemNm": "ZEN OFFICE CHAIR",
-        #                 "qty": 100,
-        #                 "imptItemsttsCd": "2" 
-        #             },
-        #             {
-        #                 "taskCd": "84013245",
-        #                 "hsCd": "48191007",
-        #                 "itemNm": "HONDA GENSET",
-        #                 "qty": 100,
-        #                 "imptItemsttsCd": "2"
-        #             }
-        #         ]
-        #     }
-        # }
+        rs = {
+            "resultCd": "000",
+            "resultMsg": "It is succeeded",
+            "data": {
+                "itemList": [
+                    # Record 1 Should be removed from this list because processing is finished
+                    # {
+                    #     "taskCd": "810000591",
+                    #     "hsCd": "58071005",
+                    #     "itemNm": "EPSON PROJECTOR",
+                    #     "qty": 100,
+                    #     "imptItemsttsCd": "2"
+                    # }
+                ]
+            }
+        }
 
         if not rs or rs.get('resultCd') not in ["000", "001"]:
             return
@@ -212,7 +226,7 @@ class ASYCUDAVerification(Document):
                 # Only update if not already finalized
                 if item.status_code not in ["Accepted", "Rejected"]:
                     self.set_status(item)
-            # self.save()
+            frappe.db.commit()
             return
 
         db_dict = self.items_as_dict()
@@ -234,19 +248,26 @@ class ASYCUDAVerification(Document):
             local_key = (item.task_code, item.hs_code, item.item_name, flt(item.qty))
             
             if local_key not in api_item_keys:
+                prints('keys')
                 # Item is no longer in the "Pending" API list, 
                 # so we sync it to its "Accepted/Rejected" state
                 if item.status_code not in ["Accepted", "Rejected"]:
                     self.set_status(item)
-        
-        # self.save()
+        frappe.db.commit()
                 
 
     def set_status(self, item):
+        new_status = None
         if item.accepted == "Yes":
-            item.status_code = "Accepted"
+            new_status = "Accepted"
         elif item.accepted == "No":
-            item.status_code = "Rejected"
+            new_status = "Rejected"
+            
+        if new_status and item.status_code != new_status:
+            # This updates the DB directly and updates the local object in memory
+            item.db_set('status_code', new_status)
+
+
 
     def items_as_dict(self):
         return {
@@ -331,10 +352,36 @@ def get_mock_response(scenario="SUCCESS"):
             "resultMsg": "Transaction Successful",
             "data": {
                 "itemList": [
+                    # {
+                    #     "taskCd": "TASK-101", "dclDe": "20240101", "itemSeq": 1,
+                    #     "hsCd": "1234", "itemNm": "MOCK ITEM A", "imptItemsttsCd": "2",
+                    #     "qty": 10, "invcFcurAmt": 1000, "invcFcurCd": "ZMW", "invcFcurExcrt": 1.0
+
+
+                        
+                    # }
                     {
-                        "taskCd": "TASK-101", "dclDe": "20240101", "itemSeq": 1,
-                        "hsCd": "1234", "itemNm": "MOCK ITEM A", "imptItemsttsCd": "2",
-                        "qty": 10, "invcFcurAmt": 1000, "invcFcurCd": "ZMW", "invcFcurExcrt": 1.0
+                        "taskCd": "810000591",
+                        "dclDe": "20240812",
+                        "itemSeq": 1,
+                        "dclNo": "C 76937-2024-KZU",
+                        "hsCd": "58071005",
+                        "itemNm": "EPSON PROJECTOR",
+                        "imptItemsttsCd": "2",
+                        "orgnNatCd": "ZA",
+                        "exptNatCd": "ZA",
+                        "pkg": 1,
+                        "pkgUnitCd": "PK",
+                        "qty": 100,
+                        "qtyUnitCd": "GRO",
+                        "totWt": 6.7,
+                        "netWt": 6.7,
+                        "spplrNm": None,
+                        "agntNm": "UNI 4",
+                        "invcFcurAmt": 3171.36,
+                        "invcFcurCd": "ZAR",
+                        "invcFcurExcrt": 1.17,
+                        "dclRefNum": None
                     }
                 ]
             }
@@ -389,54 +436,101 @@ def get_selected_branch():
         branch_doc_name = frappe.cache.hget(f"session_branch:{user}", "branch_doc_name")
         tpin = frappe.cache.hget(f"session_branch:{user}", "tpin")
         company = frappe.cache.hget(f"session_branch:{user}", "company")
-    return {
-        "branch_code": branch_code,
-        "branch_doc_name": branch_doc_name,
-        "tpin": tpin,
-        "company": company
-    }
+
+        return {
+            "branch_code": branch_code,
+            "branch_doc_name": branch_doc_name,
+            "tpin": tpin,
+            "company": company
+        }
+    else:
+        return None
 
 from smart_invoice_api.api import select_import_items as api_select_import_items
 @frappe.whitelist()
-def get_import_items(from_list=False):
-    """ Starts the process of creating import items from Smart Invoice. Called from List """
-    branch_data = get_selected_branch()
-    data={
-        "bhf_id": branch_data.get("branch_code"), 
-        "tpin": branch_data.get("tpin")
-    }
+def get_import_items(from_list=False, function=None, request_doc=None):
+    """ Starts the process of creating import items from Smart Invoice. 
+    Called from List without function and request_doc defined but from_list=False.
+    Or called from verify_item_status with both defined, without from_list
+    """
 
-    api_select_import_items(data, initialize=True, meta={
-        "function": get_function_name(), "doctype": "Asycuda Verification"
-    })
+    request = None
+    branch_data = None
+    data = {}
+
+    meta={
+        "function": function, "doctype": "ASYCUDA Verification"
+    }
+    if request_doc:
+        # called by verify_item_status
+        meta.update({
+            "entry": request_doc.entry,
+            "creator": request_doc.creator,
+            "modifier": request_doc.modifier,
+            "doctype": request_doc.type
+        })
+
+        # use original tpin and branch code from request doc
+        request = json.loads(request_doc.request)
+        data.update({
+            "bhf_id": request.get("bhfId", "000"),
+            "tpin": request.get("tpin")
+        })
+    else:
+        # called by list, getting branch details from user session
+        branch_data = get_selected_branch()
+        data.update({
+            "bhf_id": branch_data.get("branch_code"),
+            "tpin": branch_data.get("tpin")
+        })
+
+        meta.update({
+            "function": get_function_name()
+        })
+
+    api_select_import_items(data, initialize=True, meta=meta)
+
 
 def finish_get_import_items(request, from_list=False):
     """ Completes the process of creating import items from Smart Invoice by processing the API response. 
     Called after receiving API response via Sync Request -> app.py -> after_sync_process
     Receives Sync Request doc
     """
-    response = request.response
     try:
-        data = json.loads(response)
+        data = json.loads(request.response)
+        create_imports(request, data, from_list)
     except Exception as e:
         notify_user(request, f"Failed to parse API response: {str(e)}", indicator="Red")
-
-    create_imports(request, data, from_list)
 
 def notify_user(doc, message, indicator):
     """Pushes a final completion event to trigger form reload on the frontend."""
     frappe.publish_realtime(
-        event="sync_progress",
+        event="smart_invoice_event",
         message={
             "status": doc.status,
             "message": message,
             "indicator": indicator,
-            "name": doc.name
+            "name": doc.entry,
+            "doctype": doc.type,
+            "type": "progress"
         },
         user=doc.modifier,
         doctype=doc.type,
         docname=doc.entry
     )
+
+def prints(data):
+    frappe.publish_realtime(
+        event="smart_invoice_event",
+        message={
+            "message": data,
+            "indicator": "print",
+            "name": "print",
+            "type": "print"
+        },
+        user=frappe.session.user
+    )
+
 
 def clean_branch_name(name, tpin):
     if not name or not tpin:
@@ -453,7 +547,6 @@ def no_new_items_msg(request, company_name, branch_name):
     
 def create_imports(request, data, from_list):  
     branch_details = get_branch_details_from_request(request)
-
     c_branch_name = clean_branch_name(branch_details.get("branch_name"), branch_details.get("tpin")) or branch_details.get("branch_name")
     
     company_short_name = shorten_company_name(branch_details.get("company"))
@@ -467,23 +560,13 @@ def create_imports(request, data, from_list):
     else:
         no_new_items_msg(request, company_short_name, c_branch_name)
 
-"""
-{
-    'taskCd': '84013245', 'dclDe': '20241109', 'itemSeq': 1, 'dclNo': 'C 76937-2024-KZU', 
-    'hsCd': '48195190', 
-    'itemNm': 'TOYOTA HILUX', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 
-    'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 1.01, 'netWt': 1.01, 'spplrNm': None, 
-    'agntNm': 'CLEARING AGENTS LIMITED 1', 'invcFcurAmt': 10440, 'invcFcurCd': 'ZAR', 
-    'invcFcurExcrt': 1.17, 'dclRefNum': None
-}
-"""
 
 def create_doc(request, item_data):
     """Processes incoming item data, filters out existing duplicates, 
     and creates new ASYCUDA Verification documents cleanly grouped by currency.
     """
     
-    item_data = [{'taskCd': '810000591', 'dclDe': '20240812', 'itemSeq': 1, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'EPSON PROJECTOR', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'USD', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000592', 'dclDe': '20240812', 'itemSeq': 2, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'DELL DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000593', 'dclDe': '20240812', 'itemSeq': 3, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'HP DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZMW', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000594', 'dclDe': '20240812', 'itemSeq': 4, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'IPHONE 14 DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZMW', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000595', 'dclDe': '20240812', 'itemSeq': 5, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'EPSON PROJECTOR', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000596', 'dclDe': '20240812', 'itemSeq': 6, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'DELL DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000597', 'dclDe': '20240812', 'itemSeq': 7, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'HP DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000598', 'dclDe': '20240812', 'itemSeq': 8, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'IPHONE 14 DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}]
+    # item_data = [{'taskCd': '810000591', 'dclDe': '20240812', 'itemSeq': 1, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'EPSON PROJECTOR', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'USD', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000592', 'dclDe': '20240812', 'itemSeq': 2, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'DELL DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000593', 'dclDe': '20240812', 'itemSeq': 3, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'HP DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZMW', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000594', 'dclDe': '20240812', 'itemSeq': 4, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'IPHONE 14 DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZMW', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000595', 'dclDe': '20240812', 'itemSeq': 5, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'EPSON PROJECTOR', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000596', 'dclDe': '20240812', 'itemSeq': 6, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'DELL DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000597', 'dclDe': '20240812', 'itemSeq': 7, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'HP DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}, {'taskCd': '810000598', 'dclDe': '20240812', 'itemSeq': 8, 'dclNo': 'C 76937-2024-KZU', 'hsCd': '58071005', 'itemNm': 'IPHONE 14 DESKTOPS', 'imptItemsttsCd': '2', 'orgnNatCd': 'ZA', 'exptNatCd': 'ZA', 'pkg': 1, 'pkgUnitCd': 'PK', 'qty': 100, 'qtyUnitCd': 'GRO', 'totWt': 6.7, 'netWt': 6.7, 'spplrNm': None, 'agntNm': 'UNI 4', 'invcFcurAmt': 3171.36, 'invcFcurCd': 'ZAR', 'invcFcurExcrt': 1.17, 'dclRefNum': None}]
 
     db_items = frappe.db.sql(
         """
@@ -601,6 +684,7 @@ def create_doc(request, item_data):
     else:
         company_short_name = shorten_company_name(branch_details.get("company"))
         no_new_items_msg(request, company_short_name, branch_details.get("branch_name"))
+
 
 def get_branch_details_from_request(request):
     """Extracts and returns branch details (code, name, tpin, and company) from the incoming request payload."""
