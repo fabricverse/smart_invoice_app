@@ -18,19 +18,25 @@ frappe.ui.form.on("Smart Invoice Settings", {
             //     })
             // }, "Menu");
 
-            frm.add_custom_button(__("Get ZRA Codes"), function() {
-                frappe.call({
-                    method: "smart_invoice_app.app.initialize"
-                })
-            }, "Menu");
-
-            frm.add_custom_button(__("Initialize Virtual Device"), function() {
+            frm.add_custom_button(__("1. Initialize Virtual Device"), function() {
                 frappe.call({
                     method: "initialize_virtual_device",
                     doc: frm.doc,
                     callback: (r) => { }
                 })
             }, "Menu");
+
+
+            frm.add_custom_button(__("2. Load Initialization Data"), function() {
+                frappe.show_alert({
+                    message:__("Loading in the background..."),
+                    indicator:'blue'
+                }, 3);
+                frappe.call({
+                    method: "smart_invoice_app.app.initialize"
+                })
+            }, "Menu");
+
 
             frm.page.get_inner_group_button("Menu")
             .find("button")
