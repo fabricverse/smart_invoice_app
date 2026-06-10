@@ -2,7 +2,7 @@ frappe.listview_settings['ASYCUDA Verification'] = {
     refresh: function(listview) {
         // download_imports(listview);
 
-        listview.page.add_inner_button(__("Download Imports"), function() {
+        listview.page.add_inner_button(__("Synchronise"), function() {
             download_imports(listview);             
         }, __("Smart Invoice"));
         
