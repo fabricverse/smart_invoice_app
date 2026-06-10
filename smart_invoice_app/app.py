@@ -2982,7 +2982,14 @@ def after_sync_process(request_doc, method=None):
                 
                 return 
 
-            # reload form to reflect sync state
+            elif request_doc.type == "Smart Invoice Settings":
+                if request_doc.function == "initialize_virtual_device":
+                    data = json.loads(request_doc.response)
+                    if data.get("resultCd") in ["000", "902"]:
+                        notify_user(request_doc, "Device is initialized", "green")
+                    else:
+                        notify_user(request_doc, f"{data.get('resultMsg')}", "red")
+                    return        
             
     else:
         # for lists and non-doc requests

@@ -3,7 +3,7 @@
 
 frappe.ui.form.on("Smart Invoice Settings", {
 	refresh(frm) {
-        set_default_vsdc_server(frm);
+        initialize_doc(frm);
         // add button to test connection
         if (!frm.doc.__islocal){
             frm.add_custom_button(__("Connection Test"), function() {
@@ -24,26 +24,11 @@ frappe.ui.form.on("Smart Invoice Settings", {
                 })
             }, "Menu");
 
-            frm.add_custom_button(__("Initialize VSDC"), function() {
+            frm.add_custom_button(__("Initialize Virtual Device"), function() {
                 frappe.call({
-                    method: "initialize_vsdc",
+                    method: "initialize_virtual_device",
                     doc: frm.doc,
-                    callback: (r) => {
-                        if (r.error){
-                            frappe.msgprint({
-                                title: __('Initialization Failure'),
-                                indicator: 'yellow',
-                                message: r.error
-                            });
-                        }
-                        else {
-                            frappe.msgprint({
-                                title: __('Smart Invoice Initialization'),
-                                indicator: 'green',
-                                message: r.message
-                            });
-                        }
-                    }
+                    callback: (r) => { }
                 })
             }, "Menu");
 
@@ -66,11 +51,11 @@ frappe.ui.form.on("Smart Invoice Settings", {
 });
 
 
-function set_default_vsdc_server(frm){
+function initialize_doc(frm){
     if (frm.doc.base_url) return;
 
     frappe.call({
-        method: "set_default_vsdc_server",
+        method: "initialize_doc",
         doc: frm.doc,
         callback: (r) => { }
     });
