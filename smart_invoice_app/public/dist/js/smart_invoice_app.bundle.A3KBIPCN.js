@@ -339,7 +339,7 @@
       }
       const smart_invoice_docs = ["ASYCUDA Verification"];
       const activeFrm = window.cur_frm;
-      const isViewingTargetDoc = !!(activeFrm && activeFrm.doc && (activeFrm.doc.name === data.name || data.type === "print"));
+      const isViewingTargetDoc = !!(activeFrm && activeFrm.doc && (activeFrm.doc.name === data.name || data.type === "print" || data.function === "get_branches_testing"));
       const activeList = window.cur_list;
       const isViewingTargetList = !!(activeList && activeList.doctype && smart_invoice_docs.includes(activeList.doctype) && (activeList.doctype === data.doctype || data.type === "print"));
       if (isViewingTargetDoc) {
@@ -397,4 +397,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.XOPAEUJC.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.A3KBIPCN.js.map

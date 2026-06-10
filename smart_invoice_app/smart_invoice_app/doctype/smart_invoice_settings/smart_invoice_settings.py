@@ -16,10 +16,16 @@ class SmartInvoiceSettings(Document):
 			self.initialize_vsdc()
 
 	def validate(self):
-		site_url = frappe.utils.get_url()
+		self.set_default_vsdc_server()
 
-		if self.default_vsdc_url != site_url:
-			self.default_vsdc_url = site_url
+	@frappe.whitelist()
+	def set_default_vsdc_server(self):
+		if self.customize_vsdc_url == 1 or self.base_url:
+			return
+		
+		site_url = frappe.utils.get_url()
+		if self.base_url != site_url:
+			self.base_url = site_url
 	
 	@frappe.whitelist()
 	def initialize_vsdc(self):

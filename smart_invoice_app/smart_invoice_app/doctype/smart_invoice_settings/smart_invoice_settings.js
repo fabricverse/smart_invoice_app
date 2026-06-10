@@ -3,11 +3,12 @@
 
 frappe.ui.form.on("Smart Invoice Settings", {
 	refresh(frm) {
+        set_default_vsdc_server(frm);
         // add button to test connection
         if (!frm.doc.__islocal){
             frm.add_custom_button(__("Connection Test"), function() {
                 frappe.call({
-                    method: "smart_invoice_app.app.test_connection"
+                    method: "smart_invoice_api.api.test_connection"
                 })
             }, "Menu");
 
@@ -63,3 +64,14 @@ frappe.ui.form.on("Smart Invoice Settings", {
     }
 
 });
+
+
+function set_default_vsdc_server(frm){
+    if (frm.doc.base_url) return;
+
+    frappe.call({
+        method: "set_default_vsdc_server",
+        doc: frm.doc,
+        callback: (r) => { }
+    });
+}

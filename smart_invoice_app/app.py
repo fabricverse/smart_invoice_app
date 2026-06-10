@@ -2767,7 +2767,9 @@ def notify_user(doc, message, indicator):
             "indicator": indicator,
             "name": doc.entry,
             "doctype": doc.type,
-            "type": "progress"
+            "type": "progress",
+            "function": doc.function,
+            "user": doc.modifier,
         },
         user=doc.modifier,
         doctype=doc.type,
@@ -2993,7 +2995,7 @@ def after_sync_process(request_doc, method=None):
                 if request_doc.status == "Success":
                     notify_user(request_doc, "Connected to Smart Invoice", "green")
                 else:
-                    notify_user(request_doc, "Connection failed", "red")
+                    notify_user(request_doc, "Cannot connect to Smart Invoice", "red")
         elif request_doc.type == "ASYCUDA Verification":
             if request_doc.function == "get_import_items":
                 if request_doc.status == "Success":

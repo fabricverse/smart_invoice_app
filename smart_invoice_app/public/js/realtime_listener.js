@@ -18,7 +18,7 @@ function initSmartInvoiceGlobalListener() {
 
         // Form Context
         const activeFrm = window.cur_frm;
-        const isViewingTargetDoc = !!(activeFrm && activeFrm.doc && (activeFrm.doc.name === data.name || data.type === "print"));
+        const isViewingTargetDoc = !!(activeFrm && activeFrm.doc && (activeFrm.doc.name === data.name || data.type === "print" || data.function === "get_branches_testing"));
 
         // List View Context - Dynamically matches ecosystem list view AND the incoming doctype target
         const activeList = window.cur_list;
@@ -28,6 +28,7 @@ function initSmartInvoiceGlobalListener() {
             smart_invoice_docs.includes(activeList.doctype) && 
             (activeList.doctype === data.doctype || data.type === "print")
         );
+        // console.log(activeFrm, activeFrm.doc)
 
         if (isViewingTargetDoc) {
             console.log("Form:", data.name);
