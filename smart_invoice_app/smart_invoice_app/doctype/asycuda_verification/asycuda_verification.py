@@ -12,7 +12,6 @@ from smart_invoice_api.api import update_import_items as api_update_import_items
 
 class ASYCUDAVerification(Document):
     def validate(self):
-        # prints('validate')
         self.this_update_import_items()
 
     def on_update(self):
@@ -84,9 +83,9 @@ class ASYCUDAVerification(Document):
     def get_purchase_items(self):
         items = []
         for item in self.items:
-            if item.accepted != "Yes" or not item.item_class:
+            if item.accepted != "Yes" or item.status_code in ["New", "Rejected"] or not item.item_class:
                 continue
-                
+
             try:
                 # This calls the method to match/create the ERPNext Item
                 item_data = self.get_or_create_new_item(item)
@@ -113,7 +112,7 @@ class ASYCUDAVerification(Document):
         for task in tasks:
             task_key = (branch, tasks[task].task_code,  tasks[task].declaration_date)
             request_data = {
-                "bhfId": "branch",
+                "bhfId": branch,
                 "tpin": tpin,
                 "taskCd":  tasks[task].task_code,
                 "dclDe": api_date_format( tasks[task].declaration_date, date_only=True),
@@ -147,23 +146,22 @@ class ASYCUDAVerification(Document):
                 
                 
     def finish_importing_items(self, request_doc):
+        """ Initiates update of items.status_code 
+            Called by Sync Request > app.after_sync_process function
+            @params:
+                request_doc: The sync request doc that triggered this function
+        """
 
-        data = {}
+        data = json.loads(request_doc.response)
+
         # --- TESTING BLOCK ---
-        USE_MOCK = True  # Flip this to False when you have API access
+        USE_MOCK = False  # Flip this to False when you have API access
         if USE_MOCK:
             # Simulate a successful API response
-            data = get_mock_response() #"SUCCESS") 
+            data = get_mock_response()
             # We wrap it in a mock response object to mimic the real 'api' return
             response = {"response": json.dumps(data)}
-            # print(request_data)
-            # prints(str(data))
-            
-        else:
-            data = json.loads(request_doc.response)
-        
-        if data:  
-            result_code = data.get("resultCd")                  
+        if data:                
             if data.get("resultCd") == "000":
                 self.verify_item_status(request_doc)
 
@@ -171,7 +169,6 @@ class ASYCUDAVerification(Document):
         """ Get import items again and pass them to update_item_status to complete verification and updating of the doc 
             An intermediate function passing latest asycuda status to update_item_status from app.after_sync_process triggered by update of sync_request doc on success
         """
-        
         get_import_items(function="update_item_status", request_doc=request_doc)
         
 
@@ -190,24 +187,25 @@ class ASYCUDAVerification(Document):
         """ Checks whether item has updated on smart invoice and updates it in the doc 
             Called by update event in Sync Request -> app.after_sync_process
         """
+        rs = json.loads(request_doc.response)
         
         # Use this to simulate the 'rs' variable in update_item_status
-        rs = {
-            "resultCd": "000",
-            "resultMsg": "It is succeeded",
-            "data": {
-                "itemList": [
-                    # Record 1 Should be removed from this list because processing is finished
-                    # {
-                    #     "taskCd": "810000591",
-                    #     "hsCd": "58071005",
-                    #     "itemNm": "EPSON PROJECTOR",
-                    #     "qty": 100,
-                    #     "imptItemsttsCd": "2"
-                    # }
-                ]
-            }
-        }
+        # rs = {
+        #     "resultCd": "000",
+        #     "resultMsg": "It is succeeded",
+        #     "data": {
+        #         "itemList": [
+        #             # Record 1 Should be removed from this list because processing is finished
+        #             # {
+        #             #     "taskCd": "810000591",
+        #             #     "hsCd": "58071005",
+        #             #     "itemNm": "EPSON PROJECTOR",
+        #             #     "qty": 100,
+        #             #     "imptItemsttsCd": "2"
+        #             # }
+        #         ]
+        #     }
+        # }
 
         if not rs or rs.get('resultCd') not in ["000", "001"]:
             return
