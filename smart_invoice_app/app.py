@@ -144,40 +144,46 @@ def delete_vat_settings_for_company(doc, method=None):
     pass
 
 
+from smart_invoice_api.api import save_item_composition as api_save_item_composition
 @frappe.whitelist()
 def save_item_composition(bom, method=None, branch=None):
+    """ sync's BOMs """
+
     if not bom:
         return
 
-    if type(bom) == str:
+    if isinstance(bom, str):
         bom = frappe.get_cached_doc("BOM", bom)
 
-    item_data = []
-    for bom_item in bom.items:
+    function = get_function_name()
+    base_meta = {
+        "function": function, 
+        "doctype": bom.doctype, 
+        "entry_name": bom.name, 
+        "creator": bom.owner, 
+        "modifier": bom.modified_by
+    }
+    current_branch = get_selected_branch()
+    total_items = len(bom.items)
+
+    for idx, bom_item in enumerate(bom.items):
         item = {
+            "tpin": current_branch.get('tpin'),
             "bhfId": "000",
             "itemCd": bom.item,
             "cpstItemCd": bom_item.item_code,
             "cpstQty": float(bom_item.stock_qty)
         }
         item.update(get_doc_user_data(bom))
-        response = api("/api/method/smart_invoice_api.api.save_item_composition", item)
-        
-        item_data.append(validate_api_response(response))
-    if len(bom.items) == len(item_data):
-        statuses = set(item.get('resultCd') for item in item_data)
 
-        if len(statuses) == 1 and list(statuses)[0]=="000":
-            frappe.msgprint("Smart Invoice: Updated", indicator="green", alert=True)
-        elif "000" in statuses:
-            frappe.msgprint("Smart Invoice: Partial update", indicator="yellow", alert=True)
-        else:
-            frappe.msgprint("Smart Invoice: Update failure", indicator="red", alert=True)
+        # Create a fresh copy of meta for this specific iteration
+        meta = base_meta.copy()
 
+        # Check if this is the absolute last entry (0-indexed)
+        if idx == total_items - 1:
+            meta.update({"function": f"{function}_notify"})
 
-        
-        
-    return item_data
+        api_save_item_composition(item, meta)
 
 
 def error_handler(error):
@@ -3032,6 +3038,9 @@ def after_sync_process(request_doc, method=None):
         t_doc = frappe.get_cached_doc(request_doc.type, request_doc.entry)
 
         if t_doc:
+            tpin = json.loads(request_doc.request).get("tpin")
+            company = get_company_by_tpin(tpin)    
+
             if request_doc.type == "Item" and request_doc.function in ["update_item_api", "save_item_api"]:
                 update_sync_status(t_doc, request_doc.status)
             
@@ -3053,7 +3062,6 @@ def after_sync_process(request_doc, method=None):
                     t_doc.update_item_status(request_doc)
                     # frappe.publish_realtime(event="reload_form", user=request_doc.modifier, doctype=request_doc.type)
                     trigger_reload(request_doc)
-                
                 return 
             elif request_doc.type == "Smart Invoice Settings":
                 if request_doc.function == "initialize_virtual_device":
@@ -3070,12 +3078,13 @@ def after_sync_process(request_doc, method=None):
                     finish_updating_item_classes(request_doc)
                     return
                 elif request_doc.function in ["get_branches", "get_branches_confirm"] and request_doc.status == "Success":
-                    if request_doc.function == "get_branches_confirm":
-                        tpin = json.loads(request_doc.request).get("tpin")
-                        company = get_company_by_tpin(tpin)                                               
+                    if request_doc.function == "get_branches_confirm":                                           
                         notify_user(request_doc, f"<b>{company.name}</b> has been initialized", "green")
                     return
-            
+            elif request_doc.type == "BOM" and request_doc.status == "Success":
+                if request_doc.function == "save_item_composition_notify":
+                    notify_user(request_doc, f"BOM synchronised for <b>{company.name}</b>", "green")
+                return
     else:
         # for lists and non-doc requests
 
