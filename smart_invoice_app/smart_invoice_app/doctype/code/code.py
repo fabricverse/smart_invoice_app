@@ -13,9 +13,10 @@ class Code(Document):
 			return
 		self.attempt_code_mapping()
 	
-	def attempt_code_mapping(self):
+	@frappe.whitelist()
+	def attempt_code_mapping(self, force):
 		already_mapped_non_uom_code = (self.mapped_doctype != "UOM" and self.mapped_entry)
-		if not self.mapped_doctype or already_mapped_non_uom_code:
+		if (not self.mapped_doctype or already_mapped_non_uom_code) and not force:
 			return
 		
 		map_entry = self.find_mapping_entry()
@@ -99,7 +100,7 @@ class Code(Document):
 			frappe.msgprint(f"No mapping found for {self.mapped_doctype}. You have to map it manually", alert=True)
 
 	def create_item_tax_template_entry(self):
-		
+		# TODO: Multi-company support
 		company = frappe.get_cached_doc("Company", frappe.defaults.get_user_default('company'))
 		self.create_item_taxes(company)
 		last_doc = frappe.get_last_doc("Item Tax Template")

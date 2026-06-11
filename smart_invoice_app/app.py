@@ -3280,38 +3280,15 @@ def save_item_api(item, method=None, branch=None):
     data = prepare_item_data(item, branch=branch)
     if not data:
         return False
+
     item_data = []
-
     meta={"function": get_function_name(), "doctype": "Item", "entry_name": item.name, "creator": item.owner, "modifier": item.modified_by}
-
-    for item_data in data:
-        # Internally creates the Sync Request and fires `on_update`        
+    for item_data in data:     
         api_save_item(item_data, meta)
 
     start_sync_msg()
 
     return True
-
-    # add to err handling
-
-    for item in data:
-        response_doc = api("/api/method/smart_invoice_api.api.save_item", item)
-        response = response_doc.get('response', None)
-        item_data.append(validate_api_response(response_doc))
-
-        try:
-            reponse_json = json.loads(response)
-            if reponse_json.get('resultCd') not in ["000", "001"]:
-                if reponse_json.get('resultCd') == "999":
-                    frappe.throw(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="Try using setting Item Class to <strong>Unclassified Product</strong>")
-                elif reponse_json.get('resultCd') == "899":
-                    frappe.throw(title=f"Smart Invoice Error - {reponse_json.get('resultCd')}", msg="The Smart Invoice virtual device is not misconfigured. Please contact support.")
-                else:
-                    frappe.msgprint(title="Smart Invoice Error", msg=reponse_json.get('resultMsg'))
-        except Exception as e:
-            frappe.msgprint(title="Smart Invoice Error", msg=str(e))
-        
-    return item_data
 
 def get_items_api(initialize=False):    
     data = {}
@@ -3778,6 +3755,23 @@ def initialize():
     update_branches(initialize=True, doc="Smart Invoice Settings")
     update_item_classes(initialize=True)
     update_codes(initialize=True)
+
+    create_tax_templates()
+
+def create_tax_templates():
+    tax_codes = tax_codes = frappe.get_all('Code', fields=["name", "cd_nm", "cd"], filters={
+        'cd_cls': ['in', ["04", "400", "62", "60", "61  "]]
+    })
+
+    tax_templates = frappe.get_all("Item Tax Template", fields=["name", "custom_code"])
+    tax_template_codes = [template.custom_code for template in tax_templates]
+
+    for code in tax_codes:
+        if code.cd in tax_template_codes:
+            continue
+        tax_template_doc = frappe.get_doc("Code", code.name)
+        tax_template_doc.attempt_code_mapping(force=True)
+        tax_template_doc.create_item_tax_template_entry()
 
 @frappe.whitelist()
 def sync_dependancies():

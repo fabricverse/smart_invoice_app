@@ -29,7 +29,9 @@
   {
    "fieldname": "mapped_doctype",
    "fieldtype": "Link",
+   "in_filter": 1,
    "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Mapped Doctype",
    "options": "DocType"
   },
@@ -75,7 +77,7 @@
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-10-30 23:59:40.589874",
+ "modified": "2026-06-11 18:08:03.543603",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Code Class",
