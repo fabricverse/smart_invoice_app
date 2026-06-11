@@ -364,21 +364,95 @@ def get_saved_branches():
         return [branch]
     return branches
 
+
+
+def get_selected_branch():
+    """ Returns the selected branch from cache. 
+    
+        Return:
+           dict: branch, branch_name, tpin
+    """
+    user = frappe.session.user
+    if user:
+        branch_code = frappe.cache.hget(f"session_branch:{user}", "branch_code")
+        branch_doc_name = frappe.cache.hget(f"session_branch:{user}", "branch_doc_name")
+        tpin = frappe.cache.hget(f"session_branch:{user}", "tpin")
+        company = frappe.cache.hget(f"session_branch:{user}", "company")
+
+        return {
+            "branch_code": branch_code,
+            "branch_doc_name": branch_doc_name,
+            "tpin": tpin,
+            "company": company
+        }
+    else:
+        return None
+
+def get_default_company_tpin():
+    default_company = frappe.defaults.get_user_default("Company")
+    tpin = frappe.get_cached_value("Company", default_company, "tax_id")
+    return tpin
+
 from smart_invoice_api.api import select_branches as api_select_branches
-def get_branches(initialize=False): 
+def get_branches(initialize=False, doc=None): 
     """ Get all branches for all companies
         Smart Invoice returns all company branches using branch code 000
     """
 
     companies = get_companies_with_tpin()
-    meta={"function": get_function_name(), "doctype": "Branch"}
+    function = get_function_name()
+    current_function = function
+    
+    # Total number of companies to check against
+    total_companies = len(companies)
 
-    for company in companies.values():
+    # Use enumerate to get both the loop index (i) and the company
+    for i, company in enumerate(companies.values()):
+        
+        # Check if initialize is True AND it's the last iteration
+        
+        if doc == "Smart Invoice Settings":
+            doctype = "Smart Invoice Settings"
+            if i == total_companies - 1:
+                current_function = f"{function}_confirm"
+        else:            
+            doctype = "Branch"
+
+        # Construct meta dynamically for each iteration
+        meta = {
+            "function": current_function, 
+            "doctype": doctype
+        }
+        
+        # If it's the last entry, you might also want to add "entry" based on your original logic
+        if doc == "Smart Invoice Settings":
+            meta["entry"] = "Smart Invoice Settings"
+
         data = {
             "bhf_id": "000",
             "tpin": company.tax_id
         }
+        
         api_select_branches(data, meta, initialize)
+
+    # tpin = None
+    # selected_branch = get_selected_branch()
+    # if selected_branch:
+    #     tpin = selected_branch.get('tpin')
+    # else:
+    #     tpin = get_default_company_tpin()
+    #     if not tpin:
+    #         settings = get_settings()
+    #         tpin = settings.tpin
+            
+    # meta={"function": get_function_name(), "doctype": "Branch"}
+
+    # for company in companies.values():
+    #     data = {
+    #         "bhf_id": "000",
+    #         "tpin": tpin
+    #     }
+    #     api_select_branches(data, meta, initialize)
 
 
 @frappe.whitelist()
@@ -2992,6 +3066,15 @@ def after_sync_process(request_doc, method=None):
                 if request_doc.function == "get_codes" and request_doc.status == "Success":
                     finish_updating_codes(request_doc)
                     return
+                elif request_doc.function == "get_item_classes" and request_doc.status == "Success":
+                    finish_updating_item_classes(request_doc)
+                    return
+                elif request_doc.function in ["get_branches", "get_branches_confirm"] and request_doc.status == "Success":
+                    if request_doc.function == "get_branches_confirm":
+                        tpin = json.loads(request_doc.request).get("tpin")
+                        company = get_company_by_tpin(tpin)                                               
+                        notify_user(request_doc, f"<b>{company.name}</b> has been initialized", "green")
+                    return
             
     else:
         # for lists and non-doc requests
@@ -3692,16 +3775,9 @@ def get_user_changes(doc, user_list):
 
 @frappe.whitelist()
 def initialize():
+    update_branches(initialize=True, doc="Smart Invoice Settings")
     update_codes(initialize=True)
-    
-    return
     update_item_classes(initialize=True)
-    update_branches(initialize=True)
-    
-    if updated_codes and updated_item_classes and updated_branches:
-        frappe.msgprint("Updated", indicator='green', alert=True)
-    else:
-        frappe.msgprint("Update incomplete", indicator='orange', alert=True)
 
 @frappe.whitelist()
 def sync_dependancies():
@@ -3733,9 +3809,9 @@ def get_companies_with_tpin():
     companies = {d.tax_id: d for d in frappe.get_all("Company", fields=["name", "tax_id"], filters={"tax_id": ["is", "set"]})}
     return companies
 
-def update_branches(initialize=False):
+def update_branches(initialize=False, doc=None):
     # TODO: Update all dependant methods
-    data = get_branches(initialize)
+    data = get_branches(initialize, doc)
 
 
 @frappe.whitelist()
@@ -3839,8 +3915,16 @@ def update_item_classes(initialize=False):
     """
     data = get_item_classes(initialize)
 
-    if not data or not data.get("data"):
+def finish_updating_item_classes(request_doc):
+    """
+    Synchronizes Item Classes from the API.
+    Tracks and reports the number of records actually modified.
+    """
+
+    if not request_doc.response:
         return False
+
+    data = json.loads(request_doc.response)
         
     item_class_list = data['data'].get('itemClsList', [])
     
@@ -3983,11 +4067,18 @@ def update_item_classes(initialize=False):
 #     return True
 
    
+from smart_invoice_api.api import select_item_classes as api_select_item_classes
 def get_item_classes(initialize=False):
-    response = api("/api/method/smart_invoice_api.api.select_item_classes", {
-        "bhf_id": "000"
-    }, initialize)
-    return validate_api_response(response)
+
+    settings = get_settings()
+
+    api_select_item_classes({ "bhf_id": "000", "tpin": settings.tpin  }, initialize, {
+        "function": get_function_name(), 
+        "doctype": settings.doctype, 
+        "entry_name": settings.name,
+        "creator": settings.owner, 
+        "modifier": settings.modified_by
+    })
 
 
 def update_codes(initialize=False):

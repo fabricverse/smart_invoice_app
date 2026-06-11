@@ -3,7 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
-from smart_invoice_app.app import update_codes, is_migration, api, validate_api_response, get_function_name
+from smart_invoice_app.app import update_codes, is_migration, api, validate_api_response, get_function_name, get_default_company_tpin
 from smart_invoice_api.api import initialize_vsdc as api_initialize_vsdc
 import json
 
@@ -29,10 +29,6 @@ class SmartInvoiceSettings(Document):
 		if not self.tpin:
 			default_company = frappe.defaults.get_user_default("Company")
 			self.tpin = self.get_default_company_tpin()
-	
-	def get_default_company_tpin(self):
-		default_company = frappe.defaults.get_user_default("Company")
-		return frappe.get_cached_value("Company", default_company, "custom_tpin")
 
 	@frappe.whitelist()
 	def initialize_virtual_device(self):
