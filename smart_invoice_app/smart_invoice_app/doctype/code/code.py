@@ -211,3 +211,12 @@ class Code(Document):
 		if not map_entry or not isinstance(map_entry[0], dict):
 			return None
 		return next(iter(map_entry[0]))
+
+	def on_trash(self):
+		""" Unlink all mappings before deletion """
+
+		linked_uoms = frappe.get_all("UOM", filters={"custom_cd": self.name})
+		
+		for uom in linked_uoms:
+			frappe.db.set_value("UOM", uom.name, "custom_cd", None)
+		frappe.db.commit()

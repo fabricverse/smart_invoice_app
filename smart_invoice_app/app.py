@@ -3776,8 +3776,8 @@ def get_user_changes(doc, user_list):
 @frappe.whitelist()
 def initialize():
     update_branches(initialize=True, doc="Smart Invoice Settings")
-    update_codes(initialize=True)
     update_item_classes(initialize=True)
+    update_codes(initialize=True)
 
 @frappe.whitelist()
 def sync_dependancies():
@@ -4086,17 +4086,18 @@ def update_codes(initialize=False):
 
 def finish_updating_codes(request_doc):
     """ 
-    Synchronize Code Classes and child codes from VSDC/Smart Invoice payload.
-    Optimized for high-throughput string matching and database state sync.
+    1. Synchronize classes from API (Item Class or Code Class)
+    2. Synchronize child codes
+    3. Prevents redundant updates by normalizing strings and using direct DB updates.
     """
+
     response = request_doc.response
     if not response:
         return None
 
     fetched_data = json.loads(response)
     cls_list = fetched_data.get('data', {}).get('clsList', [])
-
-    # Load existing Code Classes: Keyed by class code 'cd_cls'
+    
     existing_code_classes = {
         d.cd_cls: d for d in frappe.get_all(
             "Code Class", 
@@ -4104,22 +4105,20 @@ def finish_updating_codes(request_doc):
         )
     }
 
-    # Load existing Codes: Keyed by composite tuple (cd_cls, cd) to handle description edits safely
     existing_codes = {
-        (d.cd_cls, d.cd): d for d in frappe.get_all(
+        d.name: d for d in frappe.get_all(
             "Code", 
             fields=["name", "cd", "cd_cls", "cd_nm", "user_dfn_cd1", "mapped_doctype"]
         )
     }
 
     for class_data in cls_list:
+        # Normalize core API strings
         api_cls_cd = str(class_data.get('cdCls') or "").strip()
-        api_cls_nm = str(class_data.get('cdClsNm') or "").strip()
+        api_cls_nm = (class_data.get('cdClsNm') or "").strip()
         
-        if not api_cls_cd:
-            continue
+        mapped_doctype = None
 
-        # --- PHASE 1: CODE CLASS ---
         if api_cls_cd not in existing_code_classes:
             new_doc = frappe.get_doc({
                 "doctype": "Code Class",
@@ -4127,212 +4126,51 @@ def finish_updating_codes(request_doc):
                 "cd_cls_nm": api_cls_nm
             }).insert(ignore_permissions=True)
             existing_code_classes[api_cls_cd] = new_doc
-            mapped_doctype = None
         else:
             curr = existing_code_classes[api_cls_cd]
             mapped_doctype = curr.get("mapped_doctype")
             
-            if str(curr.cd_cls_nm or "").strip() != api_cls_nm:
+            if (curr.cd_cls_nm or "").strip() != api_cls_nm:
                 frappe.db.set_value("Code Class", curr.name, "cd_cls_nm", api_cls_nm, update_modified=True)
 
-        # Skip child records if no doctype map exists
+        # Proceed to update child codes only if a mapping exists
         if not mapped_doctype:
             continue
 
         # --- PHASE 2: CHILD CODES ---
         for code_data in class_data.get('dtlList', []):
-            api_cd = str(code_data.get("cd") or "").strip()
-            api_cd_nm = str(code_data.get("cdNm") or "").strip()
-            api_user_val = str(code_data.get("userDfnCd1") or "").strip()
+            api_cd = (code_data.get("cd") or "").strip()
+            api_cd_nm = (code_data.get("cdNm") or "").strip()
+            api_user_val = (code_data.get("userDfnCd1") or "").strip()
 
-            if not api_cd:
-                continue
+            target_name = f"{api_cls_cd}-{api_cd}-{api_cd_nm}"
+            
+            # Find matching key in DB
+            matching_key = next((k for k in existing_codes if k.strip().lower() == target_name.lower()), None)
 
-            # O(1) Lookup using immutable tuple key
-            lookup_key = (api_cls_cd, api_cd)
-            existing_record = existing_codes.get(lookup_key)
-
-            if not existing_record:
-                # Insert if it completely lacks representation
+            if not matching_key:
                 new_code = frappe.get_doc({
                     "doctype": "Code",
                     "cd": api_cd,
                     "cd_cls": api_cls_cd,
                     "cd_nm": api_cd_nm,
-                    "user_dfn_cd1": api_user_val if api_user_val else None,
+                    "user_dfn_cd1": api_user_val,
                     "mapped_doctype": mapped_doctype
                 }).insert(ignore_permissions=True)
-                
-                # Cache the new object to prevent duplicate checks if items repeat
-                existing_codes[lookup_key] = new_code
+                existing_codes[new_code.name] = new_code
             else:
-                # Clean update checking using exact in-memory state comparison
-                code_changes = {}
-                if str(existing_record.cd_nm or "").strip() != api_cd_nm:
-                    code_changes["cd_nm"] = api_cd_nm
-                if str(existing_record.user_dfn_cd1 or "").strip() != api_user_val:
-                    code_changes["user_dfn_cd1"] = api_user_val if api_user_val else None
-                if existing_record.mapped_doctype != mapped_doctype:
-                    code_changes["mapped_doctype"] = mapped_doctype
-
-                if code_changes:
-                    frappe.db.set_value("Code", existing_record.name, code_changes, update_modified=True)
-                    # Sync local dictionary state
-                    for field, val in code_changes.items():
-                        setattr(existing_record, field, val)
+                update_code_optimized(
+                    matching_key, 
+                    api_cd_nm, 
+                    api_user_val, 
+                    mapped_doctype, 
+                    api_cls_cd, 
+                    existing_codes[matching_key]
+                )
 
     frappe.db.commit()
     return True
 
-# def finish_updating_codes(request_doc):
-#     """ 
-#     1. Synchronize classes from API (Item Class or Code Class)
-#     2. Synchronize child codes
-#     3. Prevents redundant updates by normalizing strings and using direct DB updates.
-#     """
-
-#     response = request_doc.response
-#     if not response:
-#         return None
-
-#     fetched_data = json.loads(response)
-
-#     # --- DATA PROCESSING ---
-#     cls_list = fetched_data['data'].get('clsList', [])
-
-#     # Load existing data with all comparison fields
-#     # existing_item_classes = {
-#     #     d.item_cls_cd: d for d in frappe.get_all(
-#     #         "Item Class", 
-#     #         fields=["name", "item_cls_cd", "item_cls_nm", "mjr_tg_yn", "item_cls_lvl"]
-#     #     )
-#     # }
-    
-#     existing_code_classes = {
-#         d.cd_cls: d for d in frappe.get_all(
-#             "Code Class", 
-#             fields=["name", "cd_cls", "cd_cls_nm", "mapped_doctype"]
-#         )
-#     }
-
-#     existing_codes = {
-#         d.name: d for d in frappe.get_all(
-#             "Code", 
-#             fields=["name", "cd", "cd_cls", "cd_nm", "user_dfn_cd1", "mapped_doctype"]
-#         )
-#     }
-
-#     for class_data in cls_list:
-#         # Normalize core API strings
-#         api_cls_cd = str(class_data.get('cdCls') or "").strip()
-#         api_cls_nm = (class_data.get('cdClsNm') or "").strip()
-        
-#         mapped_doctype = None
-
-#         # --- PHASE 1: ITEM CLASS / CODE CLASS ---
-        
-#         # Scenario A: It's an Item Class
-#         # if api_cls_cd in existing_item_classes or len(api_cls_cd) > 4:
-#         #     api_mjr_tg = int(class_data.get('mjrTgYn') or 0)
-#         #     api_lvl = str(class_data.get('itemClsLvl') or "").strip()
-
-#         #     if api_cls_cd not in existing_item_classes:
-#         #         new_doc = frappe.get_doc({
-#         #             "doctype": "Item Class",
-#         #             "item_cls_cd": api_cls_cd,
-#         #             "item_cls_nm": api_cls_nm,
-#         #             "mjr_tg_yn": api_mjr_tg,
-#         #             "item_cls_lvl": api_lvl,
-#         #             "use_yn": 1
-#         #         }).insert(ignore_permissions=True)
-#         #         existing_item_classes[api_cls_cd] = new_doc
-#         #     else:
-#         #         curr = existing_item_classes[api_cls_cd]
-#         #         item_changes = {}
-
-#         #         if (curr.item_cls_nm or "").strip() != api_cls_nm:
-#         #             item_changes['item_cls_nm'] = api_cls_nm
-#         #         if int(curr.mjr_tg_yn or 0) != api_mjr_tg:
-#         #             item_changes['mjr_tg_yn'] = api_mjr_tg
-#         #         if str((curr.item_cls_lvl or "").strip()) != str(api_lvl).strip():
-#         #             item_changes['item_cls_lvl'] = api_lvl
-#         #         if item_changes:
-#         #             frappe.db.set_value("Item Class", curr.name, item_changes, update_modified=True)
-        
-#         # Scenario B: It's a Code Class
-#         # else:
-#         if api_cls_cd not in existing_code_classes:
-#             new_doc = frappe.get_doc({
-#                 "doctype": "Code Class",
-#                 "cd_cls": api_cls_cd,
-#                 "cd_cls_nm": api_cls_nm
-#             }).insert(ignore_permissions=True)
-#             existing_code_classes[api_cls_cd] = new_doc
-#         else:
-#             curr = existing_code_classes[api_cls_cd]
-#             mapped_doctype = curr.get("mapped_doctype")
-            
-#             if (curr.cd_cls_nm or "").strip() != api_cls_nm:
-#                 frappe.db.set_value("Code Class", curr.name, "cd_cls_nm", api_cls_nm, update_modified=True)
-
-#         # Proceed to update child codes only if a mapping exists
-#         if not mapped_doctype:
-#             continue
-
-#         # --- PHASE 2: CHILD CODES ---
-#         for code_data in class_data.get('dtlList', []):
-#             api_cd = (code_data.get("cd") or "").strip()
-#             api_cd_nm = (code_data.get("cdNm") or "").strip()
-#             api_user_val = (code_data.get("userDfnCd1") or "").strip()
-
-#             target_name = f"{api_cls_cd}-{api_cd}-{api_cd_nm}"
-            
-#             # Find matching key in DB
-#             matching_key = next((k for k in existing_codes if k.strip().lower() == target_name.lower()), None)
-
-#             if not matching_key:
-#                 new_code = frappe.get_doc({
-#                     "doctype": "Code",
-#                     "cd": api_cd,
-#                     "cd_cls": api_cls_cd,
-#                     "cd_nm": api_cd_nm,
-#                     "user_dfn_cd1": api_user_val,
-#                     "mapped_doctype": mapped_doctype
-#                 }).insert(ignore_permissions=True)
-#                 existing_codes[new_code.name] = new_code
-#             else:
-#                 update_code_optimized(
-#                     matching_key, 
-#                     api_cd_nm, 
-#                     api_user_val, 
-#                     mapped_doctype, 
-#                     api_cls_cd, 
-#                     existing_codes[matching_key]
-#                 )
-
-#     frappe.db.commit()
-#     return True
-
-def update_code_optimized(doc_name, api_nm, api_val, api_map, api_cls, existing_dict):
-    """
-    Direct SQL update via set_value to prevent redundant saves and silent updates.
-    """
-    changes = {}
-    
-    if (existing_dict.get('cd_nm') or "").strip().lower() != api_nm.lower():
-        changes['cd_nm'] = api_nm
-        
-    if (existing_dict.get('user_dfn_cd1') or "").strip() != (api_val or "").strip():
-        changes['user_dfn_cd1'] = api_val
-        
-    if (existing_dict.get('mapped_doctype') or "").strip() != (api_map or "").strip():
-        changes['mapped_doctype'] = api_map
-
-    if (existing_dict.get('cd_cls') or "").strip() != (api_cls or "").strip():
-        changes['cd_cls'] = api_cls
-
-    if changes:
-        frappe.db.set_value("Code", doc_name, changes, update_modified=True)
 
 # def update_codes(initialize=False):
 #     """ 
@@ -4477,6 +4315,27 @@ def update_code_optimized(doc_name, api_nm, api_val, api_map, api_cls, existing_
 #             frappe.msgprint(str(e))
 #         except Exception as e:
 #             frappe.msgprint(str(e))
+
+def update_code_optimized(doc_name, api_nm, api_val, api_map, api_cls, existing_dict):
+    """
+    Direct SQL update via set_value to prevent redundant saves and silent updates.
+    """
+    changes = {}
+    
+    if (existing_dict.get('cd_nm') or "").strip().lower() != api_nm.lower():
+        changes['cd_nm'] = api_nm
+        
+    if (existing_dict.get('user_dfn_cd1') or "").strip() != (api_val or "").strip():
+        changes['user_dfn_cd1'] = api_val
+        
+    if (existing_dict.get('mapped_doctype') or "").strip() != (api_map or "").strip():
+        changes['mapped_doctype'] = api_map
+
+    if (existing_dict.get('cd_cls') or "").strip() != (api_cls or "").strip():
+        changes['cd_cls'] = api_cls
+
+    if changes:
+        frappe.db.set_value("Code", doc_name, changes, update_modified=True)
 
 
 from smart_invoice_api.api import select_codes as api_select_codes 
