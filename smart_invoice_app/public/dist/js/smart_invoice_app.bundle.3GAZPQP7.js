@@ -337,7 +337,7 @@
         console.log("User mismatch ignored:", data.user);
         return;
       }
-      const smart_invoice_docs = ["ASYCUDA Verification"];
+      const smart_invoice_docs = ["ASYCUDA Verification", "Purchase Invoice", "Branch", "Item"];
       const activeFrm = window.cur_frm;
       const isViewingTargetDoc = !!(activeFrm && activeFrm.doc && (activeFrm.doc.name === data.name || data.type === "print" || data.function === "get_branches_testing"));
       const activeList = window.cur_list;
@@ -397,4 +397,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.A3KBIPCN.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.3GAZPQP7.js.map

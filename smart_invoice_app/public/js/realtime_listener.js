@@ -14,7 +14,7 @@ function initSmartInvoiceGlobalListener() {
         }
 
         // Define which DocTypes belong to the Smart Invoice ecosystem
-        const smart_invoice_docs = ['ASYCUDA Verification'];
+        const smart_invoice_docs = ['ASYCUDA Verification', 'Purchase Invoice', 'Branch', 'Item'];
 
         // Form Context
         const activeFrm = window.cur_frm;

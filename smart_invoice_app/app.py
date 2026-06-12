@@ -4,7 +4,6 @@ import os
 import frappe
 from base64 import b64encode
 from frappe import _
-from datetime import datetime
 import requests, json
 from frappe.exceptions import AuthenticationError
 from requests.exceptions import JSONDecodeError
@@ -461,25 +460,35 @@ def get_branches(initialize=False, doc=None):
     #     api_select_branches(data, meta, initialize)
 
 
+from smart_invoice_api.api import select_trns_purchase_sales as api_select_trns_purchase_sales
 @frappe.whitelist()
 def get_purchase_invoices(from_list=False):
-    data = get_purchase_invoices_api()
-    
-    if data and data.get('resultCd', False)=="000":
-        invoices = data.get('data', {'saleList': None}).get('saleList')
-        if not invoices:
-            frappe.msgprint("No new Purchase Invoices", indicator="Blue", alert=True)
-            return
-        create_purchase_invoices(invoices)
-    else:
-        if from_list:
-            frappe.msgprint("No new Purchase Invoices", indicator="Blue", alert=True)
+       
+    selected_branch = get_selected_branch()
+    data = {
+        "tpin": selected_branch.get('tpin'),
+        "bhf_id": selected_branch.get('branch_code')
+    }
+    meta = {
+        "doctype": "Purchase Invoice", 
+        "function": get_function_name(),
+    }
+    api_select_trns_purchase_sales(data, meta, initialize=True)
 
 
-def create_purchase_invoices(invoices):    
+def finish_get_purchase_invoices(request_doc):
+    try:
+        response = json.loads(request_doc.response)
+        invoices = response.get('data', {'saleList': None}).get('saleList')
+        create_purchase_invoices(request_doc, invoices)
+    except Exception as e:
+        notify_user(request_doc, f"app.finish_get_purchase_invoices: {str(e)}", "red")
+
+
+def create_purchase_invoices(request_doc, invoices):    
     count = 0
     for invoice in invoices:
-        if not frappe.db.exists("Purchase Invoice", { # TODO: add 'not' exists
+        if not frappe.db.exists("Purchase Invoice", {
             "bill_no": invoice.get('spplrInvcNo'), 
             "supplier": invoice.get('spplrNm'), 
             "grand_total": invoice.get('totAmt'), 
@@ -487,11 +496,11 @@ def create_purchase_invoices(invoices):
             create_invoice(invoice)
             count+=1
     if count == 0:
-        frappe.msgprint("No new Purchase Invoices", indicator="Blue", alert=True)
+        notify_user(request_doc, "No new Purchase Invoices", "blue")
     elif count == 1:
-        frappe.msgprint(f"Downloaded {count} Purchase Invoice", indicator="Green", alert=True)
+        notify_user(request_doc, f"Downloaded {count} Purchase Invoice", "green")
     else:
-        frappe.msgprint(f"Downloaded {count} Purchase Invoice(s)", indicator="Green", alert=True)
+        notify_user(request_doc, f"Downloaded {count} Purchase Invoices", "green")
 
 
 def create_invoice(invoice):
@@ -784,16 +793,6 @@ def get_or_create_supplier(tpin, name, branch):
         new.insert(ignore_permissions=True)
 
         return new.name
-
-def get_purchase_invoices_api():    
-    saved_branches = get_saved_branches()
-    response = api( "/api/method/smart_invoice_api.api.select_trns_purchase_sales", {
-            "bhf_id": saved_branches[0].custom_bhf_id 
-        }, 
-        initialize=True,
-    )
-    data = validate_api_response(response)
-    return data
 
 def retry_message():
     frappe.msgprint(title="Smart Invoice", msg="Connection Failure. Retrying in the background ...")
@@ -2801,7 +2800,7 @@ def update_item_api_dep(item, method=None, branch=None):
         item = frappe.get_cached_doc("Item", item)
 
     # Skip if created less than 5 seconds ago
-    if time_diff_in_seconds(now(), item.creation) <= 5:
+    if time_diff_in_seconds(now(), item.creation) <= 5 or time_diff_in_seconds(now(), item.modified) <= 3:
         return
 
     data = prepare_item_data(item, branch=branch)
@@ -2997,11 +2996,9 @@ def handle_errors(doc):
     
     else:
         # 5. Fallback cleanly to the mapping, or use the raw server message if code is brand new
-
         display_msg = f"<strong>Error {result_cd}:</strong> {error_messages.get(result_cd)}"
         
         if display_msg:
-            # frappe.msgprint(title=f"Smart Invoice Error1 ({result_cd})", msg=display_msg)
             notify_user(doc, display_msg, "red")
         else:
             # Fallback for undocumented codes
@@ -3105,6 +3102,13 @@ def after_sync_process(request_doc, method=None):
                 if request_doc.status == "Success":
                     from smart_invoice_app.smart_invoice_app.doctype.asycuda_verification.asycuda_verification import finish_get_import_items
                     finish_get_import_items(request_doc)
+        elif request_doc.type == "Purchase Invoice" and request_doc.status == "Success":
+            finish_get_purchase_invoices(request_doc)
+        elif request_doc.type == "Item" and request_doc.status == "Success":
+            if request_doc.function == "get_items_api":
+                finish_sync_items(request_doc)
+                return
+
         
     user = request_doc.modifier or frappe.session.user
     if user and request_doc.function not in ["this_update_import_items"]:
@@ -3113,7 +3117,7 @@ def after_sync_process(request_doc, method=None):
 
     # Handle final status actions UI/Feedback updates cleanly
     if request_doc.status == "Success":
-        if request_doc.type not in ["Stock Ledger Entry"] and request_doc.function not in ["get_branches_testing", "get_import_items"]:
+        if request_doc.type not in ["Stock Ledger Entry"] and request_doc.function not in ["get_branches_testing", "get_import_items", "get_purchase_invoices"]:
             sync_success_msg(request_doc)
         return 
 
@@ -3202,7 +3206,7 @@ def update_item_api(item, method=None, branch=None):
         item = frappe.get_cached_doc("Item", item)
 
     # Skip if created less than 3 seconds ago
-    if frappe.utils.time_diff_in_seconds(frappe.utils.now(), item.creation) <= 3:
+    if frappe.utils.time_diff_in_seconds(frappe.utils.now(), item.creation) <= 3 or frappe.utils.time_diff_in_seconds(frappe.utils.now(), item.modified) <= 3:
         return
 
     data = prepare_item_data(item, branch=branch)
@@ -3264,22 +3268,6 @@ def finish_invoice_sync(invoice, request):
             sl_doc = frappe.get_doc("Stock Ledger Entry", sl.name)
             update_stock_movement(sl_doc)
 
-    # else:
-    #     frappe.db.rollback()
-    #     if "LPO" in json_data.get("resultCd"):
-    #         frappe.msgprint(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-    #     elif json_data.get('resultMsg', None):
-    #         frappe.msgprint(json_data.get('resultMsg'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-    #     elif json_data.get('error', None):
-    #         if json_data.get('error') in ["VSDC Connection Error", "VSDC timeout"]:
-    #             frappe.msgprint("Smart Invoice: Connection Failure. Retrying in the background ...")
-    #         elif json_data.get('text', None):
-    #             frappe.msgprint(json_data.get('text'), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-    #         else:
-    #             frappe.msgprint(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-    #     else:
-    #         frappe.msgprint(str(json_data), title=f"Smart Invoice Failure ({json_data.get('resultCd')})")
-
 
 from smart_invoice_api.api import save_item as api_save_item
 @frappe.whitelist()
@@ -3302,16 +3290,24 @@ def save_item_api(item, method=None, branch=None):
 
     return True
 
-def get_items_api(initialize=False):    
-    data = {}
-    if initialize:
-        data.update({"initialize": True})
+from smart_invoice_api.api import select_items as api_select_items 
+def get_items_api(initialize=False):
+    selected_branch = get_selected_branch()
+    data = {
+        "tpin": selected_branch.get("tpin"),
+        "bhfId": "000"
+    }
+    meta={
+        "doctype": "Item",
+        "function": get_function_name(),
+        "creator": frappe.session.user,
+        "modifier": frappe.session.user
+    }
+    api_select_items(data, meta, initialize=True)
 
-    response = api("/api/method/smart_invoice_api.api.select_items", data)
-    return validate_api_response(response)
 
-
-def get_item_api(item_code):    
+def get_item_api(item_code): 
+    """ cant find caller """   
     data = {
         "itemCd": item_code
     }
@@ -3365,13 +3361,12 @@ def generate_item_code(item, initialize=False):
 @frappe.whitelist()
 def sync_items(initialize=False):
     """ Syncs all items to smart_invoice """
-    r = get_items_api(initialize=True)
-    if not r:
-        frappe.throw(title="Smart Invoice Error", msg="No data received, try again")
-    if r.get("resultCd") != "000": 
-        return
+    get_items_api(initialize=True)
     
-    data = r['data']['itemList']
+def finish_sync_items(request_doc):
+
+    response = json.loads(request_doc.response)
+    data = response['data']['itemList']
     
     # Use itemNm as a fallback if itemCd is None
     si_items = {d.get("itemNm") or d for d in data}
@@ -3391,17 +3386,17 @@ def sync_items(initialize=False):
     item = None
     frappe.flags.skip_failing = True
 
-    if initialize:
-        # update items already in smart invoice
-        for item in items_in_both:
-            try:
-                if update_item_api(item):
-                    count += 1
-                else:
-                    failed += 1
-                    failed_items.append(item)
-            except frappe.exceptions.ValidationError as e:
-                continue
+    # if initialize:
+    # update items already in smart invoice
+    for item in items_in_both:
+        try:
+            if update_item_api(item):
+                count += 1
+            else:
+                failed += 1
+                failed_items.append(item)
+        except frappe.exceptions.ValidationError as e:
+            continue
 
     # create items not in smart invoice
     for item in missing_in_si:
@@ -3417,11 +3412,11 @@ def sync_items(initialize=False):
     
     frappe.flags.skip_failing = False
     if failed != 0:
-        frappe.msgprint(f"{failed} items failed to sync to Smart Invoice due to missing data", indicator='red', alert=True)
-        frappe.msgprint(f"<p>Failed items: {', '.join([f'<strong>{item}</strong>' for item in failed_items])}.</p><hr/> " +
-            "<p>Check the following fields for each item: <ul><li>UOM</li><li>Package UOM</li><li>Item Type (in Item Group)</li></ul></p>", title="Smart Invoice Error - Missing Data", indicator='red')
+        notify_user(request_doc, f"{failed} items failed to sync to Smart Invoice due to missing data", indicator='red')
+        notify_user(request_doc, f"<p>Failed items: {', '.join([f'<strong>{item}</strong>' for item in failed_items])}.</p><hr/> " +
+            "<p>Check the following fields for each item: <ul><li>UOM</li><li>Package UOM</li><li>Item Type (in Item Group)</li></ul></p>", indicator='red')
     else:
-        frappe.msgprint(f"{count} items synched to Smart Invoice", indicator='green', alert=True)
+        notify_user(request_doc, f"{count} items synched to Smart Invoice", indicator='green')
     return True
         
 
@@ -3503,7 +3498,6 @@ def get_doc_meta(doc):
     return {
         "doctype": doc.doctype, 
         "function": get_function_name(prev=True),
-        "doctype": doc.doctype,
         "entry_name": doc.name, 
         "creator": doc.owner, 
         "modifier": doc.modified_by
@@ -4067,7 +4061,7 @@ def get_item_classes(initialize=False):
 
 
 def update_codes(initialize=False):
-    fetched_data = get_codes(initialize)
+    get_codes(initialize)
 
 def finish_updating_codes(request_doc):
     """ 

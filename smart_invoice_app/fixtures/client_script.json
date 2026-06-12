@@ -15,10 +15,10 @@
   "doctype": "Client Script",
   "dt": "Purchase Invoice",
   "enabled": 1,
-  "modified": "2024-12-23 14:03:25.799549",
+  "modified": "2026-06-12 12:26:21.386238",
   "module": "Smart Invoice App",
   "name": "Smart Invoice - Purchase Invoice List",
-  "script": "frappe.listview_settings['Purchase Invoice'] = {\n    refresh: function(listview) {\n        listview.page.add_inner_button(__(\"Download Purchase Invoices\"), function() {\n            frappe.call({\n                method: \"smart_invoice_app.app.get_purchase_invoices\",\n                args: {\n                    from_list: true\n                },\n                callback: (r) => {\n                    listview.refresh();\n                }\n            });\n             \n        }, __(\"Smart Invoice\"));\n        \n        listview.page.get_inner_group_button(\"Smart Invoice\")\n        .find(\"button\")\n        .removeClass(\"btn-default\")\n        .addClass(\"btn-info\");\n    },\n};",
+  "script": "frappe.listview_settings['Purchase Invoice'] = {\n    refresh: function(listview) {\n        listview.page.add_inner_button(__(\"Synchronize\"), function() {\n            frappe.call({\n                method: \"smart_invoice_app.app.get_purchase_invoices\",\n                args: {\n                    from_list: true\n                },\n                callback: (r) => {\n                    listview.refresh();\n                }\n            });\n             \n        }, __(\"Smart Invoice\"));\n        \n        listview.page.get_inner_group_button(\"Smart Invoice\")\n        .find(\"button\")\n        .removeClass(\"btn-default\")\n        .addClass(\"btn-info\");\n    },\n};",
   "view": "List"
  },
  {
@@ -81,10 +81,10 @@
   "doctype": "Client Script",
   "dt": "Customer",
   "enabled": 1,
-  "modified": "2025-01-05 17:25:37.966101",
+  "modified": "2026-06-12 12:09:40.936471",
   "module": "Smart Invoice App",
   "name": "Smart Invoice - Customer",
-  "script": "frappe.ui.form.on('Customer', {\n\trefresh(frm) {\n\t    frm.toggle_reqd('customer_primary_contact', frm.doc.mobile_no.length!==10);\n\t    \n\t    \n        // frm.add_custom_button(__(\"Sync with Smart Invoice\"), function() {\n        //     call_api(frm);\n        // });\n    \n        // Custom filter function to exclude already selected entries\n        frm.set_query(\"branch\", \"custom_customer_branches\", function(doc) {\n            selected = frm.doc.custom_customer_branches.map(row => row.branch);\n            return{\n                filters: {\n                    \"name\": [\"not in\", selected]\n                }\n            };\n        });\n\t\t\n\t},\n\tvalidate(frm){\n\t    if (frm.doc.mobile_no && frm.doc.mobile_no.length!==10){\n\t        frappe.throw(\"Update contact to 10 digits\");\n\t    }\n\t    if (frm.doc.mobile_no && frm.doc.mobile_no.length !== 10) {\n            // Throw an exception with the error message\n            frappe.throw(__(\"Mobile number should be 10 digits. Update it in Primary Contact <strong>\"+frm.doc.customer_primary_contact+\"</strong>\"));\n        }\n\t},\n\ttax_id(frm){\n\t\tconst tpin = frm.doc.tax_id;\n\t\t\n\t\tif (tpin && tpin.length !== 10) {\n\t\t\tfrappe.show_alert({\n\t\t\t\tmessage:__(\"TPIN must be 10 digits\"),\n\t\t\t\tindicator:'red'\n\t\t\t}, 5);\n\t\t}\n\t},\n\tafter_save(frm){\n\t   // call_api(frm);\n\t}\n});\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.sync_customer_api\",\n        args: {\n            customer: frm.doc\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Smart Invoice: Updating Customer data ...\"),\n        callback: (r)=>{\n            frm.reload_doc();\n        }\n    });\n}",
+  "script": "frappe.ui.form.on('Customer', {\n\trefresh(frm) {\n\t    frm.toggle_reqd('customer_primary_contact', frm.doc.mobile_no.length!==10);\n\t    \n\t    \n        // frm.add_custom_button(__(\"Sync with Smart Invoice\"), function() {\n        //     call_api(frm);\n        // });\n    \n        // Custom filter function to exclude already selected entries\n        // frm.set_query(\"branch\", \"custom_customer_branches\", function(doc) {\n        //     selected = frm.doc.custom_customer_branches.map(row => row.branch);\n        //     return{\n        //         filters: {\n        //             \"name\": [\"not in\", selected]\n        //         }\n        //     };\n        // });\n\t\t\n\t},\n\tvalidate(frm){\n\t    if (frm.doc.mobile_no && frm.doc.mobile_no.length!==10){\n\t        frappe.throw(\"Update contact to 10 digits\");\n\t    }\n\t    if (frm.doc.mobile_no && frm.doc.mobile_no.length !== 10) {\n            // Throw an exception with the error message\n            frappe.throw(__(\"Mobile number should be 10 digits. Update it in Primary Contact <strong>\"+frm.doc.customer_primary_contact+\"</strong>\"));\n        }\n\t},\n\ttax_id(frm){\n\t\tconst tpin = frm.doc.tax_id;\n\t\t\n\t\tif (tpin && tpin.length !== 10) {\n\t\t\tfrappe.show_alert({\n\t\t\t\tmessage:__(\"TPIN must be 10 digits\"),\n\t\t\t\tindicator:'red'\n\t\t\t}, 5);\n\t\t}\n\t},\n\tafter_save(frm){\n\t   // call_api(frm);\n\t}\n});\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.sync_customer_api\",\n        args: {\n            customer: frm.doc\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Smart Invoice: Updating Customer data ...\"),\n        callback: (r)=>{\n            frm.reload_doc();\n        }\n    });\n}",
   "view": "Form"
  },
  {
@@ -125,10 +125,10 @@
   "doctype": "Client Script",
   "dt": "BOM",
   "enabled": 1,
-  "modified": "2024-12-23 14:03:25.771116",
+  "modified": "2026-06-11 18:49:20.357102",
   "module": "Smart Invoice App",
   "name": "Smart Invoice: BOM",
-  "script": "frappe.ui.form.on('BOM', {\n\trefresh(frm) {\n        if (!frm.doc.__islocal){\n    \t\tfrm.add_custom_button(__(\"Force Sync\"), function() {\n                call_api(frm);\n            }, __(\"Smart Invoice\"));\n            \n            frm.page.get_inner_group_button(\"Smart Invoice\")\n                .find(\"button\")\n                .removeClass(\"btn-default\")\n                .addClass(\"btn-info\");\n\t    }\n\t}\n});\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.save_item_composition\",\n        args: {\n            bom: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Smart Invoice sync ...\"),\n        callback: (r)=>{\n            frm.reload_doc();\n        }\n    });\n}",
+  "script": "frappe.ui.form.on('BOM', {\n\trefresh(frm) {\n        if (!frm.doc.__islocal){\n    \t\tfrm.add_custom_button(__(\"Manual Sync\"), function() {\n                call_api(frm);\n            }, __(\"Smart Invoice\"));\n            \n            frm.page.get_inner_group_button(\"Smart Invoice\")\n                .find(\"button\")\n                .removeClass(\"btn-default\")\n                .addClass(\"btn-info\");\n\t    }\n\t}\n});\n\nfunction call_api(frm){\n    frappe.call({\n        method: \"smart_invoice_app.app.save_item_composition\",\n        args: {\n            bom: frm.doc.name\n        },\n\t\tfreeze: true,\n\t\tfreeze_message: __(\"Smart Invoice sync ...\"),\n        callback: (r)=>{ }\n    });\n}",
   "view": "Form"
  },
  {
@@ -136,10 +136,10 @@
   "doctype": "Client Script",
   "dt": "Item",
   "enabled": 1,
-  "modified": "2026-06-09 18:42:56.926257",
+  "modified": "2026-06-12 18:15:38.790823",
   "module": "Smart Invoice App",
   "name": "Smart Invoice - Item List",
-  "script": "\n\nfrappe.listview_settings['Item'] = {\n    refresh: function(listview) {\n        listview.page.add_inner_button(__(\"Synchronize\"), function() {\n            frappe.call({\n                method: \"smart_invoice_app.app.sync_items\",\n                args: {\n                    initialize: true\n                },\n        \t\tfreeze: true,\n        \t\tfreeze_message: __(\"Running Smart Invoice item sync ...\"),\n                callback: (r)=>{\n                    // frm.reload_doc();\n                }\n            });\n             \n        }, __(\"Smart Invoice\"));\n        listview.page.get_inner_group_button(\"Smart Invoice\")\n                .find(\"button\")\n                .removeClass(\"btn-default\")\n                .addClass(\"btn-info\");\n    },\n};",
+  "script": "frappe.listview_settings['Item'] = {\n    refresh: function(listview) {\n        listview.page.add_inner_button(__(\"Synchronize\"), function() {\n            frappe.call({\n                method: \"smart_invoice_app.app.sync_items\",\n                args: {\n                    initialize: true\n                },\n        \t\tfreeze: true,\n        \t\tfreeze_message: __(\"Running Smart Invoice item sync ...\"),\n                callback: (r)=>{\n                    // frm.reload_doc();\n                }\n            });\n             \n        }, __(\"Smart Invoice\"));\n        listview.page.get_inner_group_button(\"Smart Invoice\")\n                .find(\"button\")\n                .removeClass(\"btn-default\")\n                .addClass(\"btn-info\");\n    },\n};",
   "view": "List"
  },
  {
