@@ -2832,9 +2832,12 @@ def update_item_api_dep(item, method=None, branch=None):
     return item_data
 
 
-def get_function_name():
+def get_function_name(prev=False):
     """Returns the name of the caller function."""
-    return inspect.stack()[1].function
+    if not prev:
+        return inspect.stack()[1].function
+    else:
+        return inspect.stack()[2].function
 
 
 def notify_user(doc, message, indicator):
@@ -2980,20 +2983,18 @@ def handle_errors(doc):
             if  '"bhfId": "000"' not in doc.request:
                 notify_user(doc, "ASYCUDA only supports HQ branch", "orange")
                 return
+        elif doc.type=="Branch" and "TPIN" in doc.response:
+            notify_user(doc, "The customer TPIN is invalid, check if the length is correct", "orange")
+            return
 
         frappe.throw(
             title=f"Smart Invoice Error - {result_cd}", 
             msg="Smart Invoice is likely misconfigured. Contact support."
         )
-        # Ensure VSDC is up-to-date and properly configured, as this error often indicates client-side setup issues.
-
-    # elif result_cd == "910": # and "TPIN" in sdk_msg:
-    #     match = re.search(r"'(\d{10,11})'", sdk_msg)
-    #     if match:
-    #         tpin = match.group(1)
-    #     else:
-    #         tpin = ''
-    #     notify_user(doc, f"Your branch <strong>TPIN {tpin}</strong> is invalid. Double-check the digits and try again.", "red")
+    elif result_cd == "910":
+        if doc.type=="Branch" and "custNo" in doc.response:
+            notify_user(doc, "The phone number provided is invalid, make sure its 10 digits", "orange")                
+    
     else:
         # 5. Fallback cleanly to the mapping, or use the raw server message if code is brand new
 
@@ -3085,6 +3086,8 @@ def after_sync_process(request_doc, method=None):
                 if request_doc.function == "save_item_composition_notify":
                     notify_user(request_doc, f"BOM synchronised for <b>{company.name}</b>", "green")
                 return
+            elif request_doc.type == "Customer":
+                pass
     else:
         # for lists and non-doc requests
 
@@ -3496,7 +3499,18 @@ def prepare_item_data(item, branch=None):
         item_data.append(data)
     return item_data
 
+def get_doc_meta(doc):
+    return {
+        "doctype": doc.doctype, 
+        "function": get_function_name(prev=True),
+        "doctype": doc.doctype,
+        "entry_name": doc.name, 
+        "creator": doc.owner, 
+        "modifier": doc.modified_by
+    }
 
+
+from smart_invoice_api.api import save_branche_customer as api_save_branche_customer
 @frappe.whitelist()
 def sync_customer(doc, method=None):
     frappe.db.commit()
@@ -3545,9 +3559,10 @@ def sync_customer(doc, method=None):
     if not phone:
         frappe.throw(f"Smart Invoice requires a phone number for customers. Add a phone number for {frappe.bold(customer.get('customer_name'))}")
 
+    selected_branch = get_selected_branch()
     data = {
-        "tpin": customer.get("custom_tpin"),
-        "bhfId": "000",
+        "tpin": selected_branch.get('tpin'),
+        "bhfId": selected_branch.get('branch_code', "000"),
         "custNo": phone,
         "custTpin": customer.get("tax_id", ""),
         "custNm": customer.get("customer_name", ""),
@@ -3556,47 +3571,14 @@ def sync_customer(doc, method=None):
         "faxNo": fax,
         "useYn": "Y",
         "remark": "",
-        "regrNm": users[customer.get("owner")].full_name,
-        "regrId": customer.get("owner", ""),
-        "modrNm": users[frappe.session.user].full_name,
-        "modrId": frappe.session.user
+        "regrNm": users[doc.owner].full_name,
+        "regrId": doc.owner,
+        "modrNm": users[doc.modified_by].full_name,
+        "modrId": doc.modified_by
     }
-
-    response = api("/api/method/smart_invoice_api.api.save_branche_customer", data)
-
-    response = json.loads(response.get('response', None))
-
-    if response:
-        code = response.get("resultCd")
-        msg = response.get("resultMsg")
-
-        if code == "000": 
-            frappe.msgprint(f"Synchronized customer details with Smart Invoice", indicator='green', alert=True)
-        else:
-            
-            if code == "910":
-                if "custNo" in msg:
-                    frappe.msgprint(
-                        title=f"Smart Invoice Error - {response.get('resultCd')}",
-                        msg="The phone number length is incorrect, make sure its 10 digits"
-                    )
-                elif "TPIN" in msg:
-                    frappe.throw(
-                        title=f"Smart Invoice Error - {response.get('resultCd')}",
-                        msg="TPIN is invalid, check if the length is correct"
-                    )
-                else:
-                    frappe.msgprint(
-                        title=f"Smart Invoice Error - {response.get('resultCd')}",
-                        msg=str(response.get('resultMsg'))
-                    )
-    else:
-        frappe.msgprint(f"Smart Invoice connection failure, please try again shortly.", indicator='red')
-        return False
-
-
-    return True
-
+    meta = get_doc_meta(doc)
+    api_save_branche_customer(data, meta)
+    return
 
 @frappe.whitelist()
 def get_customer_api(customer, branch="Headquarter"):  # incomplete
