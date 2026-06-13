@@ -3293,7 +3293,7 @@ def handle_errors(doc):
         "804": "There is no data found to generate this report.",
         "805": "Corresponding retransmission data already exists.",
         # Validation & Configuration
-        "834": f"Invalid Sales Type or Receipt Type provided. Please verify your inputs conform to standard codes (NS, NR, ND, TS, TR, TD, CS, CR, CD, PS).",
+        "834": "Invalid Sales Type or Receipt Type provided. Please verify your inputs conform to standard codes (NS, NR, ND, TS, TR, TD, CS, CR, CD, PS).",
         "836": "Your document sequences have been altered. Please connect to the ZRA API to sync and retrieve the correct sequences.",
         "838": "Could not establish a connection to the Smart Invoice API. Please check your internet or network settings.",
         "884": "The customer TPIN provided is invalid. Please double-check the digits and try again.",
@@ -3375,9 +3375,7 @@ def handle_errors(doc):
         )
     else:
         # 5. Fallback cleanly to the mapping, or use the raw server message if code is brand new
-        display_msg = (
-            f"<strong>Error {result_cd}:</strong> {error_messages.get(result_cd)}"
-        )
+        display_msg = f"<strong>{result_cd}:</strong> {error_messages.get(result_cd)}"
 
         if display_msg:
             notify_user(doc, display_msg, "red")
@@ -3429,7 +3427,6 @@ def after_sync_process(request_doc, method=None):
                 "update_item_api",
                 "save_item_api",
             ]:
-                prints("if")
                 update_sync_status(t_doc, request_doc.status)
 
             elif request_doc.type in [
