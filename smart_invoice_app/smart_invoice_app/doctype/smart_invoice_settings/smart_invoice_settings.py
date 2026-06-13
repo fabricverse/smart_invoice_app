@@ -1,48 +1,60 @@
 # Copyright (c) 2024, Bantoo and Partners and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe.model.document import Document
-from smart_invoice_app.app import update_codes, is_migration, api, validate_api_response, get_function_name, get_default_company_tpin
 from smart_invoice_api.api import initialize_vsdc as api_initialize_vsdc
-import json
+
+from smart_invoice_app.app import (
+    api,
+    get_default_company_tpin,
+    get_function_name,
+    is_migration,
+    update_codes,
+    validate_api_response,
+)
 
 
 class SmartInvoiceSettings(Document):
-	def on_update(self):
-		# Check if the update is triggered by a migration
-		if is_migration():
-			Return
+    def on_update(self):
+        # Check if the update is triggered by a migration
+        if is_migration():
+            Return
 
-		self.initialize_virtual_device()
+        self.initialize_virtual_device()
 
-	def validate(self):
-		self.initialize_doc()
+    def validate(self):
+        self.initialize_doc()
 
-	@frappe.whitelist()
-	def initialize_doc(self):
-		if self.customize_vsdc_server == 0 or not self.base_url:
-		
-			site_url = frappe.utils.get_url()
-			if self.base_url != site_url:
-				self.base_url = site_url
-		if not self.tpin:
-			default_company = frappe.defaults.get_user_default("Company")
-			self.tpin = self.get_default_company_tpin()
+    @frappe.whitelist()
+    def initialize_doc(self):
+        if self.customize_vsdc_server == 0 or not self.base_url:
+            site_url = frappe.utils.get_url()
+            if self.base_url != site_url:
+                self.base_url = site_url
+        if not self.tpin:
+            default_company = frappe.defaults.get_user_default("Company")
+            self.tpin = get_default_company_tpin()
 
-	@frappe.whitelist()
-	def initialize_virtual_device(self):
-		tpin = self.get_default_company_tpin()
-		frappe.errprint(tpin)
+    @frappe.whitelist()
+    def initialize_virtual_device(self):
+        tpin = get_default_company_tpin()
 
-		api_initialize_vsdc({
-			"bhf_id": "000",
-			"default_server": self.base_url,
-			"environment": self.environment,
-			"tpin": tpin or self.tpin,
-			"vsdc_serial": self.vsdc_serial
-		}, 
-		{
-			"function": get_function_name(), "doctype": self.doctype, "entry_name": self.name, "creator": self.owner, "modifier": self.modified_by
-		})
-		
+        api_initialize_vsdc(
+            {
+                "bhf_id": "000",
+                "default_server": self.base_url,
+                "environment": self.environment,
+                "tpin": tpin or self.tpin,
+                "vsdc_serial": self.vsdc_serial,
+            },
+            {
+                "function": get_function_name(),
+                "doctype": self.doctype,
+                "entry_name": self.name,
+                "creator": self.owner,
+                "modifier": self.modified_by,
+            },
+        )

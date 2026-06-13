@@ -29,7 +29,7 @@ required_apps = ["erpnext", "frappe"]
 # app_include_js = "/assets/smart_invoice_app/js/smart_invoice_app.js"
 
 # app_include_js = '/assets/smart_invoice_app/js/customer_quick_entry.js'
-app_include_js = 'smart_invoice_app.bundle.js'
+app_include_js = "smart_invoice_app.bundle.js"
 on_logout = "smart_invoice_app.scripts.setup.clear_session_branch_cache"
 clear_cache = "smart_invoice_app.scripts.setup.clear_session_branch_cache"
 
@@ -156,21 +156,19 @@ doc_events = {
     },
     "Item": {
         "after_insert": "smart_invoice_app.app.save_item_api",
-        "on_update": "smart_invoice_app.app.update_item_api"
+        "on_update": "smart_invoice_app.app.update_item_api",
     },
     "Customer": {
         "on_update": [
             "smart_invoice_app.customizations.customer.check_phone_duplicates",
-            "smart_invoice_app.app.sync_customer"
+            "smart_invoice_app.app.sync_customer",
         ]
     },
-    "BOM": {
-        "on_submit": "smart_invoice_app.app.save_item_composition"
-    },
+    "BOM": {"on_submit": "smart_invoice_app.app.save_item_composition"},
     "Sales Invoice": {
         # "on_update": "smart_invoice_app.app.save_invoice_api", # for testing
         "on_submit": "smart_invoice_app.app.save_invoice_api",
-        "on_cancel": "smart_invoice_app.app.delete_qr_code_file"
+        "on_cancel": "smart_invoice_app.app.delete_qr_code_file",
     },
     "Purchase Invoice": {
         "on_update_after_submit": "smart_invoice_app.app.update_purchase_invoice_api",
@@ -180,12 +178,8 @@ doc_events = {
     "Stock Ledger Entry": {
         "after_insert": "smart_invoice_app.app.update_stock_movement"
     },
-    "POS Invoice": {
-        "on_submit": "smart_invoice_app.app.save_invoice_api"
-    },
-    "Company": {
-        "on_trash": "smart_invoice_app.app.delete_vat_settings_for_company"
-    }
+    "POS Invoice": {"on_submit": "smart_invoice_app.app.save_invoice_api"},
+    "Company": {"on_trash": "smart_invoice_app.app.delete_vat_settings_for_company"},
 }
 
 # Scheduled Tasks
@@ -268,7 +262,7 @@ standard_doctypes = [
     "Stock Entry Item",
     "Stock Ledger Entry Item",
     "Item Price",
-    "Item Group"    
+    "Item Group",
 ]
 
 # {
@@ -288,92 +282,95 @@ fixtures = [
     {
         "dt": "Client Script",
         "filters": {
-            "module": ["in", [
-                "Smart Invoice App",
-            ]]
-        }
+            "module": [
+                "in",
+                [
+                    "Smart Invoice App",
+                ],
+            ]
+        },
+    },
+    {"doctype": "Role", "filters": [{"role_name": "API User"}]},
+    {
+        "doctype": "Province",
     },
     {
-        "doctype": "Role",
-        "filters": [
-            {
-                "role_name": "API User"
-            }
-        ]
+        "doctype": "District",
     },
     {
-        "doctype": "Province", 
+        "doctype": "Tax Category",
     },
     {
-        "doctype": "District", 
-    },
-    {
-        "doctype": "Tax Category", 
-    },
-    {
-        "doctype": "Code Class", 
+        "doctype": "Code Class",
     },
     # {
-    #     "doctype": "Item Class", 
+    #     "doctype": "Item Class",
     # },
     # {
-    #     "doctype": "Code", 
+    #     "doctype": "Code",
     # },
-    {
-        "dt": "Custom Field",
-        "filters": {
-            "module": "Smart Invoice App"
-        }
-    },
+    {"dt": "Custom Field", "filters": {"module": "Smart Invoice App"}},
     {
         "doctype": "Property Setter",
         "filters": {
-            "doc_type": ["in", [
-                "Branch",
-                "Customer",
-                "Supplier",
-                "Item Group",
-                "Item",
-                "Item Tax Template",
-                "Tax Category",
-                "Purchase Invoice",
-                "Purchase Invoice Item",
-                "Sales Invoice",
-                "Sales Invoice Item",
-                "BOM",
-                "Company",
-                "Delivery Note",
-                "Purchase Receipt",
-                "Stock Entry",
-                "Contact",
-                "Address",
-            ]]
-        }
+            "doc_type": [
+                "in",
+                [
+                    "Branch",
+                    "Customer",
+                    "Supplier",
+                    "Item Group",
+                    "Item",
+                    "Item Tax Template",
+                    "Tax Category",
+                    "Purchase Invoice",
+                    "Purchase Invoice Item",
+                    "Sales Invoice",
+                    "Sales Invoice Item",
+                    "BOM",
+                    "Company",
+                    "Delivery Note",
+                    "Purchase Receipt",
+                    "Stock Entry",
+                    "Contact",
+                    "Address",
+                ],
+            ]
+        },
     },
     {
         "doctype": "Print Format",
         "filters": {
-            "module": ["in", [
-                "Smart Invoice App",
-            ]]
-        }
+            "module": [
+                "in",
+                [
+                    "Smart Invoice App",
+                ],
+            ]
+        },
     },
     {
         "doctype": "Code",
         "filters": {
-            "cd_nm": ["in", [
-                "Each",
-            ]]
-        }
+            "cd_nm": [
+                "in",
+                [
+                    "Each",
+                ],
+            ]
+        },
     },
     {
         "doctype": "UOM",
         "filters": {
-            "uom_name": ["in", [
-                "Each",
-                "Nos",
-            ]]
-        }
+            "uom_name": [
+                "in",
+                [
+                    "Each",
+                    "Nos",
+                ],
+            ]
+        },
     },
 ]
 
@@ -411,4 +408,3 @@ fixtures = [
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
-

@@ -6,8 +6,37 @@ frappe.ui.form.on("ASYCUDA Verification", {
         frm.clear_custom_buttons();
         add_create_buttons(frm);
         setup_field_filters(frm);
+
+        // Setup child table field behavior
+        if (frm.is_new()) {
+            setup_child_table_editable(frm);
+        }
     },
 });
+
+function setup_child_table_editable(frm) {
+    // Ensure new rows also have editable 'accepted' field by default
+    frm.fields_dict['items'].grid.get_field('accepted').df.read_only = 0;
+}
+
+function update_row_accepted_readonly(frm, cdt, cdn) {
+    let row = locals[cdt][cdn];
+    if (!row) return;
+    
+    let is_readonly = false;
+    
+    // Make accepted read-only if status_code is "New"
+    if (row.status_code === "New") {
+        is_readonly = true;
+    }
+    
+    // Toggle the accepted field for this specific row
+    frm.fields_dict['items'].grid.grid_rows.forEach(function(grid_row) {
+        if (grid_row.doc.name === cdn) {
+            grid_row.toggle_editable('accepted', !is_readonly);
+        }
+    });
+}
 
 function setup_field_filters(frm){
     // item_class field in child table should only allow level 3 classes
