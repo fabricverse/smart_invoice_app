@@ -3,19 +3,21 @@ import io
 import json
 import os
 import re
-from base64 import b64encode
 from datetime import date, datetime
 
 import frappe
 import requests
 from frappe import _
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-from frappe.exceptions import AuthenticationError
-from frappe.utils import cstr, flt, get_link_to_form, now_datetime
-from frappe.utils.data import add_to_date, get_time, getdate
-from frappe.utils.password import get_decrypted_password, get_encryption_key
+from frappe.utils import (
+    cstr,
+    flt,
+    get_datetime,
+    get_link_to_form,
+    now,
+    time_diff_in_seconds,
+)
 from pyqrcode import create as qr_create
-from requests.exceptions import JSONDecodeError
 
 TESTING = 1
 
@@ -178,7 +180,7 @@ def save_item_composition(bom, method=None, branch=None):
     base_meta = {
         "function": function,
         "doctype": bom.doctype,
-        "entry_name": bom.name,
+        "entry": bom.name,
         "creator": bom.owner,
         "modifier": bom.modified_by,
     }
@@ -906,7 +908,7 @@ def save_purchase_invoice_api(invoice, method=None, branch=None):
     meta = {
         "function": get_function_name(),
         "doctype": invoice.doctype,
-        "entry_name": invoice.name,
+        "entry": invoice.name,
         "creator": invoice.owner,
         "modifier": invoice.modified_by,
     }
@@ -3192,10 +3194,10 @@ def notify_user(doc, msg, indicator):
     """Pushes a final completion event to trigger form reload on the frontend."""
     message = {}
 
-    if doc.get("entry_name"):
+    if doc.get("entry"):
         modified_by = doc.get("modifier", frappe.session.user)
         doctype = doc.get("doctype")
-        name = doc.get("entry", doc.get("entry_name"))
+        name = doc.get("entry", doc.get("entry"))
 
         message = {
             "status": "Success",
@@ -3633,7 +3635,7 @@ def update_stock_movement(ledger, method=None):
             {
                 "function": get_function_name(),
                 "doctype": ledger.doctype,
-                "entry_name": ledger.name,
+                "entry": ledger.name,
                 "creator": ledger.owner,
                 "modifier": ledger.modified_by,
             },
@@ -3654,14 +3656,26 @@ def finish_stock_movement(ledger, request):
             {
                 "function": get_function_name(),
                 "doctype": ledger.doctype,
-                "entry_name": ledger.name,
+                "entry": ledger.name,
                 "creator": ledger.owner,
                 "modifier": ledger.modified_by,
             },
         )
 
 
-from frappe.utils import now, time_diff_in_seconds
+def get_last_sync_time(doctype, name):
+    sync_doc = frappe.get_all(
+        "Sync Request",
+        filters={"type": doctype, "entry": name},
+        fields=["modified"],
+        order_by="modified desc",
+        limit=1,
+    )
+    if len(sync_doc) > 0:
+        return sync_doc[0]["modified"]
+    return None
+
+
 from smart_invoice_api.api import update_item as api_update_item
 
 
@@ -3671,28 +3685,23 @@ def update_item_api(item, method=None, branch=None):
     Prepares the data payload and hits the local API endpoint.
     """
     if not item:
-        frappe.errprint("1")
         return
 
     if isinstance(item, str):
-        item = frappe.get_cached_doc("Item", item)
+        item = frappe.get_doc("Item", item)
 
     # Skip if created less than 3 seconds ago
-    time_diff = time_diff_in_seconds(now(), item.modified)
-    if time_diff <= 0.04:
-        frappe.errprint("Condition met!")
-        return
-    # if (
-    #     time_diff_in_seconds(now(), item.creation) <= 5
-    #     or time_diff_in_seconds(now(), item.modified) <= 3
-    # ):
-    #     return
+    if item.custom_last_sync:
+        time_diff = time_diff_in_seconds(now(), item.custom_last_sync)
+
+        if time_diff <= 4.0:
+            return  # This exits the function early, preventing duplicate updates
 
     item_data = prepare_item_data(item)
     meta = {
         "function": get_function_name(),
         "doctype": "Item",
-        "entry_name": item.name,
+        "entry": item.name,
         "creator": item.owner,
         "modifier": item.modified_by,
     }
@@ -3711,7 +3720,7 @@ def save_invoice_api(invoice, method=None, branch=None):
     meta = {
         "function": get_function_name(),
         "doctype": invoice.doctype,
-        "entry_name": invoice.name,
+        "entry": invoice.name,
         "creator": invoice.owner,
         "modifier": invoice.modified_by,
     }
@@ -3766,10 +3775,10 @@ from smart_invoice_api.api import save_item as api_save_item
 def save_item_api(item, method=None, branch=None):
     if not item:
         return
-    time_diff = frappe.utils.time_diff_in_seconds(frappe.utils.now(), item.modified)
-    if time_diff <= 0.04:
-        frappe.errprint("Condition met!")
-        return
+    if item.custom_last_sync:
+        time_diff = time_diff_in_seconds(now(), item.custom_last_sync)
+        if time_diff <= 4.0:
+            return
 
     if type(item) == str:
         item = frappe.get_cached_doc("Item", item)
@@ -3778,7 +3787,7 @@ def save_item_api(item, method=None, branch=None):
     meta = {
         "function": get_function_name(),
         "doctype": "Item",
-        "entry_name": item.name,
+        "entry": item.name,
         "creator": item.owner,
         "modifier": item.modified_by,
     }
@@ -4021,7 +4030,7 @@ def get_doc_meta(doc):
     return {
         "doctype": doc.doctype,
         "function": get_function_name(prev=True),
-        "entry_name": doc.name,
+        "entry": doc.name,
         "creator": doc.owner,
         "modifier": doc.modified_by,
     }
@@ -4207,7 +4216,7 @@ def update_user_api(branch, user, use_yn):
     meta = {
         "function": get_function_name(),
         "doctype": "Branch",
-        "entry_name": branch.name,
+        "entry": branch.name,
         "creator": branch.owner,
         "modifier": branch.modified_by,
     }
@@ -4667,7 +4676,7 @@ def get_item_classes(initialize=False):
         {
             "function": get_function_name(),
             "doctype": settings.doctype,
-            "entry_name": settings.name,
+            "entry": settings.name,
             "creator": settings.owner,
             "modifier": settings.modified_by,
         },
@@ -4956,7 +4965,7 @@ def get_codes(initialize=False):
         meta={
             "function": get_function_name(),
             "doctype": settings.doctype,
-            "entry_name": settings.name,
+            "entry": settings.name,
             "creator": settings.owner,
             "modifier": settings.modified_by,
         },
