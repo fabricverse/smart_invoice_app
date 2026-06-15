@@ -400,7 +400,8 @@
         "ASYCUDA Verification",
         "Purchase Invoice",
         "Branch",
-        "Item"
+        "Item",
+        "Sales Invoice"
       ];
       const activeFrm = window.cur_frm;
       const isViewingTargetDoc = !!(activeFrm && activeFrm.doc && (activeFrm.doc.name === data.name || data.type === "print" || data.function === "get_branches_testing"));
@@ -470,4 +471,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.IQCMAH7N.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.BNHNWQGH.js.map

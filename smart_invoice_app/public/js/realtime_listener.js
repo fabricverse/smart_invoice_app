@@ -25,6 +25,7 @@ function initSmartInvoiceGlobalListener() {
             "Purchase Invoice",
             "Branch",
             "Item",
+            "Sales Invoice",
         ];
 
         // Form Context
