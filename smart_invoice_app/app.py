@@ -3532,9 +3532,10 @@ def after_sync_process(request_doc, method=None):
             finish_get_purchase_invoices(request_doc)
         elif request_doc.type == "Item" and request_doc.status == "Success":
             if request_doc.function == "get_items_api":
-                prints("else")
                 finish_sync_items(request_doc)
-                return
+            elif request_doc.function == "get_items_api_init":
+                finish_sync_items(request_doc, initialize=True)
+            return
 
     user = request_doc.modifier or frappe.session.user
     if user and request_doc.function not in ["this_update_import_items"]:
@@ -3770,10 +3771,6 @@ from smart_invoice_api.api import save_item as api_save_item
 def save_item_api(item, method=None, branch=None):
     if not item:
         return
-    if item.custom_last_sync:
-        time_diff = time_diff_in_seconds(now(), item.custom_last_sync)
-        if time_diff <= 4.0:
-            return
 
     if type(item) == str:
         item = frappe.get_cached_doc("Item", item)
@@ -3797,12 +3794,18 @@ from smart_invoice_api.api import select_items as api_select_items
 def get_items_api(initialize=False):
     selected_branch = get_selected_branch()
     data = {"tpin": selected_branch.get("tpin"), "bhfId": "000"}
+
+    function = get_function_name()
+
+    if initialize:
+        function = f"{function}_init"
     meta = {
         "doctype": "Item",
-        "function": get_function_name(),
+        "function": function,
         "creator": frappe.session.user,
         "modifier": frappe.session.user,
     }
+
     api_select_items(data, meta, initialize=True)
 
 
@@ -3865,11 +3868,14 @@ def generate_item_code(item, initialize=False):
 @frappe.whitelist()
 def sync_items(initialize=False):
     """Syncs all items to smart_invoice"""
-    get_items_api(initialize=True)
+    if str(initialize).lower() in ["true", "1"]:
+        initialize = True
+    else:
+        initialize = False
+    get_items_api(initialize)
 
 
-def finish_sync_items(request_doc):
-
+def finish_sync_items(request_doc, initialize=False):
     response = json.loads(request_doc.response)
     data = response["data"]["itemList"]
 
@@ -3891,49 +3897,41 @@ def finish_sync_items(request_doc):
     failed = 0
     failed_items = []
     item = None
-    frappe.flags.skip_failing = True
 
-    # if initialize:
-    # update items already in smart invoice
-    for item in items_in_both:
-        try:
-            if update_item_api(item):
-                count += 1
-            else:
-                failed += 1
-                failed_items.append(item)
-        except frappe.exceptions.ValidationError as e:
-            continue
+    frappe.flags.skip_failing = True
+    if initialize:
+        # update items already in smart invoice
+        for item in items_in_both:
+            try:
+                if update_item_api(item):
+                    count += 1
+                else:
+                    failed += 1
+                    failed_items.append(item)
+            except frappe.exceptions.ValidationError as e:
+                continue
 
     # create items not in smart invoice
-    for item in missing_in_si:
+    for missing_item in missing_in_si:
         try:
-            save_result = save_item_api(item)
-            if save_result:
+            if save_item_api(missing_item):
                 count += 1
             else:
                 failed += 1
-                failed_items.append(item)
+                failed_items.append(missing_item)
         except frappe.exceptions.ValidationError as e:
             continue
-
     frappe.flags.skip_failing = False
-    if failed != 0:
+    if failed > 0:
         notify_user(
             request_doc,
-            f"{failed} items failed to sync to Smart Invoice due to missing data",
-            indicator="red",
-        )
-        notify_user(
-            request_doc,
-            f"<p>Failed items: {', '.join([f'<strong>{item}</strong>' for item in failed_items])}.</p><hr/> "
+            f"<p>{failed} items didn't sync: {', '.join([f'<strong>{item}</strong>' for item in failed_items])}.</p><hr/> "
             + "<p>Check the following fields for each item: <ul><li>UOM</li><li>Package UOM</li><li>Item Type (in Item Group)</li></ul></p>",
             indicator="red",
         )
     else:
-        notify_user(
-            request_doc, f"{count} items synched to Smart Invoice", indicator="green"
-        )
+        notify_user(request_doc, f"Sync attempted for {count} items", indicator="green")
+    prints(f"return {failed} {count}")
     return True
 
 
