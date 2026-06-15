@@ -13,18 +13,24 @@
     validate() {
       const tpin = this.dialog.doc.tax_id;
       if (tpin && tpin.length !== 10) {
-        frappe.show_alert({
-          message: __("TPIN must be 10 digits"),
-          indicator: "red"
-        }, 5);
+        frappe.show_alert(
+          {
+            message: __("TPIN must be 10 digits"),
+            indicator: "red"
+          },
+          5
+        );
         return false;
       }
       const mobile_number = this.dialog.doc.mobile_number;
       if (mobile_number && mobile_number.length !== 10) {
-        frappe.show_alert({
-          message: __("Phone Number must be 10 digits"),
-          indicator: "red"
-        }, 5);
+        frappe.show_alert(
+          {
+            message: __("Phone Number must be 10 digits"),
+            indicator: "red"
+          },
+          5
+        );
         return false;
       }
       return true;
@@ -39,10 +45,12 @@
         email_address: "email_id",
         mobile_number: "mobile_no"
       };
-      Object.entries(map_field_names).forEach(([fieldname, new_fieldname]) => {
-        this.dialog.doc[new_fieldname] = this.dialog.doc[fieldname];
-        delete this.dialog.doc[fieldname];
-      });
+      Object.entries(map_field_names).forEach(
+        ([fieldname, new_fieldname]) => {
+          this.dialog.doc[new_fieldname] = this.dialog.doc[fieldname];
+          delete this.dialog.doc[fieldname];
+        }
+      );
       return super.insert();
     }
     get_variant_fields() {
@@ -111,7 +119,10 @@
 
   // ../smart_invoice_app/smart_invoice_app/public/js/smart_invoice_setup.js
   if (!$("link[href*='octicons']").length) {
-    $("<link>").attr("rel", "stylesheet").attr("type", "text/css").attr("href", "https://cdnjs.cloudflare.com/ajax/libs/Octicons/4.4.0/font/octicons.min.css").appendTo("head");
+    $("<link>").attr("rel", "stylesheet").attr("type", "text/css").attr(
+      "href",
+      "https://cdnjs.cloudflare.com/ajax/libs/Octicons/4.4.0/font/octicons.min.css"
+    ).appendTo("head");
   }
   var active_branch_dialog = null;
   var is_fetching_branch_context = false;
@@ -130,7 +141,7 @@
         if (!frappe.session.branch_doc_name && !is_fetching_branch_context) {
           initialize_session_context(false);
         }
-      }, 3e3);
+      }, 2300);
     } else if (frappe.session.branch_doc_name) {
       render_navbar_branch_switcher(true, frappe.session.branch_doc_name);
     }
@@ -151,7 +162,7 @@
     let icon_color = is_set ? "#17a2b8" : "pink";
     let switcher_html = `
         <li class="nav-item d-flex align-items-center" id="navbar-branch-switcher">
-            <button class="btn-reset nav-link text-muted d-flex align-items-center" style="gap: 8px; padding: 0 10px; height: 100%; cursor: pointer;" title="${__("Switch active branch context")}">
+            <button class="btn-reset nav-link text-muted d-flex align-items-center" style="gap: 8px; padding: 0 10px; height: 100%; cursor: pointer;" title="${__("Select the branch to work on")}">
                 <span class="mega-octicon octicon-git-branch branch-icon-element" style="font-size: 16px; color: ${icon_color}; transition: color 0.2s ease;"></span>
                 <span class="branch-label" style="color: var(--text-color); font-weight: 400; font-size: 13px;">${label_text}</span>
             </button>
@@ -177,19 +188,54 @@
     $(document).on("page-change", function() {
       enforce_branch_context();
     });
-    $(document).on("click", 'button[onclick*="frappe.ui.toolbar.clear_cache()"]', function() {
-      frappe.session.company = null;
-      frappe.session.branch_doc_name = null;
-      frappe.session.tpin = null;
-      frappe.session.branch_code = null;
+    $(document).on(
+      "click",
+      'button[onclick*="frappe.ui.toolbar.clear_cache()"]',
+      function() {
+        frappe.session.company = null;
+        frappe.session.branch_doc_name = null;
+        frappe.session.tpin = null;
+        frappe.session.branch_code = null;
+        frappe.call({
+          method: "smart_invoice_app.scripts.setup.clear_session_branch_cache",
+          async: false,
+          callback: function(r) {
+          }
+        });
+      }
+    );
+    document.addEventListener("visibilitychange", function() {
+      if (document.visibilityState === "visible")
+        verify_server_session_integrity();
+    });
+    window.addEventListener("focus", verify_server_session_integrity);
+  });
+  function verify_server_session_integrity() {
+    if (is_fetching_branch_context)
+      return;
+    if (frappe.session.user && frappe.session.user !== "Guest") {
+      if (!frappe.session.branch_doc_name) {
+        enforce_branch_context();
+        return;
+      }
+      is_fetching_branch_context = true;
       frappe.call({
-        method: "smart_invoice_app.scripts.setup.clear_session_branch_cache",
-        async: false,
+        method: "smart_invoice_app.scripts.setup.get_initial_session_status",
         callback: function(r) {
+          if (r.message && !r.message.branch_code) {
+            frappe.session.company = null;
+            frappe.session.branch_doc_name = null;
+            frappe.session.tpin = null;
+            frappe.session.branch_code = null;
+            enforce_branch_context();
+          }
+        },
+        always: function() {
+          is_fetching_branch_context = false;
         }
       });
-    });
-  });
+    }
+  }
   function show_branch_success_alert(branch_doc_name, is_auto = false) {
     let alert_message = is_auto ? __(`Auto-assigned sole branch: <b>${branch_doc_name}</b>`) : __(`Branch set to: <b>${branch_doc_name}</b>`);
     frappe.show_alert({ message: alert_message, indicator: "green" });
@@ -200,7 +246,10 @@
       method: "smart_invoice_app.scripts.setup.get_initial_session_status",
       callback: function(r) {
         if (r.error || !r.message) {
-          console.error("Failed to parse initial session configuration.", r.error);
+          console.error(
+            "Failed to parse initial session configuration.",
+            r.error
+          );
           is_fetching_branch_context = false;
           return;
         }
@@ -214,7 +263,7 @@
           is_fetching_branch_context = false;
           return;
         }
-        if (!status.branches_setup) {
+        if (!status.branches_setup || !status.branches || status.branches.length === 0) {
           is_fetching_branch_context = false;
           render_navbar_branch_switcher(false);
           if (frappe.get_route_str() === "List/Branch")
@@ -222,7 +271,9 @@
           if (frappe.session.user === "Administrator") {
             frappe.warn(
               __("Smart Invoice"),
-              __("No branches with valid configurations were detected. Please navigate to the <b>Branch</b> list to set up Smart Invoice branches."),
+              __(
+                "No branches with valid configurations were detected. Please navigate to the <b>Branch</b> list to set up Smart Invoice branches."
+              ),
               () => {
                 frappe.set_route("List", "Branch");
               },
@@ -232,7 +283,9 @@
             return;
           }
           if ($("#freeze-setup-notice").length === 0) {
-            $(`<div id="freeze-setup-notice" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; justify-content: center; align-items: center; color: white; text-align: center; font-family: sans-serif;"><div><h2 style="color: #ff5858;">\u26A0\uFE0F Branch Assignment Required</h2><p style="margin: 15px 0; font-size: 16px;">Sorry, you are not assigned to any active Smart Invoice branches.<br>Please contact your Administrator or set up your Branch information.</p><button class="btn btn-primary" onclick="frappe.set_route('List', 'Branch'); $('#freeze-setup-notice').remove();" style="margin-top: 10px;">Go to Branch Setup</button></div></div>`).appendTo("body");
+            $(
+              `<div id="freeze-setup-notice" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; justify-content: center; align-items: center; color: white; text-align: center; font-family: sans-serif;"><div><h2 style="color: #ff5858;">\u26A0\uFE0F Branch Assignment Required</h2><p style="margin: 15px 0; font-size: 16px;">Sorry, you are not assigned to any active Smart Invoice branches.<br>Please contact your Administrator or set up your Branch information.</p><button class="btn btn-primary" onclick="frappe.set_route('List','Branch'); $('#freeze-setup-notice').remove();" style="margin-top: 10px;">Go to Branch Setup</button></div></div>`
+            ).appendTo("body");
           }
           return;
         }
@@ -257,10 +310,12 @@
   function show_branch_selection_dialog(branches) {
     if (active_branch_dialog && active_branch_dialog.display)
       return;
-    let branch_options = branches.map((branch) => ({
+    let branch_options = branches.filter((b) => b && b.branch_doc_name).map((branch) => ({
       label: branch.branch_doc_name,
       value: branch.branch_doc_name
     }));
+    if (branch_options.length === 0)
+      return;
     active_branch_dialog = new frappe.ui.Dialog({
       title: __("Smart Invoice Branch"),
       fields: [
@@ -269,14 +324,16 @@
           fieldname: "branch_doc_name",
           label: __("Branch"),
           options: branch_options,
-          default: branches[0] ? branches[0].branch_doc_name : "",
+          default: branch_options[0] ? branch_options[0].value : "",
           reqd: 1
         }
       ],
       primary_action_label: __("Save"),
       primary_action: function(values) {
         let selected_name = values ? values.branch_doc_name : this.get_value("branch_doc_name");
-        let selected_branch = branches.find((b) => b.branch_doc_name === selected_name);
+        let selected_branch = branches.find(
+          (b) => b.branch_doc_name === selected_name
+        );
         if (selected_branch) {
           set_session_branch(selected_branch, this);
         }
@@ -311,7 +368,7 @@
           frappe.session.company = r.message.company;
           frappe.session.branch_doc_name = r.message.branch_doc_name;
           frappe.session.tpin = r.message.tpin;
-          frappe.session.branch_code = r.message.branch_doc_name;
+          frappe.session.branch_code = r.message.branch_code;
           show_branch_success_alert(r.message.branch_doc_name);
           if (active_branch_dialog) {
             active_branch_dialog.$wrapper.off("hide.bs.modal");
@@ -328,9 +385,6 @@
   $(document).ready(function() {
     initSmartInvoiceGlobalListener();
     setupVisibilityFocusRecovery();
-    console.log(
-      "apps/smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js"
-    );
   });
   function initSmartInvoiceGlobalListener() {
     frappe.realtime.off("smart_invoice_event");
@@ -426,4 +480,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.HZW7EDKA.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.XD55HGOI.js.map

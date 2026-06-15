@@ -1,45 +1,58 @@
 import frappe
-from smart_invoice_app.scripts.branch import check_branches_setup, get_branch_code_by_name
+from smart_invoice_app.scripts.branch import (
+    check_branches_setup,
+    get_branch_code_by_name,
+)
+
 
 @frappe.whitelist()
 def check_setup():
     branches_setup = check_branches_setup()
 
     fully_setup = branches_setup == True
-    return {
-        'system_is_setup': fully_setup, 
-        'branches_setup': branches_setup
-    }
+    return {"system_is_setup": fully_setup, "branches_setup": branches_setup}
+
+
 from frappe import _
+
 
 @frappe.whitelist()
 def get_initial_session_status():
     user = frappe.session.user
     hash_key = f"session_branch:{user}"
-    
+
     # 1. Gather all operational branches first based on authorization permissions
     if user == "Administrator":
         allowed_branches = frappe.get_all(
-            "Branch", 
-            filters={"custom_branch_status": ["is", "set"]}, 
-            fields=["name as branch_doc_name", "custom_bhf_id as branch_code", "custom_tpin as tpin", "custom_company as company"]
+            "Branch",
+            filters={"custom_branch_status": ["is", "set"]},
+            fields=[
+                "name as branch_doc_name",
+                "custom_bhf_id as branch_code",
+                "custom_tpin as tpin",
+                "custom_company as company",
+            ],
         )
         for b in allowed_branches:
             b["is_default"] = 0
     else:
-        allowed_branches = frappe.db.sql("""
-            SELECT 
-                b.name as branch_doc_name, 
-                b.custom_bhf_id as branch_code, 
-                b.custom_tpin as tpin, 
+        allowed_branches = frappe.db.sql(
+            """
+            SELECT
+                b.name as branch_doc_name,
+                b.custom_bhf_id as branch_code,
+                b.custom_tpin as tpin,
                 b.custom_company as company,
                 bu.is_default
             FROM `tabBranch` b
             JOIN `tabBranch User` bu ON bu.parent = b.name
-            WHERE bu.user_id = %s 
+            WHERE bu.user_id = %s
               AND bu.parenttype = 'Branch'
               AND b.custom_branch_status IS NOT NULL
-        """, (user,), as_dict=True)
+        """,
+            (user,),
+            as_dict=True,
+        )
 
     if not allowed_branches:
         return {"branches_setup": False}
@@ -54,14 +67,20 @@ def get_initial_session_status():
             "branch_doc_name": frappe.cache().hget(hash_key, "branch_doc_name"),
             "branch_code": branch_code,
             "tpin": frappe.cache().hget(hash_key, "tpin"),
-            "company": frappe.cache().hget(hash_key, "company")
+            "company": frappe.cache().hget(hash_key, "company"),
         }
 
     # 3. Rule: If user only has one branch total, select it by default instantly
     if len(allowed_branches) == 1:
         single_branch = allowed_branches[0]
-        set_branch(single_branch.name, single_branch.branch_code, single_branch.tpin, single_branch.company)
-        
+        # FIX: single_branch.name was throwing an error here because the SQL field mapping was aliased as branch_doc_name!
+        set_branch(
+            branch_doc_name=single_branch.branch_doc_name,
+            branch_code=single_branch.branch_code,
+            tpin=single_branch.tpin,
+            company=single_branch.company,
+        )
+
         return {
             "branches_setup": True,
             "auto_selected": True,
@@ -69,7 +88,7 @@ def get_initial_session_status():
             "branch_doc_name": single_branch.branch_doc_name,
             "branch_code": single_branch.branch_code,
             "tpin": single_branch.tpin,
-            "company": single_branch.company
+            "company": single_branch.company,
         }
 
     # 4. Rule: Multi-branch sorting (Hoist defaults to index 0)
@@ -78,7 +97,7 @@ def get_initial_session_status():
     return {
         "branches_setup": True,
         "auto_selected": False,
-        "branches": allowed_branches
+        "branches": allowed_branches,
     }
 
 
@@ -93,6 +112,13 @@ def set_branch(branch_doc_name, branch_code, tpin, company):
     frappe.cache.hset(hash_key, "branch_doc_name", branch_doc_name)
     frappe.cache.hset(hash_key, "tpin", tpin)
     frappe.cache.hset(hash_key, "company", company)
+
+    return {
+        "branch_code": branch_code,
+        "branch_doc_name": branch_doc_name,
+        "tpin": tpin,
+        "company": company,
+    }
 
     return {
         "branch_code": branch_code,

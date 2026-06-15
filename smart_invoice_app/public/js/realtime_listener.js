@@ -1,9 +1,9 @@
 $(document).ready(function () {
     initSmartInvoiceGlobalListener();
     setupVisibilityFocusRecovery(); // Added visibility change watcher
-    console.log(
-        "apps/smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js",
-    );
+    // console.log(
+    //     "apps/smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js",
+    // );
 });
 
 function initSmartInvoiceGlobalListener() {
