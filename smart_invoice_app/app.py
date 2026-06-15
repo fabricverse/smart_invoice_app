@@ -3008,7 +3008,7 @@ def get_user_branch():
 
 
 @frappe.whitelist()
-def get_user_branch_deprecated(name, user=None):
+def get_branches_assigned_to_user(name, user=None):
     if frappe.session:
         user = frappe.session.user
     else:
@@ -3040,7 +3040,7 @@ def get_user_branches(name=None, user=None):
     else:
         user_name = frappe.session.user
     if name:
-        branch = get_user_branch(name, user)
+        branch = get_branches_assigned_to_user(name, user)
         if branch:
             return branch
 
