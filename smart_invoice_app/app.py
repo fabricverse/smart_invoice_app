@@ -514,7 +514,7 @@ def finish_get_purchase_invoices(request_doc):
         invoices = response.get("data", {"saleList": None}).get("saleList")
         create_purchase_invoices(request_doc, invoices)
     except Exception as e:
-        notify_user(request_doc, f"app.finish_get_purchase_invoices: {str(e)}", "red")
+        notify_user(request_doc, str(e), "red")
 
 
 def create_purchase_invoices(request_doc, invoices):
