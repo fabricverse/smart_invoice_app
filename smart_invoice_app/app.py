@@ -3931,7 +3931,6 @@ def finish_sync_items(request_doc, initialize=False):
         )
     else:
         notify_user(request_doc, f"Sync attempted for {count} items", indicator="green")
-    prints(f"return {failed} {count}")
     return True
 
 

@@ -90,10 +90,15 @@ function initSmartInvoiceGlobalListener() {
                         { message: message, indicator: indicator },
                         4,
                     );
-                } else {
+                } else if (indicator === "blue") {
                     frappe.show_alert(
                         { message: message, indicator: indicator },
                         3,
+                    );
+                } else {
+                    frappe.show_alert(
+                        { message: message, indicator: indicator },
+                        4,
                     );
                 }
                 break;

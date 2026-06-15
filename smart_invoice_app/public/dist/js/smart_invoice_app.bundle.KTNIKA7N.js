@@ -439,10 +439,15 @@
               { message, indicator },
               4
             );
-          } else {
+          } else if (indicator === "blue") {
             frappe.show_alert(
               { message, indicator },
               3
+            );
+          } else {
+            frappe.show_alert(
+              { message, indicator },
+              4
             );
           }
           break;
@@ -471,4 +476,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.BNHNWQGH.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.KTNIKA7N.js.map
