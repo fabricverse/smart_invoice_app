@@ -327,9 +327,13 @@
   // ../smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js
   $(document).ready(function() {
     initSmartInvoiceGlobalListener();
-    console.log("apps/smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js");
+    setupVisibilityFocusRecovery();
+    console.log(
+      "apps/smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js"
+    );
   });
   function initSmartInvoiceGlobalListener() {
+    frappe.realtime.off("smart_invoice_event");
     frappe.realtime.on("smart_invoice_event", function(data) {
       if (!data)
         return;
@@ -337,7 +341,12 @@
         console.log("User mismatch ignored:", data.user);
         return;
       }
-      const smart_invoice_docs = ["ASYCUDA Verification", "Purchase Invoice", "Branch", "Item"];
+      const smart_invoice_docs = [
+        "ASYCUDA Verification",
+        "Purchase Invoice",
+        "Branch",
+        "Item"
+      ];
       const activeFrm = window.cur_frm;
       const isViewingTargetDoc = !!(activeFrm && activeFrm.doc && (activeFrm.doc.name === data.name || data.type === "print" || data.function === "get_branches_testing"));
       const activeList = window.cur_list;
@@ -370,9 +379,15 @@
           } else if (indicator === "print") {
             console.log(message);
           } else if (indicator === "orange") {
-            frappe.show_alert({ message, indicator }, 4);
+            frappe.show_alert(
+              { message, indicator },
+              4
+            );
           } else {
-            frappe.show_alert({ message, indicator }, 3);
+            frappe.show_alert(
+              { message, indicator },
+              3
+            );
           }
           break;
         case "reload":
@@ -388,7 +403,10 @@
             acted = true;
           }
           if (!acted) {
-            console.log("Reload skipped (neither form nor list matched active view):", data.name);
+            console.log(
+              "Reload skipped (neither form nor list matched active view):",
+              data.name
+            );
           }
           break;
         default:
@@ -396,5 +414,16 @@
       }
     });
   }
+  function setupVisibilityFocusRecovery() {
+    document.addEventListener("visibilitychange", function() {
+      if (document.visibilityState === "visible") {
+        if (frappe.realtime.socket && !frappe.realtime.socket.connected) {
+          console.log("Socket disconnected. Forcing reconnect...");
+          frappe.realtime.socket.connect();
+        }
+        initSmartInvoiceGlobalListener();
+      }
+    });
+  }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.3GAZPQP7.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.HZW7EDKA.js.map

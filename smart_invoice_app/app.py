@@ -422,7 +422,7 @@ def get_selected_branch():
             "company": company,
         }
     else:
-        return None
+        frappe.throw("Select a branch to proceed")
 
 
 def get_default_company_tpin():
