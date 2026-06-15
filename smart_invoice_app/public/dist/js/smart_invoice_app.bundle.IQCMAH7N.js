@@ -384,10 +384,11 @@
   // ../smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js
   $(document).ready(function() {
     initSmartInvoiceGlobalListener();
-    setupVisibilityFocusRecovery();
+    console.log(
+      "apps/smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js"
+    );
   });
   function initSmartInvoiceGlobalListener() {
-    frappe.realtime.off("smart_invoice_event");
     frappe.realtime.on("smart_invoice_event", function(data) {
       if (!data)
         return;
@@ -468,16 +469,5 @@
       }
     });
   }
-  function setupVisibilityFocusRecovery() {
-    document.addEventListener("visibilitychange", function() {
-      if (document.visibilityState === "visible") {
-        if (frappe.realtime.socket && !frappe.realtime.socket.connected) {
-          console.log("Socket disconnected. Forcing reconnect...");
-          frappe.realtime.socket.connect();
-        }
-        initSmartInvoiceGlobalListener();
-      }
-    });
-  }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.XD55HGOI.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.IQCMAH7N.js.map

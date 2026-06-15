@@ -1,15 +1,11 @@
 $(document).ready(function () {
     initSmartInvoiceGlobalListener();
-    setupVisibilityFocusRecovery(); // Added visibility change watcher
-    // console.log(
-    //     "apps/smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js",
-    // );
+    console.log(
+        "apps/smart_invoice_app/smart_invoice_app/public/js/realtime_listener.js",
+    );
 });
 
 function initSmartInvoiceGlobalListener() {
-    // Turn off any existing listener for this event first to prevent duplicate bindings on re-init
-    frappe.realtime.off("smart_invoice_event");
-
     frappe.realtime.on("smart_invoice_event", function (data) {
         if (!data) return;
 
@@ -49,6 +45,7 @@ function initSmartInvoiceGlobalListener() {
             smart_invoice_docs.includes(activeList.doctype) &&
             (activeList.doctype === data.doctype || data.type === "print")
         );
+        // console.log(activeFrm, activeFrm.doc)
 
         if (isViewingTargetDoc) {
             console.log("Form:", data.name);
@@ -125,25 +122,6 @@ function initSmartInvoiceGlobalListener() {
 
             default:
                 console.warn("Unknown event type:", data.type);
-        }
-    });
-}
-
-/**
- * Monitors page visibility. If the tab becomes active after being in the background,
- * it ensures the Frappe socket connection is alive and refreshes the listener.
- */
-function setupVisibilityFocusRecovery() {
-    document.addEventListener("visibilitychange", function () {
-        if (document.visibilityState === "visible") {
-            // Check if socket exists and is disconnected
-            if (frappe.realtime.socket && !frappe.realtime.socket.connected) {
-                console.log("Socket disconnected. Forcing reconnect...");
-                frappe.realtime.socket.connect();
-            }
-
-            // Re-initialize listener to guarantee it is active and fresh
-            initSmartInvoiceGlobalListener();
         }
     });
 }

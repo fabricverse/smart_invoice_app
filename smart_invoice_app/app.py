@@ -3193,11 +3193,10 @@ def get_function_name(prev=False):
 def notify_user(doc, msg, indicator):
     """Pushes a final completion event to trigger form reload on the frontend."""
     message = {}
-
-    if doc.get("entry"):
+    name = doc.get("entry")
+    if name:
         modified_by = doc.get("modifier", frappe.session.user)
         doctype = doc.get("doctype")
-        name = doc.get("entry", doc.get("entry"))
 
         message = {
             "status": "Success",
@@ -3454,19 +3453,15 @@ def after_sync_process(request_doc, method=None):
                     and request_doc.status == "Success"
                 ):
                     sync_success_msg(request_doc)
-            elif request_doc.type == "ASYCUDA Verification":
-                if (
-                    request_doc.function == "this_update_import_items"
-                    and request_doc.status == "Success"
-                ):
+            elif (
+                request_doc.type == "ASYCUDA Verification"
+                and request_doc.status == "Success"
+            ):
+                if request_doc.function == "this_update_import_items":
                     t_doc.finish_importing_items(request_doc)
 
-                elif (
-                    request_doc.function == "update_item_status"
-                    and request_doc.status == "Success"
-                ):
+                elif request_doc.function == "update_item_status":
                     t_doc.update_item_status(request_doc)
-                    # frappe.publish_realtime(event="reload_form", user=request_doc.modifier, doctype=request_doc.type)
                     trigger_reload(request_doc)
                 return
             elif request_doc.type == "Smart Invoice Settings":

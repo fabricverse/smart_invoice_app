@@ -53,7 +53,7 @@ class SmartInvoiceSettings(Document):
             {
                 "function": get_function_name(),
                 "doctype": self.doctype,
-                "entry_name": self.name,
+                "entry": self.name,
                 "creator": self.owner,
                 "modifier": self.modified_by,
             },
