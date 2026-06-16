@@ -21,7 +21,7 @@ class SmartInvoiceSettings(Document):
     def on_update(self):
         # Check if the update is triggered by a migration
         if is_migration():
-            Return
+            return
 
         self.initialize_virtual_device()
 
