@@ -91,7 +91,25 @@ function onboarding(frm) {
         frm.set_value("status", "Initialize Virtual Device");
     }
     // else if (doc.status == "Setup Environment" ) {
-    //     frm.set_value("status", ")
+    //     frm.set_value("status", ")'
+    frm.page.set_indicator(
+        `${frm.doc.status}`,
+        get_status_color(frm.doc.status),
+    );
+}
+
+function get_status_color(status) {
+    const colors = {
+        "Setup Company & TPIN": "gray",
+        "Setup Environment": "gray",
+        "Initialize Virtual Device": "gray",
+        "Load Initization Data": "blue",
+        "Setup Company Defaults": "blue",
+        "Setup Branches": "blue",
+        Active: "green",
+        Misconfigured: "red",
+    };
+    return colors[status] || "gray";
 }
 
 function set_environment(frm) {

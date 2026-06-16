@@ -1,12 +1,17 @@
 {
  "actions": [],
  "allow_copy": 1,
- "allow_rename": 1,
+ "autoname": "field:company",
  "creation": "2024-09-23 15:11:31.280574",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "section_break_tyc0",
+  "status",
+  "column_break_bbbc",
+  "initialized",
   "section_break_ctyz",
+  "company",
   "tpin",
   "column_break_btac",
   "vsdc_serial",
@@ -14,7 +19,7 @@
   "environment",
   "column_break_ofch",
   "base_url",
-  "customize_vsdc_server",
+  "use_custom_server",
   "api_credentials_section",
   "api_key",
   "column_break_gmiy",
@@ -22,11 +27,12 @@
  ],
  "fields": [
   {
+   "default": "Sandbox",
    "fieldname": "environment",
-   "fieldtype": "Select",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Environment",
-   "options": "\nSandbox\nProduction",
+   "options": "Environment",
    "reqd": 1
   },
   {
@@ -38,22 +44,20 @@
    "fieldtype": "Data",
    "label": "VSDC Server URL",
    "options": "URL",
-   "read_only": 1,
-   "read_only_depends_on": "eval:doc.customize_vsdc_server==0",
+   "read_only_depends_on": "eval:doc.use_custom_server==0",
    "reqd": 1
   },
   {
    "collapsible": 1,
-   "collapsible_depends_on": "eval: doc.api_secret",
+   "collapsible_depends_on": "base_url && initialized == 1",
+   "depends_on": "base_url && initialized == 1",
    "fieldname": "api_credentials_section",
    "fieldtype": "Section Break",
-   "hidden": 1,
-   "label": "API Credentials"
+   "label": "Company Defaults"
   },
   {
    "fieldname": "api_key",
    "fieldtype": "Data",
-   "hidden": 1,
    "label": "API Key"
   },
   {
@@ -63,13 +67,11 @@
   {
    "fieldname": "api_secret",
    "fieldtype": "Data",
-   "hidden": 1,
    "label": "API Secret"
   },
   {
    "fieldname": "tpin",
    "fieldtype": "Data",
-   "in_list_view": 1,
    "label": "TPIN",
    "length": 10,
    "reqd": 1
@@ -85,31 +87,64 @@
   {
    "fieldname": "vsdc_serial",
    "fieldtype": "Data",
-   "in_list_view": 1,
    "label": "VSDC Serial",
    "length": 15,
-   "mandatory_depends_on": "eval:doc.default_server==0",
    "reqd": 1
   },
   {
+   "depends_on": "tpin",
    "fieldname": "section_break_vemr",
    "fieldtype": "Section Break"
   },
   {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
    "default": "1",
-   "fieldname": "customize_vsdc_server",
+   "fieldname": "use_custom_server",
    "fieldtype": "Check",
-   "label": "Set Custom VSDC Server"
+   "label": "Use custom server"
+  },
+  {
+   "default": "Setup Company & TPIN",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Setup Company & TPIN\nSetup Environment\nInitialize Virtual Device\nLoad Initization Data\nSetup Company Defaults\nSetup Branches\nActive\nMisconfigured",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_bbbc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "initialized",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Initialized",
+   "show_on_timeline": 1
+  },
+  {
+   "fieldname": "section_break_tyc0",
+   "fieldtype": "Section Break"
   }
  ],
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-06-10 16:52:59.087291",
+ "modified": "2026-06-16 15:51:57.724910",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Smart Invoice Settings",
+ "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
   {

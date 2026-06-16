@@ -4316,7 +4316,7 @@ def create_tax_templates():
     tax_codes = tax_codes = frappe.get_all(
         "Code",
         fields=["name", "cd_nm", "cd"],
-        filters={"cd_cls": ["in", ["04", "400", "62", "60", "61  "]]},
+        filters={"cd_cls": ["in", ["04", "400", "62", "60", "61"]]},
     )
 
     tax_templates = frappe.get_all("Item Tax Template", fields=["name", "custom_code"])
