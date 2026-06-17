@@ -7,7 +7,7 @@ frappe.listview_settings["Smart Invoice Settings"] = {
             "Setup Company & TPIN": "gray",
             "Setup Environment": "gray",
             "Initialize Virtual Device": "gray",
-            "Load Initization Data": "blue",
+            "Load Initialization Data": "blue",
             "Setup Company Defaults": "blue",
             "Setup Branches": "blue",
             Active: "green",

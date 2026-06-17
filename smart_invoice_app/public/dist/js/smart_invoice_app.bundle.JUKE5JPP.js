@@ -431,7 +431,8 @@
         "Purchase Invoice",
         "Branch",
         "Item",
-        "Sales Invoice"
+        "Sales Invoice",
+        "Smart Invoice Settings"
       ];
       const activeFrm = window.cur_frm;
       const isViewingTargetDoc = !!(activeFrm && activeFrm.doc && (activeFrm.doc.name === data.name || data.type === "print" || data.function === "get_branches_testing"));
@@ -506,4 +507,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.T4XE2VS3.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.JUKE5JPP.js.map

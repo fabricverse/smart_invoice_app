@@ -46,8 +46,8 @@ def api_date_format(date_input, date_only=False):
 frappe.whitelist()
 
 
-def get_settings():
-    return frappe.get_cached_doc("Smart Invoice Settings", "Smart Invoice Settings")
+def get_settings(company):
+    return frappe.get_cached_doc("Smart Invoice Settings", company)
 
 
 def get_region(company_name):
@@ -249,148 +249,6 @@ def error_handler(error):
     }
 
 
-def api(endpoint, data, initialize=False):
-    settings = get_settings()
-    base_url = settings.base_url
-    if settings.default_server == 1:
-        base_url = settings.default_vsdc_url
-    secret = settings.api_secret
-
-    error_messages = {
-        400: "Bad Request",
-        401: "Authentication failed. Please check your API credentials.",
-        403: "Forbidden. Please check your API credentials.",
-        404: "API endpoint not found.",
-        415: "Make sure <strong>API Server URL</strong> is correct. Verify whether the site uses https or http.\nIf using https, make sure the server has a valid SSL certificate.",
-        417: "Invalid request arguments",
-        422: "Unprocessable Entity.",
-        500: "An Internal Server Error occurred on the target site. Check the logs for more details.",
-        894: "Unable to connect to the Smart Invoice Server.",
-        899: "Smart Invoice device error.",
-    }
-
-    try:
-        data.update(
-            {
-                "default_server": settings.default_server,
-                "vsdc_serial": settings.vsdc_serial,
-            }
-        )
-        branches = []
-
-        if not data.get("bhfId"):
-            data.update({"bhfId": "000"})
-
-        if not data.get("tpin"):
-            tpin = None
-            if not branches:
-                branches = get_user_branches()
-            if branches:
-                for branch in branches:
-                    if branch.get("custom_bhf_id") == data.get("bhfId"):
-                        tpin = branch.get("custom_tpin")
-            if not tpin:
-                tpin = settings.tpin
-            data.update({"tpin": tpin})
-
-        if initialize:
-            data.update({"initialize": True})
-        # Convert data to JSON string
-        # Convert input data to a JSON string
-        if isinstance(data, str):
-            # If data is a string, parse it as JSON and then re-serialize
-            # This ensures the string is valid JSON
-            json_data = json.dumps(json.loads(data))
-        else:
-            # If data is not a string (e.g., dict or list), serialize to JSON
-            json_data = json.dumps(data)
-
-        r = requests.post(
-            base_url + endpoint,
-            data=json_data,
-            headers={
-                "Authorization": f"token {settings.api_key}:{secret}",
-                "Content-Type": "application/json",
-            },
-        )
-
-        if r.status_code == 200:
-            response_json = r.json()
-            return response_json.get("message", response_json)
-        elif r.status_code == 417:
-            if "smart_invoice_api is not installed" in r.text:
-                frappe.throw("Smart Invoice API is not installed on the target site")
-
-            if (
-                "frappe.exceptions.ValidationError: Encryption key is invalid!"
-                in r.text
-            ):
-                frappe.throw("Encryption key is invalid on the target site")
-
-            else:
-                frappe.throw(r.text)
-        else:
-            error_info = {
-                "status_code": r.status_code,
-                "message": error_messages.get(r.status_code, cstr(r.text)),
-                "response": r.text,
-                "environment": settings.environment,
-            }
-            return error_handler(error_info)
-
-    except json.JSONDecodeError as e:
-        error_info = {
-            "status_code": "JSONDecodeError",
-            "message": f"Invalid JSON data: {str(e)}",
-            "response": e,
-            "environment": settings.environment,
-        }
-        return error_handler(error_info)
-    except frappe.exceptions.AuthenticationError as e:
-        error_info = {
-            "status_code": "Authentication Error",
-            "message": "Verify your API credentials",
-            "response": e,
-            "environment": settings.environment,
-        }
-        return error_handler(error_info)
-    except requests.exceptions.SSLError as e:
-        msg = "Make sure the <strong>API Server URL</strong> is correct. Verify whether the site uses https or http.\nIf using https, make sure the server has a valid SSL certificate."
-        error_info = {
-            "status_code": "SSL Error",
-            "message": msg,
-            "response": msg,
-            "environment": settings.environment,
-        }
-        return error_handler(error_info)
-    except requests.exceptions.InvalidURL as e:
-        msg = "Failed to establish a new connection. Make sure the <strong>API Server URL</strong> is correct and your site is reachable."
-        error_info = {
-            "status_code": "Connection Error",
-            "message": msg,
-            "response": msg,
-            "environment": settings.environment,
-        }
-        return error_handler(error_info)
-    except requests.exceptions.ConnectionError as e:
-        msg = "Failed to establish a new connection. Make sure the <strong>API Server URL</strong> is correct and your site is reachable."
-        error_info = {
-            "status_code": "Connection Error",
-            "message": msg,
-            "response": msg,
-            "environment": settings.environment,
-        }
-        return error_handler(error_info)
-    except Exception as e:
-        error_info = {
-            "status_code": "UnexpectedError",
-            "message": f"An unexpected error occurred: {str(e)}",
-            "response": e,
-            "environment": settings.environment,
-        }
-        return error_handler(error_info)
-
-
 def get_saved_branches():
     branches = frappe.get_all(
         "Branch", fields=["*"], order_by="custom_bhf_id asc", limit=0
@@ -434,39 +292,24 @@ def get_default_company_tpin():
 from smart_invoice_api.api import select_branches as api_select_branches
 
 
-def get_branches(initialize=False, doc=None):
+def get_branches(company, initialize=False, doctype="Branch"):
     """Get all branches for all companies
     Smart Invoice returns all company branches using branch code 000
     """
-
-    companies = get_companies_with_tpin()
+    company_settings = get_settings(company)
     function = get_function_name()
     current_function = function
 
-    # Total number of companies to check against
-    total_companies = len(companies)
+    # Check if initialize is True AND it's the last iteration
+    if doctype == "Smart Invoice Settings":
+        doctype = "Smart Invoice Settings"
+        current_function = f"{function}_confirm"
 
-    # Use enumerate to get both the loop index (i) and the company
-    for i, company in enumerate(companies.values()):
-        # Check if initialize is True AND it's the last iteration
+    # Construct meta dynamically for each iteration
+    meta = {"function": current_function, "doctype": doctype, "entry": company}
+    data = {"bhf_id": "000", "tpin": company_settings.tpin}
 
-        if doc == "Smart Invoice Settings":
-            doctype = "Smart Invoice Settings"
-            if i == total_companies - 1:
-                current_function = f"{function}_confirm"
-        else:
-            doctype = "Branch"
-
-        # Construct meta dynamically for each iteration
-        meta = {"function": current_function, "doctype": doctype}
-
-        # If it's the last entry, you might also want to add "entry" based on your original logic
-        if doc == "Smart Invoice Settings":
-            meta["entry"] = "Smart Invoice Settings"
-
-        data = {"bhf_id": "000", "tpin": company.tax_id}
-
-        api_select_branches(data, meta, initialize)
+    api_select_branches(data, meta, initialize)
 
     # tpin = None
     # selected_branch = get_selected_branch()
@@ -475,7 +318,7 @@ def get_branches(initialize=False, doc=None):
     # else:
     #     tpin = get_default_company_tpin()
     #     if not tpin:
-    #         settings = get_settings()
+    #         settings = get_settings(company)
     #         tpin = settings.tpin
 
     # meta={"function": get_function_name(), "doctype": "Branch"}
@@ -3156,14 +2999,14 @@ def get_unit_code(item, company):
     return unit_cd, pkg_unit
 
 
-@frappe.whitelist()
-def create_codes_if_needed(item=None):
-    count = frappe.get_all("Code", limit=0)
-    if len(count) < 100:
-        update_codes(initialize=True)
-        frappe.msgprint(
-            "Updated UOM and Packaging Unit codes", indicator="green", alert=True
-        )
+# @frappe.whitelist()
+# def create_codes_if_needed(item=None):
+#     count = frappe.get_all("Code", limit=0)
+#     if len(count) < 100:
+#         update_codes(initialize=True)
+#         frappe.msgprint(
+#             "Updated UOM and Packaging Unit codes", indicator="green", alert=True
+#         )
 
 
 def get_item_price(
@@ -3193,8 +3036,8 @@ def get_function_name(prev=False):
 def notify_user(doc, msg, indicator):
     """Pushes a final completion event to trigger form reload on the frontend."""
     message = {}
-    name = doc.get("entry")
-    if name:
+    entry = doc.get("entry")
+    if entry:
         modified_by = doc.get("modifier", frappe.session.user)
         doctype = doc.get("doctype")
 
@@ -3202,7 +3045,7 @@ def notify_user(doc, msg, indicator):
             "status": "Success",
             "message": msg,
             "indicator": indicator,
-            "name": name,
+            "name": entry,
             "doctype": doctype,
             "type": "progress",
             "function": doc.get("function"),
@@ -3212,7 +3055,7 @@ def notify_user(doc, msg, indicator):
     else:
         modified_by = doc.modifier
         doctype = doc.type
-        name = doc.entry
+        entry = doc.entry
 
         message = {
             "status": doc.status,
@@ -3230,7 +3073,7 @@ def notify_user(doc, msg, indicator):
         message=message,
         user=modified_by,
         doctype=doctype,
-        docname=name,
+        docname=doc.name or entry,
     )
 
 
@@ -3418,7 +3261,16 @@ def after_sync_process(request_doc, method=None):
     if request_doc.status == "New":
         return
     if request_doc.type and request_doc.entry:
-        t_doc = frappe.get_cached_doc(request_doc.type, request_doc.entry)
+        t_doc = None
+        try:
+            t_doc = frappe.get_cached_doc(request_doc.type, request_doc.entry)
+        except Exception as e:
+            prints(e)
+            notify_user(
+                request_doc,
+                f"Cant find doc {request_doc.entry}, check sync logs",
+                "yellow",
+            )
 
         if t_doc:
             tpin = json.loads(request_doc.request).get("tpin")
@@ -3468,11 +3320,18 @@ def after_sync_process(request_doc, method=None):
                 if request_doc.function == "initialize_virtual_device":
                     data = json.loads(request_doc.response)
                     if data.get("resultCd") in ["000", "902"]:
+                        frappe.set_value(
+                            "Smart Invoice Settings",
+                            request_doc.company,
+                            "initialized",
+                            1,
+                        )
+                        trigger_reload(request_doc)
                         notify_user(request_doc, "Device is initialized", "green")
                     else:
                         notify_user(request_doc, f"{data.get('resultMsg')}", "red")
                     return
-                if (
+                elif (
                     request_doc.function == "get_codes"
                     and request_doc.status == "Success"
                 ):
@@ -3489,6 +3348,13 @@ def after_sync_process(request_doc, method=None):
                     and request_doc.status == "Success"
                 ):
                     if request_doc.function == "get_branches_confirm":
+                        frappe.set_value(
+                            "Smart Invoice Settings",
+                            request_doc.company,
+                            "loaded_initialization_data",
+                            1,
+                        )
+                        finish_branch_updates(request_doc)
                         notify_user(
                             request_doc,
                             f"<b>{company.name}</b> has been initialized",
@@ -3513,7 +3379,7 @@ def after_sync_process(request_doc, method=None):
                 request_doc.function == "get_branches"
                 and request_doc.status == "Success"
             ):
-                finish_branch_updates(request=request_doc)
+                finish_branch_updates(request_doc)
             elif request_doc.function == "get_branches_testing":
                 # Called from VSDC connection test
                 if request_doc.status == "Success":
@@ -3813,7 +3679,7 @@ def get_item_api(item_code):
     """cant find caller"""
     data = {"itemCd": item_code}
     response = api("/api/method/smart_invoice_api.api.select_item", data)
-    return validate_api_response(response)
+    # return validate_api_response(response)
 
 
 @frappe.whitelist()
@@ -4135,7 +4001,7 @@ def get_customer_api(customer, branch="Headquarter"):  # incomplete
     }
 
     response = api("/api/method/smart_invoice_api.api.select_customer", data)
-    return validate_api_response(response)
+    # return validate_api_response(response)
 
 
 def get_branch_tpin(branch):
@@ -4146,12 +4012,6 @@ def get_branch_tpin(branch):
         tpin = branch.custom_tpin
 
     return tpin
-
-    # if company:
-    #     custom_tpin = company.tax_id
-    # else:
-    #     settings = get_settings()
-    #     custom_tpin = settings.tpin
 
 
 @frappe.whitelist()
@@ -4185,7 +4045,7 @@ def save_customer_api(customer, company=None, branch=None):
         "modrId": frappe.session.user,
     }
     response = api("/api/method/smart_invoice_api.api.save_branche_customer", data)
-    return validate_api_response(response)
+    # return validate_api_response(response)
 
 
 from smart_invoice_api.api import save_branche_user as api_save_branche_user
@@ -4213,9 +4073,6 @@ def update_user_api(branch, user, use_yn):
         "modifier": branch.modified_by,
     }
     api_save_branche_user(data, meta)
-    # response = api(data, meta)
-    # validate_api_response(response)
-    # return json.loads(response.get('response'))
 
 
 @frappe.whitelist()
@@ -4304,15 +4161,16 @@ def get_user_changes(doc, user_list):
 
 
 @frappe.whitelist()
-def initialize():
-    update_branches(initialize=True, doc="Smart Invoice Settings")
-    update_item_classes(initialize=True)
-    update_codes(initialize=True)
+def initialize(company):
 
-    create_tax_templates()
+    # update_branches(company=company, initialize=True, doctype="Smart Invoice Settings")
+    # update_item_classes(company=company, initialize=True)
+    update_codes(company=company, initialize=True)
+
+    create_tax_templates(company=company)
 
 
-def create_tax_templates():
+def create_tax_templates(company):
     tax_codes = tax_codes = frappe.get_all(
         "Code",
         fields=["name", "cd_nm", "cd"],
@@ -4330,18 +4188,6 @@ def create_tax_templates():
         tax_template_doc.create_item_tax_template_entry()
 
 
-@frappe.whitelist()
-def sync_dependancies():
-    updated_codes = update_codes()
-    updated_item_classes = update_item_classes()
-    updated_branches = update_branches()
-
-    if updated_codes and updated_item_classes and updated_branches:
-        frappe.msgprint("Synchronization Complete", alert=True)
-    else:
-        frappe.msgprint("Update incomplete", indicator="orange", alert=True)
-
-
 def get_company_by_tpin(tpin):
     companies = {
         d.tax_id: d for d in frappe.get_all("Company", fields=["name", "tax_id"])
@@ -4356,7 +4202,15 @@ def get_company_by_tpin(tpin):
 
 @frappe.whitelist()
 def sync_branches(initialize=True):
-    update_branches(initialize)
+    fully_setup_companies = frappe.get_all(
+        "Smart Invoice Settings",
+        fields=["name"],
+        filters={"status": "Active"},
+        pluck="name",
+    )
+
+    for company in fully_setup_companies:
+        update_branches(company, initialize)
 
 
 def get_companies_with_tpin():
@@ -4369,16 +4223,16 @@ def get_companies_with_tpin():
     return companies
 
 
-def update_branches(initialize=False, doc=None):
+def update_branches(company, initialize=False, doctype="Branch"):
     # TODO: Update all dependant methods
-    data = get_branches(initialize, doc)
+    get_branches(company, initialize, doctype)
 
 
 @frappe.whitelist()
-def finish_branch_updates(request=None):
+def finish_branch_updates(request_doc):
     """Update local branches based on API response, called from the Sync Request after receiving the response from the API"""
 
-    data = to_json(request)
+    data = json.loads(request_doc.response)
 
     # string = """{"resultCd": "000", "resultMsg": "It is succeeded", "resultDt": "20260602125735", "data": {"bhfList": [{"tpin": "1003905487", "bhfId": "000", "bhfNm": "Headquarter", "bhfSttsCd": "01", "prvncNm": "LUSAKA PROVINCE", "dstrtNm": "ISMTO_Lusaka", "sctrNm": "Lusaka", "locDesc": null, "mgrNm": "OKAVANGO FOODS LIMITED", "mgrTelNo": "0977785716", "mgrEmail": "okavangofoods@gmail.com", "hqYn": "Y"}]}}"""
     # data = json.loads(string)
@@ -4395,6 +4249,7 @@ def finish_branch_updates(request=None):
         for d in frappe.get_all("Code", fields=["name", "cd"], filters={"cd_cls": "09"})
     }
     if not statuses:
+        notify_user(request_doc, "Initialize ZRA data first", "red")
         frappe.throw("Initialize ZRA data first")
 
     for branch_data in data["data"]["bhfList"]:
@@ -4483,12 +4338,12 @@ def finish_branch_updates(request=None):
     return True
 
 
-def update_item_classes(initialize=False):
+def update_item_classes(company, initialize=False):
     """
     Synchronizes Item Classes from the API.
     Tracks and reports the number of records actually modified.
     """
-    data = get_item_classes(initialize)
+    get_item_classes(company, initialize)
 
 
 def finish_updating_item_classes(request_doc):
@@ -4589,78 +4444,12 @@ def finish_updating_item_classes(request_doc):
     return True
 
 
-# def update_item_classes(initialize=False):
-#     """
-#     1. Fetch item classes from API
-#     2. Compare with saved item classes
-#     3. If not saved, insert
-#     4. If saved, update if anything is different
-#     """
-#     data = get_item_classes(initialize)
-
-#     if not data or not data.get("data"):
-#         return
-
-
-#     # If we've reached here, we have a successful response
-#     # Proceed with processing the data
-
-#     item_class_list = data['data'].get('itemClsList', [])
-
-#     # Fetch all existing item classes
-#     existing_item_classes = {d.name: d for d in frappe.get_all("Item Class", fields=["name", "item_cls_cd", "item_cls_nm"])}
-#     tax_types = {d.custom_cd: d for d in frappe.get_all("Tax Category", fields=["title", "custom_cd"])}
-
-#     # Update Item Classes
-#     for item_class_data in item_class_list:
-#         # Get the tax type title based on the taxTyCd
-#         tax_type_title = None
-#         if item_class_data.get('taxTyCd'):
-#             tax_type = tax_types.get(item_class_data['taxTyCd'])
-#             if tax_type:
-#                 tax_type_title = tax_type.title
-
-#         use_yn = 1 if item_class_data.get('useYn', "Y") == "Y" else 0
-#         mjr_tg_yn = 1 if item_class_data.get('mjrTgYn', "N") == "Y" else 0
-
-#         if item_class_data['itemClsCd'] not in existing_item_classes:
-#             frappe.get_doc({
-#                 "doctype": "Item Class",
-#                 "item_cls_cd": item_class_data['itemClsCd'],
-#                 "item_cls_nm": item_class_data['itemClsNm'],
-#                 "item_cls_lvl": item_class_data.get('itemClsLvl', None),
-#                 "tax_ty_cd": tax_type_title,
-#                 "use_yn": use_yn,
-#                 "mjr_tg_yn": mjr_tg_yn
-#             }).insert(ignore_permissions=True, ignore_mandatory=True)
-#         else:
-#             existing_class = existing_item_classes[item_class_data['itemClsCd']]
-#             if (existing_class.item_cls_nm != item_class_data['itemClsNm'] or
-#                     existing_class.item_cls_lvl != item_class_data.get('itemClsLvl', None) or
-#                     existing_class.tax_ty_cd != item_class_data.get('taxTyCd', None) or
-#                     existing_class.use_yn != use_yn or
-#                     existing_class.mjr_tg_yn != mjr_tg_yn):
-
-#                 doc = frappe.get_doc("Item Class", item_class_data['itemClsCd'])
-#                 doc.item_cls_nm = item_class_data['itemClsNm']
-#                 doc.item_cls_lvl = item_class_data.get('itemClsLvl', None)
-#                 doc.tax_type = tax_type_title
-#                 doc.use_yn = use_yn
-#                 doc.mjr_tg_yn = mjr_tg_yn
-#                 doc.flags.ignore_mandatory = True
-#                 doc.save(ignore_permissions=True)
-
-#     frappe.db.commit()
-#     frappe.msgprint("Item Classes updated successfully", alert=True)
-#     return True
-
-
 from smart_invoice_api.api import select_item_classes as api_select_item_classes
 
 
-def get_item_classes(initialize=False):
+def get_item_classes(company, initialize=False):
 
-    settings = get_settings()
+    settings = get_settings(company)
 
     api_select_item_classes(
         {"bhf_id": "000", "tpin": settings.tpin},
@@ -4675,8 +4464,8 @@ def get_item_classes(initialize=False):
     )
 
 
-def update_codes(initialize=False):
-    get_codes(initialize)
+def update_codes(company, initialize=False):
+    get_codes(company, initialize)
 
 
 def finish_updating_codes(request_doc):
@@ -4709,7 +4498,7 @@ def finish_updating_codes(request_doc):
     }
 
     for class_data in cls_list:
-        # Normalize core API strings
+        # check if code classes exist before creating them
         api_cls_cd = str(class_data.get("cdCls") or "").strip()
         api_cls_nm = (class_data.get("cdClsNm") or "").strip()
 
@@ -4721,24 +4510,25 @@ def finish_updating_codes(request_doc):
             ).insert(ignore_permissions=True)
             existing_code_classes[api_cls_cd] = new_doc
         else:
+            # get doctype mapping from existing Code Class
             curr = existing_code_classes[api_cls_cd]
             mapped_doctype = curr.get("mapped_doctype")
 
-            if (curr.cd_cls_nm or "").strip() != api_cls_nm:
-                frappe.db.set_value(
-                    "Code Class",
-                    curr.name,
-                    "cd_cls_nm",
-                    api_cls_nm,
-                    update_modified=True,
-                )
-
-        # Proceed to update child codes only if a mapping exists
-        if not mapped_doctype:
-            continue
+            # disabled because renaming only the name may distort data
+            # if (curr.cd_cls_nm or "").strip() != api_cls_nm:
+            #     frappe.db.set_value(
+            #         "Code Class",
+            #         curr.name,
+            #         "cd_cls_nm",
+            #         api_cls_nm,
+            #         update_modified=True,
+            #     )
 
         # --- PHASE 2: CHILD CODES ---
         for code_data in class_data.get("dtlList", []):
+            # prints(
+            #     f"MAPPED {mapped_doctype} Code Class. Length: {len(class_data.get('dtlList', []))}"
+            # )
             api_cd = (code_data.get("cd") or "").strip()
             api_cd_nm = (code_data.get("cdNm") or "").strip()
             api_user_val = (code_data.get("userDfnCd1") or "").strip()
@@ -4751,6 +4541,14 @@ def finish_updating_codes(request_doc):
                 None,
             )
 
+            if not api_cd_nm or not api_cd:
+                notify_user(
+                    request_doc,
+                    f"Missing name for {api_cd} in class {api_cls_cd} - skipping",
+                    "orange",
+                )
+                continue
+
             if not matching_key:
                 new_code = frappe.get_doc(
                     {
@@ -4759,7 +4557,7 @@ def finish_updating_codes(request_doc):
                         "cd_cls": api_cls_cd,
                         "cd_nm": api_cd_nm,
                         "user_dfn_cd1": api_user_val,
-                        "mapped_doctype": mapped_doctype,
+                        "mapped_doctype": mapped_doctype or "",
                     }
                 ).insert(ignore_permissions=True)
                 existing_codes[new_code.name] = new_code
@@ -4775,151 +4573,6 @@ def finish_updating_codes(request_doc):
 
     frappe.db.commit()
     return True
-
-
-# def update_codes(initialize=False):
-#     """
-#     1. code classes
-#         update codes from api
-#         fetch code classes from api
-#         compare with saved code classes
-#         if not saved, insert
-#         if saved, update if anything is different
-#     2. codes
-#         for each code class, iterate through its codes
-#         if code not saved, insert
-#         if code saved, update if anything is different
-#     """
-#     fetched_data = get_codes(initialize)
-#     # Check if the API call was successful
-#     if not fetched_data:
-#         return None
-
-#     if fetched_data.get('response', None):
-#         fetched_data = fetched_data.get('response')
-#     else:
-#         result_cd = fetched_data.get('resultCd', None)
-#         error = fetched_data.get('error', None)
-
-#         if not result_cd:
-
-#             if error:
-#                 error_info = {
-#                     'status_code': fetched_data.get('status_code', 'ERR'),
-#                     'message': error,
-#                     'response': fetched_data.get('response', 'No details provided.'),
-#                     'environment': get_settings().environment,
-#                     'suppress_msgprint': True
-#                 }
-#             else:
-#                 error_info = {
-#                     'status_code': 'No Result Code',
-#                     'message': 'API response did not include a result code',
-#                     'response': str(fetched_data),
-#                     'environment': get_settings().environment,
-#                     'suppress_msgprint': True
-#                 }
-#         elif result_cd != '000':
-#             error_info = {
-#                 'status_code': result_cd,
-#                 'message': fetched_data.get('resultMsg', 'API call was not successful'),
-#                 'response': str(fetched_data),
-#                 'environment': get_settings().environment,
-#                 'suppress_mssgprint': False
-#             }
-
-#         if 'error_info' in locals():
-#             error_handler(error_info)
-#             return
-
-#     # If we've reached here, we have a successful response
-#     # Proceed with processing the data
-
-#     cls_list = fetched_data['data'].get('clsList', [])
-
-#     # Fetch all existing code classes and codes
-#     existing_classes = {d.name: d for d in frappe.get_all("Code Class", fields=["name", "cd_cls_nm", "mapped_doctype"])}
-#     existing_codes = {d.name: d for d in frappe.get_all("Code", fields=["name", "cd", "cd_cls", "cd_nm", "user_dfn_cd1"])}
-
-#     # Update Code Classes
-#     for class_data in cls_list:
-#         cd_cls_key = class_data['cdCls'] # Store key for readability
-#         if cd_cls_key not in existing_classes:
-#             new_cls_doc = frappe.get_doc({
-#                 "doctype": "Code Class",
-#                 "cd_cls": cd_cls_key,
-#                 "cd_cls_nm": class_data['cdClsNm'],
-#                 "usr_dfn_cd1": class_data.get('usrDfnCd1', '')
-#             }).insert(ignore_permissions=True, ignore_mandatory=True)
-#             existing_classes[cd_cls_key] = new_cls_doc
-#         else:
-#             existing_class = existing_classes[cd_cls_key]
-#             if existing_class.cd_cls_nm != class_data['cdClsNm']:
-#                 doc = frappe.get_doc("Code Class", cd_cls_key)
-#                 doc.cd_cls_nm = class_data['cdClsNm']
-#                 doc.flags.ignore_mandatory=True
-#                 doc.save(ignore_permissions=True)
-#                 existing_classes[cd_cls_key] = doc
-
-#         mapped_doctype = existing_classes[cd_cls_key].get('mapped_doctype')
-
-#         if not mapped_doctype:
-#             continue
-
-#         # Update Codes
-#         for code_data in class_data.get('dtlList', []):
-#             # Create a lowercase version of the name for case-insensitive comparison
-#             name_lower = f'{cd_cls_key}-{code_data["cd"]}-{code_data["cdNm"]}'.lower()
-
-#             # Find a matching name in existing_codes, ignoring case
-#             matching_name = next((key for key in existing_codes if key.lower().strip() == name_lower.strip()), None)
-
-#             # Use the matching name if found, otherwise create a new name
-#             name = matching_name if matching_name else f'{cd_cls_key}-{code_data["cd"]}-{code_data["cdNm"]}'
-
-#             try:
-#                 if matching_name is None:
-#                     new_code = frappe.get_doc({
-#                         "doctype": "Code",
-#                         "cd": code_data['cd'],
-#                         "cd_cls": cd_cls_key,
-#                         "cd_nm": code_data['cdNm'],
-#                         "user_dfn_cd1": code_data.get('userDfnCd1', None)
-#                     })
-#                     if mapped_doctype:
-#                         new_code.mapped_doctype = mapped_doctype
-#                     new_code.insert(ignore_permissions=True, ignore_mandatory=True)
-#                 else:
-#                     update_code(name, code_data, class_data, existing_codes, mapped_doctype)
-#             except frappe.exceptions.DuplicateEntryError as e:
-#                 update_code(name, code_data, class_data, existing_codes, mapped_doctype)
-#     frappe.db.commit()
-#     return True
-
-# def update_code(name, code_data, class_data, existing_codes, mapped_doctype=None):
-#     existing_code = frappe.get_doc("Code", name)
-
-#     if not existing_code:
-#         return
-
-#     if (existing_code.cd_cls != class_data['cdCls'] or
-#         existing_code.cd_nm != code_data['cdNm'] or
-#         existing_code.user_dfn_cd1 != code_data.get('userDfnCd1', None) or
-#         existing_code.mapped_doctype != mapped_doctype):
-
-#         doc = frappe.get_doc("Code", existing_code.name)
-#         doc.cd_cls = class_data['cdCls']
-#         doc.cd_nm = code_data['cdNm']
-#         doc.user_dfn_cd1 = code_data.get('userDfnCd1', None)
-#         if mapped_doctype:
-#             doc.mapped_doctype = mapped_doctype
-#         doc.flags.ignore_mandatory=True
-#         try:
-#             doc.save(ignore_permissions=True)
-#         except frappe.exceptions.LinkValidationError as e:
-#             frappe.msgprint(str(e))
-#         except Exception as e:
-#             frappe.msgprint(str(e))
 
 
 def update_code_optimized(doc_name, api_nm, api_val, api_map, api_cls, existing_dict):
@@ -4947,9 +4600,10 @@ def update_code_optimized(doc_name, api_nm, api_val, api_map, api_cls, existing_
 from smart_invoice_api.api import select_codes as api_select_codes
 
 
-def get_codes(initialize=False):
+def get_codes(company, initialize=False):
+    """initiates fetching of codes, completed in finish_updating_codes"""
 
-    settings = get_settings()
+    settings = get_settings(company)
 
     api_select_codes(
         {"bhf_id": "000", "tpin": settings.tpin},
@@ -4962,81 +4616,3 @@ def get_codes(initialize=False):
             "modifier": settings.modified_by,
         },
     )
-
-
-def validate_api_response(fetched_data):
-    if not fetched_data:
-        return None
-
-    try:
-        response_json = (
-            fetched_data if isinstance(fetched_data, dict) else json.loads(fetched_data)
-        )
-
-        response = response_json.get("response", None)
-        if type(response) == str:
-            response = json.loads(response)
-
-        result_cd = response.get("resultCd")
-        result_msg = response.get("resultMsg")
-
-        if result_cd in ("000", "001", "801", "802", "803", "805"):
-            return response
-
-        error_messages = {
-            "894": "Unable to connect to the Smart Invoice Server",
-            "899": "Smart Invoice device error",
-            "10000": result_msg,
-        }
-
-        error_info = {
-            "status_code": result_cd,
-            "message": error_messages.get(
-                result_cd, f"API call was not successful: {result_msg}"
-            )
-            + f" ({result_cd})",
-            "response": str(response_json),
-            "environment": get_settings().environment,
-            "suppress_msgprint": result_cd not in ("894", "899", "10000"),
-        }
-        error_handler(error_info)
-        return None
-
-    except json.JSONDecodeError as e:
-        error_info = {
-            "status_code": "JSON Parse Error",
-            "message": f"Failed to parse API response as JSON: {str(e)}",
-            "response": fetched_data,
-            "environment": get_settings().environment,
-            "suppress_msgprint": False,
-        }
-        error_handler(error_info)
-        return None
-    except Exception as e:
-        error_info = {
-            "status_code": "Unexpected Error",
-            "message": f"An unexpected error occurred: {str(e)}",
-            "response": fetched_data,
-            "environment": get_settings().environment,
-            "suppress_msgprint": False,
-        }
-        error_handler(error_info)
-        return None
-
-
-@frappe.whitelist()
-def test_connection():
-    # verify_site_encryption()
-    response = get_branches()
-
-    if response:
-        if response and response.get("error", response) != "Smart Invoice VSDC Timeout":
-            if (
-                response
-                and not response.get("error")
-                and response.get("resultCd") in ["000", "001"]
-            ):
-                frappe.msgprint("Connection Successful", indicator="green", alert=True)
-                return True
-    frappe.msgprint("Connection Failure", indicator="red", alert=True)
-    return False

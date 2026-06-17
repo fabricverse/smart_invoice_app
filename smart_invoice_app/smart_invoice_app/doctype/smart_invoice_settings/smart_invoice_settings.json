@@ -10,6 +10,7 @@
   "status",
   "column_break_bbbc",
   "initialized",
+  "loaded_initialization_data",
   "section_break_ctyz",
   "company",
   "tpin",
@@ -17,13 +18,21 @@
   "vsdc_serial",
   "section_break_vemr",
   "environment",
+  "timeout",
+  "max_retries",
   "column_break_ofch",
   "base_url",
   "use_custom_server",
-  "api_credentials_section",
-  "api_key",
+  "company_defaults",
+  "default_uom",
+  "uom_code",
+  "default_item_class",
+  "item_class_code",
   "column_break_gmiy",
-  "api_secret"
+  "default_packing_unit",
+  "packing_unit_code",
+  "default_item_tax",
+  "item_tax_code"
  ],
  "fields": [
   {
@@ -48,26 +57,8 @@
    "reqd": 1
   },
   {
-   "collapsible": 1,
-   "collapsible_depends_on": "base_url && initialized == 1",
-   "depends_on": "base_url && initialized == 1",
-   "fieldname": "api_credentials_section",
-   "fieldtype": "Section Break",
-   "label": "Company Defaults"
-  },
-  {
-   "fieldname": "api_key",
-   "fieldtype": "Data",
-   "label": "API Key"
-  },
-  {
    "fieldname": "column_break_gmiy",
    "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "api_secret",
-   "fieldtype": "Data",
-   "label": "API Secret"
   },
   {
    "fieldname": "tpin",
@@ -89,6 +80,7 @@
    "fieldtype": "Data",
    "label": "VSDC Serial",
    "length": 15,
+   "read_only_depends_on": "eval: !doc.tpin",
    "reqd": 1
   },
   {
@@ -103,10 +95,11 @@
    "in_standard_filter": 1,
    "label": "Company",
    "options": "Company",
-   "reqd": 1
+   "reqd": 1,
+   "unique": 1
   },
   {
-   "default": "1",
+   "default": "0",
    "fieldname": "use_custom_server",
    "fieldtype": "Check",
    "label": "Use custom server"
@@ -116,7 +109,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Setup Company & TPIN\nSetup Environment\nInitialize Virtual Device\nLoad Initization Data\nSetup Company Defaults\nSetup Branches\nActive\nMisconfigured",
+   "options": "Setup Company & TPIN\nSetup Environment\nSave\nInitialize Virtual Device\nLoad Initialization Data\nSetup Company Defaults\nSetup Branches\nActive\nMisconfigured",
    "read_only": 1
   },
   {
@@ -134,13 +127,105 @@
   {
    "fieldname": "section_break_tyc0",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "default_uom",
+   "fieldtype": "Link",
+   "label": "Default UOM",
+   "link_filters": "[[\"UOM\",\"custom_code_class_name\",\"=\",\"10\"],[\"UOM\",\"custom_code_class_code\",\"is\",\"set\"]]",
+   "mandatory_depends_on": "eval: doc.loaded_initialization_data==1",
+   "options": "UOM"
+  },
+  {
+   "fetch_from": "default_uom.custom_code_cd",
+   "fieldname": "uom_code",
+   "fieldtype": "Read Only",
+   "label": "UOM Code",
+   "no_copy": 1
+  },
+  {
+   "fieldname": "default_packing_unit",
+   "fieldtype": "Link",
+   "label": "Default Packing Unit",
+   "link_filters": "[[\"UOM\",\"custom_code_class_name\",\"=\",\"17\"],[\"UOM\",\"custom_code_class_code\",\"is\",\"set\"]]",
+   "mandatory_depends_on": "eval: doc.loaded_initialization_data==1",
+   "options": "UOM"
+  },
+  {
+   "fetch_from": "default_packing_unit.custom_code_cd",
+   "fieldname": "packing_unit_code",
+   "fieldtype": "Read Only",
+   "label": "Packing Unit Code",
+   "no_copy": 1
+  },
+  {
+   "fieldname": "default_item_class",
+   "fieldtype": "Link",
+   "label": "Default Item Class",
+   "link_filters": "[[\"Item Class\",\"item_cls_lvl\",\"=\",\"3\"]]",
+   "mandatory_depends_on": "eval: doc.loaded_initialization_data==1",
+   "options": "Item Class"
+  },
+  {
+   "fieldname": "default_item_tax",
+   "fieldtype": "Link",
+   "label": "Default Item Tax",
+   "link_filters": "[[\"Item Tax Template\",\"custom_code\",\"in\",[\"04\",\"400\",\"62\",\"60\",\"61\"]]]",
+   "mandatory_depends_on": "eval: doc.loaded_initialization_data==1",
+   "options": "Item Tax Template"
+  },
+  {
+   "fetch_from": "default_item_class.item_cls_cd",
+   "fieldname": "item_class_code",
+   "fieldtype": "Read Only",
+   "label": "Item Class Code",
+   "no_copy": 1
+  },
+  {
+   "fetch_from": "default_item_tax.custom_smart_invoice_tax_code",
+   "fieldname": "item_tax_code",
+   "fieldtype": "Read Only",
+   "label": "Item Tax Code",
+   "no_copy": 1
+  },
+  {
+   "default": "30",
+   "depends_on": "eval: doc.environment",
+   "fieldname": "timeout",
+   "fieldtype": "Int",
+   "label": "Server Request Timeout (in seconds)",
+   "length": 3
+  },
+  {
+   "default": "10",
+   "depends_on": "eval: doc.environment",
+   "fieldname": "max_retries",
+   "fieldtype": "Int",
+   "label": "Max Retries",
+   "length": 2
+  },
+  {
+   "default": "0",
+   "fieldname": "loaded_initialization_data",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Loaded Initialization Data",
+   "show_on_timeline": 1
+  },
+  {
+   "collapsible": 1,
+   "collapsible_depends_on": "eval: doc.base_url && doc.loaded_initialization_data == 1",
+   "depends_on": "eval: doc.base_url && doc.loaded_initialization_data == 1",
+   "description": "These values are used when you have nothing specified in their respective documents.",
+   "fieldname": "company_defaults",
+   "fieldtype": "Section Break",
+   "label": "Company Defaults"
   }
  ],
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
- "issingle": 1,
  "links": [],
- "modified": "2026-06-16 15:51:57.724910",
+ "modified": "2026-06-16 18:56:02.209337",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Smart Invoice Settings",
