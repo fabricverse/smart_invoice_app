@@ -3367,6 +3367,15 @@ def after_sync_process(request_doc, method=None):
                             "green",
                         )
                     return
+                elif request_doc.function == "get_branches_testing":
+                    # Called from Smart Invoice Settings connection test
+                    if request_doc.status == "Success":
+                        notify_user(request_doc, "Connected to Smart Invoice", "green")
+                        return
+                    else:
+                        notify_user(
+                            request_doc, "Cannot connect to Smart Invoice", "red"
+                        )
             elif request_doc.type == "BOM" and request_doc.status == "Success":
                 if request_doc.function == "save_item_composition_notify":
                     notify_user(

@@ -13,6 +13,9 @@ frappe.ui.form.on("Smart Invoice Settings", {
                 function () {
                     frappe.call({
                         method: "smart_invoice_api.api.test_connection",
+                        args: {
+                            company_name: frm.doc.name,
+                        },
                     });
                 },
                 "Menu",
