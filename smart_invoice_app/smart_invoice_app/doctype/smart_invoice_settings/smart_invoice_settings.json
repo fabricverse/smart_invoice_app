@@ -162,7 +162,7 @@
    "fieldname": "default_item_class",
    "fieldtype": "Link",
    "label": "Default Item Class",
-   "link_filters": "[[\"Item Class\",\"item_cls_lvl\",\"=\",\"3\"]]",
+   "link_filters": "[[\"Item Class\",\"item_cls_lvl\",\"in\",[\"3\",\"4\"]]]",
    "mandatory_depends_on": "eval: doc.loaded_initialization_data==1",
    "options": "Item Class"
   },
@@ -170,7 +170,7 @@
    "fieldname": "default_item_tax",
    "fieldtype": "Link",
    "label": "Default Item Tax",
-   "link_filters": "[[\"Item Tax Template\",\"custom_code\",\"in\",[\"04\",\"400\",\"62\",\"60\",\"61\"]]]",
+   "link_filters": "[]",
    "mandatory_depends_on": "eval: doc.loaded_initialization_data==1",
    "options": "Item Tax Template"
   },
@@ -225,7 +225,7 @@
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-16 18:56:02.209337",
+ "modified": "2026-06-17 16:45:09.104306",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Smart Invoice Settings",

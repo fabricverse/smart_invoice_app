@@ -298,17 +298,21 @@ def get_branches(company, initialize=False, doctype="Branch"):
     """
     company_settings = get_settings(company)
     function = get_function_name()
-    current_function = function
+
+    # Construct meta dynamically for each iteration
+    meta = {"function": function, "doctype": doctype}
 
     # Check if initialize is True AND it's the last iteration
     if doctype == "Smart Invoice Settings":
-        doctype = "Smart Invoice Settings"
-        current_function = f"{function}_confirm"
+        meta.update(
+            {
+                "function": f"{function}_confirm",
+                "doctype": "Smart Invoice Settings",
+                "entry": company,
+            }
+        )
 
-    # Construct meta dynamically for each iteration
-    meta = {"function": current_function, "doctype": doctype, "entry": company}
     data = {"bhf_id": "000", "tpin": company_settings.tpin}
-
     api_select_branches(data, meta, initialize)
 
     # tpin = None
@@ -338,6 +342,7 @@ from smart_invoice_api.api import (
 
 @frappe.whitelist()
 def get_purchase_invoices(from_list=False):
+    from_list = bool(from_list)
 
     selected_branch = get_selected_branch()
     data = {
@@ -3348,11 +3353,12 @@ def after_sync_process(request_doc, method=None):
                     and request_doc.status == "Success"
                 ):
                     if request_doc.function == "get_branches_confirm":
+                        update_fields = {"loaded_initialization_data": 1}
+                        if t_doc.status == "Load Initialization Data":
+                            update_fields.update({"status": "Setup Company Defaults"})
+
                         frappe.set_value(
-                            "Smart Invoice Settings",
-                            request_doc.company,
-                            "loaded_initialization_data",
-                            1,
+                            "Smart Invoice Settings", request_doc.company, update_fields
                         )
                         finish_branch_updates(request_doc)
                         notify_user(
@@ -3692,6 +3698,7 @@ def generate_item_code(item, initialize=False):
     BA: Quantity Unity (Barrel)
     0000001: increments from 0000001 to N value (7 digits)
     """
+    initialize = bool(initialize)
 
     def get_next_value(doctype, field, padding=7):
         """
@@ -3731,13 +3738,20 @@ def generate_item_code(item, initialize=False):
     return f"{item_code_seed}{next_val}"
 
 
+def bool(var):
+    """sometimes boolean vals are passed as string"""
+    if str(var).lower() in ["true", "1"]:
+        var = True
+    else:
+        var = False
+    return var
+
+
 @frappe.whitelist()
 def sync_items(initialize=False):
     """Syncs all items to smart_invoice"""
-    if str(initialize).lower() in ["true", "1"]:
-        initialize = True
-    else:
-        initialize = False
+    initialize = bool(initialize)
+
     get_items_api(initialize)
 
 
@@ -4163,11 +4177,11 @@ def get_user_changes(doc, user_list):
 @frappe.whitelist()
 def initialize(company):
 
-    # update_branches(company=company, initialize=True, doctype="Smart Invoice Settings")
+    update_branches(company=company, initialize=True, doctype="Smart Invoice Settings")
     # update_item_classes(company=company, initialize=True)
-    update_codes(company=company, initialize=True)
+    # update_codes(company=company, initialize=True)
 
-    create_tax_templates(company=company)
+    # create_tax_templates(company=company)
 
 
 def create_tax_templates(company):
@@ -4202,15 +4216,26 @@ def get_company_by_tpin(tpin):
 
 @frappe.whitelist()
 def sync_branches(initialize=True):
+    """checks which companies are fully setup on smart invoice and creates their branches
+    - completed in finish_branch_updates
+    """
+
+    initialize = bool(initialize)
+
     fully_setup_companies = frappe.get_all(
         "Smart Invoice Settings",
-        fields=["name"],
-        filters={"status": "Active"},
+        filters={"status": ["in", ["Active", "Setup Company Defaults"]]},
         pluck="name",
     )
 
     for company in fully_setup_companies:
         update_branches(company, initialize)
+    if len(fully_setup_companies) < 1:
+        frappe.msgprint(
+            "Please ensure Smart Invoice is properly setup",
+            alert=True,
+            indicator="orange",
+        )
 
 
 def get_companies_with_tpin():
