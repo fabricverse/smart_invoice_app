@@ -429,39 +429,6 @@
   "user_dfn_nm1": null
  },
  {
-  "cd_cls": "09",
-  "cd_cls_nm": "Branch Status",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": "Branch",
-  "modified": "2024-09-29 21:51:45.996398",
-  "name": "09",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "07",
-  "cd_cls_nm": "Payment Type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": "Mode of Payment",
-  "modified": "2024-09-29 21:36:48.222121",
-  "name": "07",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "04",
-  "cd_cls_nm": "Taxation Type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": "Tax Category",
-  "modified": "2024-09-29 20:49:24.141242",
-  "name": "04",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
   "cd_cls": "33",
   "cd_cls_nm": "Currency",
   "docstatus": 0,
@@ -495,13 +462,13 @@
   "user_dfn_nm1": null
  },
  {
-  "cd_cls": "05",
-  "cd_cls_nm": "Country",
+  "cd_cls": "09",
+  "cd_cls_nm": "Branch Status",
   "docstatus": 0,
   "doctype": "Code Class",
-  "mapped_doctype": "Country",
-  "modified": "2024-09-29 21:03:03.144041",
-  "name": "05",
+  "mapped_doctype": "Branch",
+  "modified": "2024-09-29 21:51:45.996398",
+  "name": "09",
   "result_dt": null,
   "user_dfn_nm1": null
  },
@@ -515,5 +482,38 @@
   "name": "10",
   "result_dt": null,
   "user_dfn_nm1": "1"
+ },
+ {
+  "cd_cls": "07",
+  "cd_cls_nm": "Payment Type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": "Mode of Payment",
+  "modified": "2024-09-29 21:36:48.222121",
+  "name": "07",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "04",
+  "cd_cls_nm": "Taxation Type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": "Tax Category",
+  "modified": "2024-09-29 20:49:24.141242",
+  "name": "04",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "05",
+  "cd_cls_nm": "Country",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": "Country",
+  "modified": "2024-09-29 21:03:03.144041",
+  "name": "05",
+  "result_dt": null,
+  "user_dfn_nm1": null
  }
 ]
