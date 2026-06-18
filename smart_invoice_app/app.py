@@ -2711,7 +2711,8 @@ def notify_user(doc, msg, indicator):
     """Pushes a final completion event to trigger form reload on the frontend."""
     message = {}
     entry = doc.get("entry")
-    if entry:
+
+    if not doc.entry:
         modified_by = doc.get("modifier", frappe.session.user)
         doctype = doc.get("doctype")
 
@@ -2725,7 +2726,6 @@ def notify_user(doc, msg, indicator):
             "function": doc.get("function"),
             "user": modified_by,
         }
-
     else:
         modified_by = doc.modifier
         doctype = doc.type
@@ -2735,7 +2735,7 @@ def notify_user(doc, msg, indicator):
             "status": doc.status,
             "message": msg,
             "indicator": indicator,
-            "name": doc.entry,
+            "name": doc.name,
             "doctype": doctype,
             "type": "progress",
             "function": doc.function,
