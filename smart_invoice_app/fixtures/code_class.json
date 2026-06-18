@@ -11,160 +11,6 @@
   "user_dfn_nm1": null
  },
  {
-  "cd_cls": "21",
-  "cd_cls_nm": "Detail information type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.357954",
-  "name": "21",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "22",
-  "cd_cls_nm": "Travel purpose",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.378005",
-  "name": "22",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "23",
-  "cd_cls_nm": "Commercial Invoice status",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.391780",
-  "name": "23",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "27",
-  "cd_cls_nm": "Departure Incoterm",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.402771",
-  "name": "27",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "28",
-  "cd_cls_nm": "Destination Incortem",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.414358",
-  "name": "28",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "29",
-  "cd_cls_nm": "Export Charges",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.424990",
-  "name": "29",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "30",
-  "cd_cls_nm": "Zambia ports",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.437853",
-  "name": "30",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "36",
-  "cd_cls_nm": "Bank",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.449476",
-  "name": "36",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "44",
-  "cd_cls_nm": "Provisional invoice finalization type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.459825",
-  "name": "44",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "46",
-  "cd_cls_nm": "Value Credit Note Type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.472995",
-  "name": "46",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "56",
-  "cd_cls_nm": "Value Credit Note Type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.488663",
-  "name": "56",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "58",
-  "cd_cls_nm": "Reason for value credit note",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.501293",
-  "name": "58",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "63",
-  "cd_cls_nm": "Invoice stolution status",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.516257",
-  "name": "63",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "70",
-  "cd_cls_nm": "Reported Status",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2026-04-07 17:57:57.528217",
-  "name": "70",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
   "cd_cls": "62",
   "cd_cls_nm": "Tourism levy",
   "docstatus": 0,
@@ -187,17 +33,6 @@
   "user_dfn_nm1": null
  },
  {
-  "cd_cls": "38",
-  "cd_cls_nm": "Purchase Receipt Type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:33.139402",
-  "name": "38",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
   "cd_cls": "60",
   "cd_cls_nm": "Excise duties",
   "docstatus": 0,
@@ -216,6 +51,116 @@
   "mapped_doctype": "Item Tax Template",
   "modified": "2024-10-30 23:48:58.019062",
   "name": "61",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "06",
+  "cd_cls_nm": "Sale category",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2024-09-29 18:47:24.399773",
+  "name": "06",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "14",
+  "cd_cls_nm": "Transaction Type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2024-09-29 18:47:26.268581",
+  "name": "14",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "11",
+  "cd_cls_nm": "Sale Status",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2024-09-29 18:47:25.870831",
+  "name": "11",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "12",
+  "cd_cls_nm": "Stock I/O Type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2024-09-29 18:47:25.997270",
+  "name": "12",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "400",
+  "cd_cls_nm": "Taxation Type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": "Tax Category",
+  "modified": "2024-09-28 18:34:41.512727",
+  "name": "400",
+  "result_dt": null,
+  "user_dfn_nm1": ""
+ },
+ {
+  "cd_cls": "17",
+  "cd_cls_nm": "Packing Unit",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": "UOM",
+  "modified": "2024-09-29 22:10:52.359084",
+  "name": "17",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "58",
+  "cd_cls_nm": "Reason for value credit note",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.501293",
+  "name": "58",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "27",
+  "cd_cls_nm": "Departure Incoterm",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.402771",
+  "name": "27",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "46",
+  "cd_cls_nm": "Value Credit Note Type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.472995",
+  "name": "46",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "38",
+  "cd_cls_nm": "Purchase Receipt Type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2024-09-29 18:47:33.139402",
+  "name": "38",
   "result_dt": null,
   "user_dfn_nm1": null
  },
@@ -253,6 +198,61 @@
   "user_dfn_nm1": null
  },
  {
+  "cd_cls": "09",
+  "cd_cls_nm": "Branch Status",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": "Branch",
+  "modified": "2024-09-29 21:51:45.996398",
+  "name": "09",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "22",
+  "cd_cls_nm": "Travel purpose",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.378005",
+  "name": "22",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "44",
+  "cd_cls_nm": "Provisional invoice finalization type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.459825",
+  "name": "44",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "56",
+  "cd_cls_nm": "Value Credit Note Type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.488663",
+  "name": "56",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "70",
+  "cd_cls_nm": "Reported Status",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.528217",
+  "name": "70",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
   "cd_cls": "68",
   "cd_cls_nm": "Rental income status",
   "docstatus": 0,
@@ -262,6 +262,28 @@
   "name": "68",
   "result_dt": null,
   "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "48",
+  "cd_cls_nm": "LOCALE",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2024-09-29 18:47:33.292999",
+  "name": "48",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "10",
+  "cd_cls_nm": "Quantity Unit",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": "UOM",
+  "modified": "2024-09-29 20:30:11.596355",
+  "name": "10",
+  "result_dt": null,
+  "user_dfn_nm1": "1"
  },
  {
   "cd_cls": "24",
@@ -282,39 +304,6 @@
   "mapped_doctype": null,
   "modified": "2024-09-29 18:47:33.062342",
   "name": "37",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "48",
-  "cd_cls_nm": "LOCALE",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:33.292999",
-  "name": "48",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "06",
-  "cd_cls_nm": "Sale category",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:24.399773",
-  "name": "06",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "14",
-  "cd_cls_nm": "Transaction Type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:26.268581",
-  "name": "14",
   "result_dt": null,
   "user_dfn_nm1": null
  },
@@ -363,6 +352,39 @@
   "user_dfn_nm1": null
  },
  {
+  "cd_cls": "23",
+  "cd_cls_nm": "Commercial Invoice status",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.391780",
+  "name": "23",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "29",
+  "cd_cls_nm": "Export Charges",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.424990",
+  "name": "29",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "63",
+  "cd_cls_nm": "Invoice stolution status",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.516257",
+  "name": "63",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
   "cd_cls": "49",
   "cd_cls_nm": "Category Level",
   "docstatus": 0,
@@ -374,17 +396,6 @@
   "user_dfn_nm1": null
  },
  {
-  "cd_cls": "11",
-  "cd_cls_nm": "Sale Status",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:25.870831",
-  "name": "11",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
   "cd_cls": "34",
   "cd_cls_nm": "Purchase Status",
   "docstatus": 0,
@@ -392,6 +403,17 @@
   "mapped_doctype": null,
   "modified": "2024-09-29 18:47:32.748118",
   "name": "34",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "21",
+  "cd_cls_nm": "Detail information type",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.357954",
+  "name": "21",
   "result_dt": null,
   "user_dfn_nm1": null
  },
@@ -418,72 +440,6 @@
   "user_dfn_nm1": null
  },
  {
-  "cd_cls": "12",
-  "cd_cls_nm": "Stock I/O Type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:25.997270",
-  "name": "12",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "33",
-  "cd_cls_nm": "Currency",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": null,
-  "modified": "2024-09-29 18:47:29.260314",
-  "name": "33",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "400",
-  "cd_cls_nm": "Taxation Type",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": "Tax Category",
-  "modified": "2024-09-28 18:34:41.512727",
-  "name": "400",
-  "result_dt": null,
-  "user_dfn_nm1": ""
- },
- {
-  "cd_cls": "17",
-  "cd_cls_nm": "Packing Unit",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": "UOM",
-  "modified": "2024-09-29 22:10:52.359084",
-  "name": "17",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "09",
-  "cd_cls_nm": "Branch Status",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": "Branch",
-  "modified": "2024-09-29 21:51:45.996398",
-  "name": "09",
-  "result_dt": null,
-  "user_dfn_nm1": null
- },
- {
-  "cd_cls": "10",
-  "cd_cls_nm": "Quantity Unit",
-  "docstatus": 0,
-  "doctype": "Code Class",
-  "mapped_doctype": "UOM",
-  "modified": "2024-09-29 20:30:11.596355",
-  "name": "10",
-  "result_dt": null,
-  "user_dfn_nm1": "1"
- },
- {
   "cd_cls": "07",
   "cd_cls_nm": "Payment Type",
   "docstatus": 0,
@@ -502,6 +458,50 @@
   "mapped_doctype": "Tax Category",
   "modified": "2024-09-29 20:49:24.141242",
   "name": "04",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "28",
+  "cd_cls_nm": "Destination Incortem",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.414358",
+  "name": "28",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "36",
+  "cd_cls_nm": "Bank",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.449476",
+  "name": "36",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "30",
+  "cd_cls_nm": "Zambia ports",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2026-04-07 17:57:57.437853",
+  "name": "30",
+  "result_dt": null,
+  "user_dfn_nm1": null
+ },
+ {
+  "cd_cls": "33",
+  "cd_cls_nm": "Currency",
+  "docstatus": 0,
+  "doctype": "Code Class",
+  "mapped_doctype": null,
+  "modified": "2024-09-29 18:47:29.260314",
+  "name": "33",
   "result_dt": null,
   "user_dfn_nm1": null
  },
