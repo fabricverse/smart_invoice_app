@@ -974,6 +974,9 @@ def get_invoice_data(invoice, branch=None):
 def calculate_item_taxes(company, invoice, data, items, country_code=None):
     items = []
 
+    settings = get_settings(company.name)
+    default_item_class_code = settings.item_class_code
+
     for idx, item in enumerate(invoice.items, start=1):
         item_doc = frappe.get_cached_doc("Item", item.item_code)
         unit_cd, pkg_unit = get_unit_code(item_doc, invoice.company)
@@ -985,8 +988,7 @@ def calculate_item_taxes(company, invoice, data, items, country_code=None):
         item_data = {
             "itemSeq": idx,
             "itemCd": item.item_code,
-            "itemClsCd": item_doc.custom_item_cls_cd
-            or company.custom_default_item_class,
+            "itemClsCd": item_doc.custom_item_cls_cd or default_item_class_code,
             "itemNm": item.item_code,
             "bcd": None,
             "pkgUnitCd": pkg_unit or "PACK",
@@ -1088,10 +1090,10 @@ def calculate_item_taxes(company, invoice, data, items, country_code=None):
                     item, company, country_code, invoice
                 )
             else:
-                tax_code = company.custom_tax_code
+                tax_code = settings.item_tax_code
                 if not tax_code:
                     frappe.throw(
-                        f"Set <strong>Tax Bracket</strong> in company <a href='{company.get_url()}'>{frappe.bold(ledger.company)}</a>"
+                        f"Set <b>Default Item Tax</b> in company <a href='{settings.get_url()}'>{frappe.bold(settings.company)}</a>"
                     )
 
                 code_doc = frappe.get_cached_value(
@@ -1259,6 +1261,9 @@ def get_item_data(ledger):
     unit_cd, pkg_unit = get_unit_code(item_doc, ledger.company)
     posting_date_only = api_date_format(str(ledger.posting_date), date_only=True)
 
+    settings = get_settings(ledger.company)
+    default_item_class_code = settings.item_class_code
+
     # 1. Get Transaction Code
     transaction_code = get_transaction_code(ledger)
     if not transaction_code:
@@ -1280,7 +1285,7 @@ def get_item_data(ledger):
         "itemSeq": 1,
         "itemCd": ledger.item_code,
         "itemNm": ledger.item_code,
-        "itemClsCd": item_doc.custom_item_cls_cd or company.custom_default_item_class,
+        "itemClsCd": item_doc.custom_item_cls_cd or default_item_class_code,
         "bcd": None,
         "pkgUnitCd": pkg_unit or "PACK",
         "pkg": qty,
@@ -1303,7 +1308,7 @@ def get_item_data(ledger):
     }
 
     stock_item_data = {
-        "tpin": company.tax_id,
+        "tpin": settings.tpin,
         "bhfId": "000",
         "sarNo": 1,
         "orgSarNo": 0,
@@ -1323,7 +1328,7 @@ def get_item_data(ledger):
 
     # 4. Process Tax Logic
     stock_item_data, item_data = get_tax_logic(
-        ledger, item_doc, company, amt, stock_item_data, item_data
+        ledger, item_doc, company, settings, amt, stock_item_data, item_data
     )
 
     item_data.update(
@@ -1436,7 +1441,7 @@ def get_transaction_code(ledger):
     return transaction_code
 
 
-def get_tax_logic(ledger, item_doc, company, amt, stock_item_data, item_data):
+def get_tax_logic(ledger, item_doc, company, settings, amt, stock_item_data, item_data):
     """Calculates specific taxes including Excise and Levies"""
     template, tax_code, tax_rate = None, None, 0
 
@@ -1465,7 +1470,7 @@ def get_tax_logic(ledger, item_doc, company, amt, stock_item_data, item_data):
 
     else:
         # Company Default Fallback
-        tax_code = (company.custom_tax_code or "A").upper()
+        tax_code = (settings.item_tax_code or "A").upper()
         if not tax_code:
             frappe.throw(f"Set Tax Bracket in company {ledger.company}")
         code_doc = frappe.get_cached_value(
@@ -1644,8 +1649,11 @@ def get_item_data_deprecated(ledger):
 
     company = frappe.get_cached_doc("Company", ledger.company)
 
+    settings = get_settings(ledger.company)
+    default_item_class_code = settings.item_class_code
+
     stock_item_data = {
-        "tpin": company.tax_id,
+        "tpin": settings.tpin,
         "bhfId": "000",  # TODO: get branch id
         "sarNo": 1,
         "orgSarNo": 0,
@@ -1710,7 +1718,7 @@ def get_item_data_deprecated(ledger):
     item_data = {
         "itemSeq": 1,
         "itemCd": ledger.item_code,
-        "itemClsCd": item_doc.custom_item_cls_cd or company.custom_default_item_class,
+        "itemClsCd": item_doc.custom_item_cls_cd or default_item_class_code,
         "itemNm": ledger.item_code,
         "bcd": None,
         "pkgUnitCd": pkg_unit or "PACK",
@@ -1918,10 +1926,10 @@ def get_item_data_deprecated(ledger):
 
     if not template:
         # use company default company if not set in transation or item
-        tax_code = company.custom_tax_code
+        tax_code = settings.item_tax_code
         if not tax_code:
             frappe.throw(
-                f"Set <strong>Tax Bracket</strong> in company <a href='{company.get_url()}'>{frappe.bold(ledger.company)}</a>"
+                f"Set <b>Default Item Tax</b> in company <a href='{settings.get_url()}'>{frappe.bold(settings.company)}</a>"
             )
 
             code_doc = frappe.get_cached_value(
@@ -2335,7 +2343,9 @@ def ensure_tax_accounts(codes, company_name, abbr):
             account.insert(ignore_permissions=True)
 
 
-def create_item_taxes(company, tax_codes):
+def create_item_taxes(company_name):
+    company = frappe.get_cached_doc("Company", company_name)
+
     abbr = company.abbr
     codes = frappe.get_all(
         "Code",
@@ -2385,26 +2395,15 @@ def set_item_taxes(invoice, auto_tax=None):
     if auto_tax == 0:
         return
 
-    item_tax_templates = frappe.get_all(
-        "Item Tax Template",
-        filters={
-            "company": invoice.company,
-            "disabled": 0,
-            "custom_code": ("is", "set"),
-        },
-        fields=["name", "custom_code"],
-        limit=0,
-    )
-
-    tax_templates_by_code = {d.custom_code: d.name for d in item_tax_templates}
-    company = frappe.get_cached_doc("Company", invoice.company)
-
-    default_item_tax = tax_templates_by_code.get(company.custom_tax_code, None)
+    settings = get_settings(invoice.company)
+    default_item_tax = settings.default_item_tax
 
     if not default_item_tax:
-        tax_templates_by_code = create_item_taxes(company, tax_templates_by_code)
+        create_item_taxes(invoice.company)
 
-    default_item_tax = tax_templates_by_code.get(company.custom_tax_code, None)
+        frappe.throw(
+            f"Set <b>Default Item Tax</b> in company <a href='{settings.get_url()}'>{frappe.bold(invoice.company)}</a>"
+        )
 
     for item in invoice.items:
         if item.item_tax_template:
@@ -2418,333 +2417,6 @@ def not_supported():
     frappe.throw(
         "Smart Invoice does not support this feature/tax type yet. Please contact support."
     )
-
-
-# def prepare_invoice_data(invoice, branch=None):
-#     if isinstance(invoice, str):
-#         invoice = frappe.get_cached_doc("Sales Invoice", invoice)
-
-#     if invoice.discount_amount:
-#         frappe.throw(_("Sorry, invoice level discounting is not yet supported in Smart Invoice. You can set item level discounts instead."), title="Not Supported")
-
-#     company = frappe.get_cached_doc("Company", invoice.company)
-#     if invoice.doctype == "Purchase Invoice":
-#         party = frappe.get_cached_doc("Supplier", invoice.supplier)
-#     else:
-#         party = frappe.get_cached_doc("Customer", invoice.customer)
-
-#     if not branch:
-#         branches = get_user_branches()
-#         branch = next((b for b in branches if b['custom_company'] == invoice.company), None)
-#         if not branch and not frappe.flags.batch:
-#             # TODO: use default branch from company if its a sync_job
-#             frappe.throw("No branch found for the current user and company")
-
-#     posting_date = invoice.posting_date
-#     posting_time = invoice.posting_time or "00:00:00"
-
-#     # Group variables that depend on is_return
-#     if invoice.is_return == 1:
-#         original_invoice = frappe.get_cached_doc("Sales Invoice", invoice.return_against)
-#         rcpt_ty_cd = "R"
-#         sales_stts_cd = "05"
-#         org_invc_no = original_invoice.custom_receipt_no
-#         org_sdc_id = original_invoice.custom_sdc_id
-#         rfd_rsn_cd = invoice.custom_refund_reason_code
-#         rfd_dt = None
-#         if rfd_rsn_cd:
-#             rfd_dt = api_date_format(f"{posting_date} {posting_time}")
-#         cancel_date = get_cancel_date(invoice)
-#     else:
-#         rcpt_ty_cd = "S"
-#         sales_stts_cd = "02"
-#         org_sdc_id = None
-#         org_invc_no = 0
-#         rfd_dt = None
-#         rfd_rsn_cd = ""
-#         cancel_date = None
-
-#     posting_date_time = api_date_format(f"{posting_date} {posting_time}")
-#     posting_date_only = api_date_format(posting_date, date_only=True)
-
-#     country_code = get_country_code(invoice)
-#     invoice_name = api_date_format(f"{frappe.utils.get_datetime_str(frappe.utils.get_datetime())}")
-
-#     data = {
-#         "tpin": branch['custom_tpin'],
-#         "bhfId": branch['custom_bhf_id'],
-#         "orgSdcId": org_sdc_id,
-#         "orgInvcNo": org_invc_no,
-#         "cisInvcNo": invoice_name,# invoice.name, #
-#         "custTpin": party.tax_id,
-#         "custNm": party.customer_name,
-#         "salesTyCd": "N",  # Assuming normal sale
-#         "rcptTyCd": rcpt_ty_cd,
-#         "pmtTyCd": get_payment_code(invoice),
-#         "salesSttsCd": sales_stts_cd,
-#         "cfmDt": posting_date_time,
-#         "salesDt": posting_date_only,
-#         "stockRlsDt": None if invoice.update_stock == 0 else posting_date_time,
-#         "cnclReqDt": cancel_date,
-#         "cnclDt": cancel_date,
-#         "rfdDt": rfd_dt,
-#         "rfdRsnCd": rfd_rsn_cd,
-#         "totItemCnt": len(invoice.items),
-#         "prchrAcptcYn": "Y",
-#         "remark": invoice.remarks or "",
-#         "saleCtyCd": "1",
-#         "lpoNumber": None, # invoice.po_no or None,
-#         "destnCountryCd": country_code if not "ZM" else None,
-#         "currencyTyCd": invoice.currency or "XXX",
-#         "exchangeRt": invoice.conversion_rate,
-#         "dbtRsnCd": None,
-#         "invcAdjustReason": None,
-#         "cashDcAmt": flt(invoice.discount_amount, 3),
-#         "cashDcRt": flt(invoice.additional_discount_percentage, 3),
-
-#         "taxRtA": 16,
-#         "taxblAmtA": 0.0,
-#         "taxAmtA": 0.0,
-#         "taxRtB": 16,
-#         "taxblAmtB": 0.0,
-#         "taxAmtB": 0.0,
-#         "taxRtC1": 0,
-#         "taxblAmtC1": 0.0,
-#         "taxAmtC1": 0.0,
-#         "taxRtC2": 0,
-#         "taxblAmtC2": 0.0,
-#         "taxAmtC2": 0.0,
-#         "taxRtC3": 0,
-#         "taxblAmtC3": 0.0,
-#         "taxAmtC3": 0.0,
-#         "taxRtD": 0,
-#         "taxblAmtD": 0.0,
-#         "taxAmtD": 0.0,
-#         "taxRtRvat": 0,
-#         "taxblAmtRvat": 0.0,
-#         "taxAmtRvat": 0.0,
-#         "taxRtE": 0,
-#         "taxblAmtE": 0.0,
-#         "taxAmtE": 0.0,
-#         "taxRtF": 10,
-#         "taxblAmtF": 0.0,
-#         "taxAmtF": 0.0,
-#         "taxRtTot": 0,
-#         "taxblAmtTot": 0.0,
-#         "taxAmtTot": 0.0,
-
-#         "taxRtIpl1": 5,
-#         "taxblAmtIpl1": 0.0,
-#         "taxAmtIpl1": 0.0,
-#         "taxRtIpl2": 0,
-#         "taxblAmtIpl2": 0.0,
-#         "taxAmtIpl2": 0.0,
-#         "taxRtTl": 1.5,
-#         "taxblAmtTl": 0.0,
-#         "taxAmtTl": 0.0,
-#         "taxRtEcm": 5,
-#         "taxblAmtEcm": 0.0,
-#         "taxAmtEcm": 0.0,
-#         "taxRtExeeg": 3,
-#         "taxblAmtExeeg": 0.0,
-#         "taxAmtExeeg": 0.0,
-
-#         "tlAmt": 0.0,
-#         "totTaxblAmt": 0.0,
-#         "totTaxAmt": 0.0,
-#         "totAmt": 0.0,
-#         "itemList": []
-#     }
-#     items = []
-#     data, items = calculate_item_taxes(company, invoice, data, items)
-
-#     data.update({"itemList": items})
-#     data.update(get_doc_user_data(invoice)) # add user info
-
-#     return data
-
-
-# def calculate_item_taxes(company, invoice, data, items):
-#     items = []
-
-#     for idx, item in enumerate(invoice.items, start=1):
-
-#         item_doc = frappe.get_cached_doc("Item", item.item_code)
-#         unit_cd, pkg_unit = get_unit_code(item_doc, invoice.company)
-
-#         item_data = {
-#             "itemSeq": idx,
-#             "itemCd": item.item_code,
-#             "itemClsCd": item_doc.custom_item_cls_cd or company.custom_default_item_class,
-#             "itemNm": item.item_code,
-#             "bcd": None,
-#             "pkgUnitCd": pkg_unit or "PACK",
-#             "pkg": flt(abs(item.qty), 3),
-#             "qtyUnitCd": unit_cd or "U",
-#             "qty": flt(abs(item.qty), 3),
-#             "prc": flt(item.rate, 3),
-#             "splyAmt": flt(abs(item.amount), 3),
-#             "dcRt": 0.0, # flt(item.discount_percentage, 3) if item.discount_percentage else 0.0,
-#             "dcAmt": 0.0, # flt(item.discount_amount, 3) if item.discount_amount else 0.0,
-#             "isrccCd": None,
-#             "isrccNm": None,
-#             "rrp": flt(item.rate, 3),
-#             "isrcRt": 0.0,
-#             "isrcAmt": 0.0,
-#             "totDcAmt": 0.0,
-#             "totAmt": flt(abs(item.amount), 3),
-#             "vatTaxblAmt": 0.0,
-#             "vatAmt": 0.0
-#         }
-
-#         # set tax defaults
-#         code_doc = None
-#         if not item_doc.custom_industry_tax_type or not item.item_tax_template or not item.custom_tax_rate or not item.custom_tax_code:
-#             if not item.custom_tax_code:
-#                 item.custom_tax_code = company.custom_tax_code
-#                 if not item.custom_tax_code:
-#                     frappe.throw(f"Set <strong>Tax Bracket</strong> in company <a href='{company.get_url()}'>{frappe.bold(invoice.company)}</a>")
-
-#             if not item.item_tax_template or not item.custom_tax_rate:
-#                 if item.custom_tax_code:
-#                     code_doc = frappe.get_cached_value("Code", {"cd": item.custom_tax_code}, ["name", "cd_nm", "user_dfn_cd1"], as_dict=True)
-#                 else:
-#                     code_doc = frappe.get_cached_doc("Code", company.custom_tax_bracket)
-
-#                 item.custom_tax_rate  = flt(code_doc.user_dfn_cd1, 2)
-#                 item.item_tax_template = f"{code_doc.cd_nm} - {company.abbr}"
-
-#             # do industry tax type helps choose the correct calculation
-#             if not item_doc.custom_industry_tax_type:
-#                 templates = {
-#                     f"TOT - {company.abbr}": "TOT",
-#                     f"Standard Rated(16%) - {company.abbr}": "VAT",
-#                     f"Minimum Taxable Value (MTV-16%) - {company.abbr}": "VAT",
-#                     f"Reverse VAT - {company.abbr}": "VAT",
-#                     f"Disbursement - {company.abbr}": "Zero Rated (VAT)",
-#                     f"Exempt - {company.abbr}": "Zero Rated (VAT)",
-#                     f"Zero-rated by nature - {company.abbr}": "Zero Rated (VAT)",
-#                     f"Zero-rated LPO - {company.abbr}": "Zero Rated (VAT)",
-#                     f"Exports(0%) - {company.abbr}": "Zero Rated (VAT)",
-#                     f"Excise Electricity - {company.abbr}": "Excise Duty",
-#                     f"Excise on Coal - {company.abbr}": "Excise Duty",
-#                     f"Tourism Levy - {company.abbr}": "Tourism Levy",
-#                     f"Insurance Premium Levy - {company.abbr}": "Insurance Premium Levy",
-#                     f"Re-insurance - {company.abbr}": "Insurance Premium Levy"
-#                 }
-#                 # defaults to VAT if no industry tax type is set, VAT will work for VAT and TOT depending on the computed item tax code
-#                 item_doc.custom_industry_tax_type = templates.get(item.item_tax_template, "VAT")
-
-
-#             if item.idx == 1:
-#                 frappe.msgprint("Item Taxes not set. Using company default.", indicator="Warning", alert=True)
-
-#         tax_code = item.custom_tax_code.title()
-
-#         # Calculate taxes for the item
-#         if item_doc.custom_industry_tax_type in ["Excise Duty", "Tourism Levy", "Insurance Premium Levy"]:
-#             tax_types = {
-#                 "Excise Duty": "excise",
-#                 "Tourism Levy": "tl",
-#                 "Insurance Premium Levy": "ipl"
-#             }
-
-#             tax_rate = flt(item.custom_tax_rate)
-
-#             amt = flt(abs(item.amount), 4)
-#             rate = 0.0
-#             taxable_amount = 0.0
-#             tax_amt = 0.0
-
-#             if tax_rate != 0:
-#                 rate = (flt(tax_rate/100) + 1)
-#                 taxable_amount = flt(amt/rate, 4)
-#                 tax_amt = flt(amt - taxable_amount, 4)
-
-#             tax_type = tax_types[item_doc.custom_industry_tax_type]
-
-#             if item_doc.custom_industry_tax_type in ["Tourism Levy", "Insurance Premium Levy"]:
-#                 if tax_code == "Ipl2":
-#                     taxable_amount = amt
-
-#                 item_data.update({
-#                     f"{tax_type}CatCd": item.custom_tax_code,
-#                     f"{tax_type}TaxblAmt": taxable_amount,
-#                     f"{tax_type}Amt": tax_amt
-#                 })
-#             elif item_doc.custom_industry_tax_type == "Excise Duty":
-#                 item_data.update({
-#                     f"{tax_type}TxCatCd": item.custom_tax_code,
-#                     f"{tax_type}TaxblAmt": taxable_amount,
-#                     f"{tax_type}TxAmt": tax_amt
-#                 })
-
-#             inv_taxable_amount = data[f"taxblAmt{tax_code}"] + taxable_amount
-#             inv_tax_amount = data[f"taxAmt{tax_code}"] + tax_amt
-
-#             tot_taxbl_amt = data[f"totTaxblAmt"] + taxable_amount
-#             tot_tax_amt = data[f"totTaxAmt"] + tax_amt
-#             inv_tot_amt = data["totAmt"] + amt
-
-#             data.update({
-#                 f"taxblAmt{tax_code}": flt(inv_taxable_amount, 4),
-#                 f"taxAmt{tax_code}": flt(inv_tax_amount, 4),
-
-#                 f"taxRt{tax_code}": tax_rate,
-
-#                 "totTaxblAmt": flt(tot_taxbl_amt, 4),
-#                 "totTaxAmt": flt(tot_tax_amt, 4),
-#                 "totAmt": flt(inv_tot_amt, 4)
-#             })
-#         elif item_doc.custom_industry_tax_type == "Rental Tax":
-#             not_supported()
-#         elif item_doc.custom_industry_tax_type == "Service Tax":
-#             not_supported()
-#         else:
-#             item_taxes = {}
-#             tax_rate = (flt(item.custom_tax_rate, 4)/100) + 1 if item.custom_tax_rate else 0.0
-#             amt = flt(abs(item.amount), 4)
-
-#             taxable_amount = flt((amt/tax_rate) if tax_rate != 0 else 0, 4)
-#             tax_amt = flt(amt - taxable_amount, 4)
-
-#             item_taxes = {
-#                 "totAmt": amt,
-#                 "vatTaxblAmt": taxable_amount,
-#                 "vatAmt": tax_amt
-#             }
-
-#             if tax_code in ["A", "B", "C1", "C2", "C3", "D", "E", "Rvat"]:
-#                 item_taxes.update({
-#                     "vatCatCd": tax_code.upper(),
-#                 })
-#             elif tax_code == "Tot":
-#                 item_taxes.update({
-#                     "taxCatCd": tax_code.upper(),
-#                     "vatTaxblAmt": amt,
-#                     "vatAmt": 0
-#                 })
-
-#             item_data.update(item_taxes)
-
-#             # total main doc from each item
-#             tax_amount = data[f"taxAmt{tax_code}"] + item_taxes.get("vatAmt", 0)
-#             taxable_amount = data[f"taxblAmt{tax_code}"] + item_taxes.get("vatTaxblAmt", 0)
-#             total_taxable_amount = data[f"totTaxblAmt"] + item_taxes.get("vatTaxblAmt", 0)
-#             total_tax_amount = data[f"totTaxAmt"] + item_taxes.get("vatAmt", 0)
-#             total_amount = data["totAmt"] + item_taxes.get("totAmt", 0)
-
-#             data.update({
-#                 f"taxAmt{tax_code}": flt(tax_amount, 4),
-#                 f"taxblAmt{tax_code}": flt(taxable_amount, 4),
-#                 "taxblAmtTot": 0,
-#                 "taxAmtTot": 0,
-#                 "totTaxblAmt": flt(total_taxable_amount, 4),
-#                 "totTaxAmt": flt(total_tax_amount, 4),
-#                 "totAmt": flt(total_amount, 4)
-#             })
-#         items.append(item_data)
-#     return data, items
 
 
 def get_item_taxes(item, tax_code):
@@ -2950,7 +2622,7 @@ def get_unit_code(item, company):
     - search codes for matching UOM
     - use fallback UOMs if nothting is found
         - smart_invoice_settings.default_uom : suggest each
-        - smart_invoice_settings.default_pkg_uom : suggest pack
+        - smart_invoice_settings.default_packing_unit : suggest pack
     """
 
     unit_cd = None
@@ -2983,16 +2655,13 @@ def get_unit_code(item, company):
                     pkg_unit = code.cd
 
     defaults = []
-    company_doc = None
+    settings = get_settings(company)
     if not unit_cd:
-        company_doc = frappe.get_cached_doc("Company", company)
-        unit_cd = company_doc.custom_unit_code
-        defaults.append(company_doc.custom_unit_code)
+        unit_cd = settings.uom_code
+        defaults.append(settings.uom_code)
     if not pkg_unit:
-        if not company_doc:
-            company_doc = frappe.get_cached_doc("Company", company)
-        pkg_unit = company_doc.custom_packaging_unit_code
-        defaults.append(company_doc.custom_packaging_unit_code)
+        pkg_unit = settings.packing_unit_code
+        defaults.append(settings.packing_unit_code)
 
     if defaults and not frappe.flags.skip_failing:
         frappe.msgprint(
@@ -3749,7 +3418,9 @@ def generate_item_code(item, initialize=False):
     )  # Default to "2" for finished product
 
     # Get the packaging unit code and quantity unity code
-    company_name = frappe.defaults.get_user_default("Company")
+    company_name = frappe.defaults.get_user_default(
+        "Company"
+    )  # TODO: company from session
     unit, pkg_unit = get_unit_code(item, company_name)
 
     # Generate the next value for the item code
