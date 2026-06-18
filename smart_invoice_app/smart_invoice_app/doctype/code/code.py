@@ -5,7 +5,7 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import flt
 
-from smart_invoice_app.app import is_migration
+from smart_invoice_app.app import get_selected_branch, is_migration
 
 
 class Code(Document):
@@ -15,12 +15,17 @@ class Code(Document):
         self.attempt_code_mapping()
 
     @frappe.whitelist()
-    def attempt_code_mapping(self, force=False):
+    def attempt_code_mapping(self, company_name=None, force=False):
         already_mapped_non_uom_code = self.mapped_doctype != "UOM" and self.mapped_entry
         if (not self.mapped_doctype or already_mapped_non_uom_code) and not force:
             return
 
-        map_entry = self.find_mapping_entry()
+        if not company_name:
+            # get from user session
+            company_branch = get_selected_branch()
+            company_name = company_branch.get("company")
+
+        map_entry = self.find_mapping_entry(company_name)
 
         if map_entry:
             self.mapped_entry = map_entry
@@ -63,7 +68,7 @@ class Code(Document):
             frappe.log_error(f"Error in get_code_field: {str(e)}")
             return None
 
-    def find_mapping_entry(self):
+    def find_mapping_entry(self, company_name):
         if self.mapped_doctype in ["UOM"]:
             try:
                 mapped_uom = self.find_db_entry("uom_name", "custom_cd")
@@ -103,7 +108,7 @@ class Code(Document):
             if item_tax_template:
                 return item_tax_template[0]["title"]
             else:
-                return self.create_item_tax_template_entry()
+                return self.create_item_tax_template_entry(company_name)
         if self.mapped_doctype in ["Country"]:
             country = self.find_db_entry("country_name", "code")
             if country:
@@ -121,11 +126,9 @@ class Code(Document):
                 alert=True,
             )
 
-    def create_item_tax_template_entry(self):
+    def create_item_tax_template_entry(self, company_name):
         # TODO: Multi-company support
-        company = frappe.get_cached_doc(
-            "Company", frappe.defaults.get_user_default("company")
-        )
+        company = frappe.get_cached_doc("Company", company_name)
         self.create_item_taxes(company)
         last_doc = frappe.get_last_doc("Item Tax Template")
         return last_doc.name

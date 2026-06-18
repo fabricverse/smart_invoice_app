@@ -1092,9 +1092,7 @@ def calculate_item_taxes(company, invoice, data, items, country_code=None):
             else:
                 tax_code = settings.item_tax_code
                 if not tax_code:
-                    frappe.throw(
-                        f"Set <b>Default Item Tax</b> in company <a href='{settings.get_url()}'>{frappe.bold(settings.company)}</a>"
-                    )
+                    set_defaults_exception()
 
                 code_doc = frappe.get_cached_value(
                     "Code",
@@ -1472,7 +1470,7 @@ def get_tax_logic(ledger, item_doc, company, settings, amt, stock_item_data, ite
         # Company Default Fallback
         tax_code = (settings.item_tax_code or "A").upper()
         if not tax_code:
-            frappe.throw(f"Set Tax Bracket in company {ledger.company}")
+            set_defaults_expection()
         code_doc = frappe.get_cached_value(
             "Code", {"cd": tax_code}, ["cd_nm", "user_dfn_cd1"], as_dict=True
         )
@@ -1576,6 +1574,12 @@ def get_tax_logic(ledger, item_doc, company, settings, amt, stock_item_data, ite
         )
 
     return stock_item_data, item_data
+
+
+def set_defaults_exception():
+    frappe.throw(
+        f"Set <b>Company Defaults</b> in <a href='{settings.get_url()}'>{frappe.bold(settings.company)}<b>'s Smart Invoice Settings</b></a>"
+    )
 
 
 def get_valuation_price(ledger):
@@ -1928,9 +1932,7 @@ def get_item_data_deprecated(ledger):
         # use company default company if not set in transation or item
         tax_code = settings.item_tax_code
         if not tax_code:
-            frappe.throw(
-                f"Set <b>Default Item Tax</b> in company <a href='{settings.get_url()}'>{frappe.bold(settings.company)}</a>"
-            )
+            set_defaults_exception()
 
             code_doc = frappe.get_cached_value(
                 "Code",
@@ -2400,10 +2402,7 @@ def set_item_taxes(invoice, auto_tax=None):
 
     if not default_item_tax:
         create_item_taxes(invoice.company)
-
-        frappe.throw(
-            f"Set <b>Default Item Tax</b> in company <a href='{settings.get_url()}'>{frappe.bold(invoice.company)}</a>"
-        )
+        set_defaults_exception()
 
     for item in invoice.items:
         if item.item_tax_template:
@@ -3869,16 +3868,18 @@ def get_user_changes(doc, user_list):
 
 
 @frappe.whitelist()
-def initialize(company):
+def initialize(company_name):
 
-    update_branches(company=company, initialize=True, doctype="Smart Invoice Settings")
-    # update_item_classes(company=company, initialize=True)
-    # update_codes(company=company, initialize=True)
+    update_branches(
+        company=company_name, initialize=True, doctype="Smart Invoice Settings"
+    )
+    # update_item_classes(company=company_name, initialize=True)
+    # update_codes(company=company_name, initialize=True)
 
-    # create_tax_templates(company=company)
+    # create_tax_templates(company=company_name)
 
 
-def create_tax_templates(company):
+def create_tax_templates(company_name):
     tax_codes = tax_codes = frappe.get_all(
         "Code",
         fields=["name", "cd_nm", "cd"],
@@ -3892,8 +3893,8 @@ def create_tax_templates(company):
         if code.cd in tax_template_codes:
             continue
         tax_template_doc = frappe.get_doc("Code", code.name)
-        tax_template_doc.attempt_code_mapping(force=True)
-        tax_template_doc.create_item_tax_template_entry()
+        tax_template_doc.attempt_code_mapping(company_name, force=True)
+        tax_template_doc.create_item_tax_template_entry(company_name)
 
 
 def get_company_by_tpin(tpin):

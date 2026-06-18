@@ -1,5 +1,5 @@
 // Purpose: Adds smart invoice branch switcher button and functionality to the right of awesome search bar
-return;
+//
 // add icon to switcher button
 if (!$("link[href*='octicons']").length) {
     $("<link>")

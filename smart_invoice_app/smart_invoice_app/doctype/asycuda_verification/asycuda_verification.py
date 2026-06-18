@@ -14,9 +14,11 @@ from smart_invoice_app.app import (
     format_date_only,
     get_doc_user_data,
     get_industry_tax_type,
+    get_settings,
     get_tax_template_by_tax_code,
     get_uom_by_zra_unit,
     get_user_branches,
+    set_defaults_exception,
     validate_api_response,
 )
 
@@ -298,10 +300,9 @@ class ASYCUDAVerification(Document):
         pass
 
     def get_or_create_new_item(self, item):
-        company_name = frappe.defaults.get_user_default(
-            "Company"
-        ) or frappe.db.get_single_value("Global Defaults", "default_company")
-        company = frappe.get_cached_doc("Company", company_name)
+        settings = get_settings(self.company)
+        if not settings.branches_setup:
+            set_defaults_exception()
 
         price = flt(float(item.amount) / float(item.qty), 4)
         docname = item.name
@@ -309,12 +310,10 @@ class ASYCUDAVerification(Document):
         name = item.item_name
 
         custom_industry_tax_type, tax_code = get_industry_tax_type(
-            tax_code=company.custom_tax_code
+            tax_code=settings.item_tax_code
         )  #
-        itt = get_tax_template_by_tax_code(company.custom_tax_code)  #
-        uom = (
-            get_uom_by_zra_unit(item.qty_unit) or company.custom_default_unit_of_measure
-        )
+        itt = get_tax_template_by_tax_code(settings.item_tax_code)  #
+        uom = get_uom_by_zra_unit(item.qty_unit) or settings.default_uom
 
         # FIX: Parameterized SQL to prevent injection
         db_item = frappe.db.sql(
@@ -352,11 +351,11 @@ class ASYCUDAVerification(Document):
             new.is_stock_item = maintain_stock
             new.valuation_rate = price
             new.item_group = "Products"
-            new.custom_item_cls = item.item_class or company.custom_default_item_class
+            new.custom_item_cls = item.item_class or settings.default_item_class
             new.country_of_origin = get_country_code(item.country_of_origin) or "Zambia"
             new.stock_uom = uom
             new.custom_pkg_unit = (
-                get_uom_by_zra_unit(item.package_unit) or company.custom_packaging_unit
+                get_uom_by_zra_unit(item.package_unit) or settings.default_packing_unit
             )
 
             new.custom_industry_tax_type = custom_industry_tax_type
@@ -745,7 +744,6 @@ def get_branch_details_from_request(request):
         branch = data.get("bhfId", "000")
         tpin = data.get("tpin")
 
-        # Optimization 5: Cached string queries are fast, but ensure fields are indexed in DocType
         branch_data = frappe.db.get_values(
             "Branch",
             {"custom_bhf_id": branch, "custom_tpin": tpin},
