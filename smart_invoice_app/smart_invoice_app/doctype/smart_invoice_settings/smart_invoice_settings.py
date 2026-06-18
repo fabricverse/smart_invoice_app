@@ -60,3 +60,25 @@ class SmartInvoiceSettings(Document):
     def get_environments(self):
         envs = frappe.get_all("Environment", fields=["name", "base_url"])
         return {d["name"]: d["base_url"] for d in envs}
+
+    @frappe.whitelist()
+    def auto_check_branches_have_users(self):
+        if self.branches_have_users() == 1 and self.branches_setup == 0:
+            self.branches_setup = 1
+            self.status = "Active"
+            self.save()
+            self.reload()
+
+    def branches_have_users(self):
+        """checks if any of the company's branches have no users"""
+        branches = frappe.get_all(
+            "Branch", filters={"custom_company": self.company}, pluck="name"
+        )
+
+        for branch in branches:
+            branch = frappe.get_cached_doc("Branch", branch)
+            if len(branch.custom_branch_users) < 1:
+                # this branch has no users
+                return 0
+        # all do
+        return 1

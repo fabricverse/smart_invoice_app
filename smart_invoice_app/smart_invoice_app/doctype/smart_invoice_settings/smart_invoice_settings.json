@@ -7,10 +7,12 @@
  "engine": "InnoDB",
  "field_order": [
   "section_break_tyc0",
+  "column_break_tana",
   "status",
   "column_break_bbbc",
   "initialized",
   "loaded_initialization_data",
+  "branches_setup",
   "section_break_ctyz",
   "company",
   "tpin",
@@ -18,8 +20,6 @@
   "vsdc_serial",
   "section_break_vemr",
   "environment",
-  "timeout",
-  "max_retries",
   "column_break_ofch",
   "base_url",
   "use_custom_server",
@@ -32,11 +32,16 @@
   "default_packing_unit",
   "packing_unit_code",
   "default_item_tax",
-  "item_tax_code"
+  "item_tax_code",
+  "advanced_settings_section",
+  "timeout",
+  "column_break_zydw",
+  "max_retries"
  ],
  "fields": [
   {
    "default": "Sandbox",
+   "description": "Select <i>Production</i> to go live, <i>Sandbox</i> for testing",
    "fieldname": "environment",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -125,10 +130,12 @@
    "show_on_timeline": 1
   },
   {
+   "depends_on": "tpin",
    "fieldname": "section_break_tyc0",
    "fieldtype": "Section Break"
   },
   {
+   "description": "Recommended: Nos or Each",
    "fieldname": "default_uom",
    "fieldtype": "Link",
    "label": "Default UOM",
@@ -144,6 +151,7 @@
    "no_copy": 1
   },
   {
+   "description": "Recommended: Pack or Each",
    "fieldname": "default_packing_unit",
    "fieldtype": "Link",
    "label": "Default Packing Unit",
@@ -159,6 +167,8 @@
    "no_copy": 1
   },
   {
+   "description": "Most handled sales item type (<a href=\"https://www.ungm.org/public/unspsc\">UNSPSC reference codes</a>)",
+   "documentation_url": "https://www.ungm.org/public/unspsc",
    "fieldname": "default_item_class",
    "fieldtype": "Link",
    "label": "Default Item Class",
@@ -167,6 +177,7 @@
    "options": "Item Class"
   },
   {
+   "description": "TOT or Standard Rated for VAT",
    "fieldname": "default_item_tax",
    "fieldtype": "Link",
    "label": "Default Item Tax",
@@ -194,7 +205,8 @@
    "fieldname": "timeout",
    "fieldtype": "Int",
    "label": "Server Request Timeout (in seconds)",
-   "length": 3
+   "length": 3,
+   "reqd": 1
   },
   {
    "default": "10",
@@ -202,7 +214,8 @@
    "fieldname": "max_retries",
    "fieldtype": "Int",
    "label": "Max Retries",
-   "length": 2
+   "length": 2,
+   "reqd": 1
   },
   {
    "default": "0",
@@ -214,18 +227,42 @@
   },
   {
    "collapsible": 1,
-   "collapsible_depends_on": "eval: doc.base_url && doc.loaded_initialization_data == 1",
+   "collapsible_depends_on": "eval: (doc.base_url && doc.loaded_initialization_data == 1) && (!doc.default_item_tax && !doc.default_item_class && !doc.default_packing_unit && !doc.default_uom) ",
    "depends_on": "eval: doc.base_url && doc.loaded_initialization_data == 1",
-   "description": "These values are used when you have nothing specified in their respective documents.",
+   "description": "Used as default when you have nothing specified in respective documents",
    "fieldname": "company_defaults",
    "fieldtype": "Section Break",
    "label": "Company Defaults"
+  },
+  {
+   "default": "0",
+   "fieldname": "branches_setup",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Branches fully setup",
+   "show_on_timeline": 1
+  },
+  {
+   "collapsible": 1,
+   "depends_on": "branches_setup",
+   "description": "Knowledge users only",
+   "fieldname": "advanced_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Advanced Settings"
+  },
+  {
+   "fieldname": "column_break_zydw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_tana",
+   "fieldtype": "Column Break"
   }
  ],
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-17 16:45:09.104306",
+ "modified": "2026-06-18 12:16:03.983732",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Smart Invoice Settings",

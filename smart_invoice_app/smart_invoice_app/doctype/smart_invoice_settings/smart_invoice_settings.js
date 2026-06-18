@@ -94,37 +94,76 @@ frappe.ui.form.on("Smart Invoice Settings", {
 });
 function onboarding(frm) {
     const doc = frm.doc;
+
+    const company_defaults_setup =
+        doc.default_uom &&
+        doc.default_packing_unit &&
+        doc.default_item_class &&
+        doc.default_item_tax;
+
+    const step_one_done = doc.status && doc.tpin && doc.base_url;
+
+    const initialized = doc.initialized == 1;
+
+    const fully_initialized =
+        step_one_done && initialized && doc.loaded_initialization_data == 1;
+
+    const initialized_and_set_defaults =
+        fully_initialized && company_defaults_setup;
+
+    const completed = fully_initialized && doc.branches_setup;
+
     if (!doc.status || !doc.tpin) {
         frm.set_value("status", "Setup Company & TPIN");
-    } else if (doc.status == "Setup Company & TPIN" && !doc.base_url) {
+        frm.set_intro("");
+    } else if (doc.status && doc.tpin && !doc.base_url) {
         frm.set_value("status", "Setup Environment");
-    } else if (
-        ["Setup Environment", "Setup Company & TPIN"].includes(doc.status) &&
-        doc.base_url
-    ) {
+        frm.set_intro("");
+    } else if (step_one_done && !initialized) {
         frm.set_value("status", "Save");
-        frm.set_intro("Step 1 of 5: Save to initialize Smart Invoice", "blue");
-    } else if (doc.status == "Save" && doc.initialized == 0) {
-        frm.set_value("status", "Load Initialization Data");
         frm.set_intro(
-            "Step 2 of 5: Provide the right data and save to initialize Smart Invoice",
+            "<a>Step 1 of 4:</a> Save to initialize Smart Invoice",
             "blue",
         );
-    } else if (
-        (doc.initialized == 1 && doc.loaded_initialization_data == 0) ||
-        (doc.status === "Load Initialization Data" &&
-            doc.loaded_initialization_data == 0)
-    ) {
+    } else if (initialized && !fully_initialized) {
         frm.set_value("status", "Load Initialization Data");
         frm.set_intro(
-            "Step 3 of 5: Go to <b>Menu > Load Initialization Data</b>",
+            "<a>Step 2 of 4:</a> Go to <b>Menu > Load Initialization Data</b>",
             "blue",
         );
-    } else if (doc.initialized == 1 && doc.loaded_initialization_data == 1) {
+    } else if (fully_initialized && !company_defaults_setup) {
         frm.set_value("status", "Setup Company Defaults");
-        frm.set_intro("Step 4 of 5: Setup Company Defaults", "blue");
+        frm.set_intro(
+            "<b>Step 3 of 4:</b> Setup Company Defaults and save",
+            "blue",
+        );
+    } else if (initialized_and_set_defaults && !completed) {
+        frm.set_value("status", "Setup Branches");
+        frm.set_intro(
+            "<div style='display: flex; justify-content: space-between; align-items: center;'>" +
+                "<div><b>Step 4 of 4:</b> Add users to your branches</div>" +
+                `<div style='margin-right: 2%;'><a class='btn btn-success btn-sm success-action' target='_blank' href='/app/branch?custom_company=${frm.doc.company}'>Branch Setup</a></div>` +
+                "</div >            ",
+            "blue",
+        );
+
+        frappe.call({
+            method: "auto_check_branches_have_users",
+            doc: frm.doc,
+            callback: (e) => {},
+        });
+    } else if (completed) {
+        if (doc.status != "Active") frm.set_value("status", "Active");
+        frm.set_intro(
+            "Smart Invoice is fully setup. You can test the connection from <b>Menu > Connection Test</b>",
+            "green",
+        );
     } else {
-        frm.set_intro("else", "red");
+        frm.set_value("status", "Misconfigured");
+        frm.set_intro(
+            "Something's wrong. Test the connection from <b>Menu > Connection Test</b>",
+            "yellow",
+        );
     }
 
     console.log(doc.status);

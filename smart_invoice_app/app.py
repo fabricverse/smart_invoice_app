@@ -3236,13 +3236,13 @@ def handle_errors(doc):
             notify_user(doc, fallback_msg, "red")
 
 
-def trigger_reload(doc, name=None):
+def reload_doc(doc, doctype=None, name=None):
     frappe.publish_realtime(
         event="smart_invoice_event",
         message={
             "type": "reload",
             "name": name or doc.entry,
-            "doctype": doc.type or doc.doctype,
+            "doctype": doctype or doc.type or doc.doctype,
         },
         user=doc.modifier or doc.modified_by,
     )
@@ -3319,7 +3319,7 @@ def after_sync_process(request_doc, method=None):
 
                 elif request_doc.function == "update_item_status":
                     t_doc.update_item_status(request_doc)
-                    trigger_reload(request_doc)
+                    reload_doc(request_doc)
                 return
             elif request_doc.type == "Smart Invoice Settings":
                 if request_doc.function == "initialize_virtual_device":
@@ -3331,7 +3331,7 @@ def after_sync_process(request_doc, method=None):
                             "initialized",
                             1,
                         )
-                        trigger_reload(request_doc)
+                        reload_doc(request_doc)
                         notify_user(request_doc, "Device is initialized", "green")
                     else:
                         notify_user(request_doc, f"{data.get('resultMsg')}", "red")
@@ -3384,6 +3384,20 @@ def after_sync_process(request_doc, method=None):
                         "green",
                     )
                 return
+            elif request_doc.type == "Branch" and request_doc.status == "Success":
+                settings = get_settings(request_doc.company)
+                if settings.branches_setup == 0:
+                    frappe.set_value(
+                        settings.doctype, settings.name, "branches_setup", 1
+                    )
+
+                    reload_doc(request_doc, settings.doctype, settings.name)
+                    reload_doc(request_doc)
+
+                    notify_user(
+                        request_doc, "Updated <b>Smart Invoice Settings</b>", "green"
+                    )
+                    return
             elif request_doc.type == "Customer":
                 pass
     else:
@@ -3420,7 +3434,7 @@ def after_sync_process(request_doc, method=None):
 
     user = request_doc.modifier or frappe.session.user
     if user and request_doc.function not in ["this_update_import_items"]:
-        trigger_reload(request_doc)
+        reload_doc(request_doc)
 
     # Handle final status actions UI/Feedback updates cleanly
     if request_doc.status == "Success":
@@ -4233,7 +4247,9 @@ def sync_branches(initialize=True):
 
     fully_setup_companies = frappe.get_all(
         "Smart Invoice Settings",
-        filters={"status": ["in", ["Active", "Setup Company Defaults"]]},
+        filters={
+            "status": ["in", ["Active", "Setup Company Defaults", "Setup Branches"]]
+        },
         pluck="name",
     )
 
