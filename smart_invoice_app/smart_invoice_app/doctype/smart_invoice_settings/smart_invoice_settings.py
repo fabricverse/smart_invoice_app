@@ -22,18 +22,13 @@ class SmartInvoiceSettings(Document):
         self.initialize_virtual_device()
 
     def validate(self):
-        self.initialize_doc()
+        self.set_company_tax_id()
 
-    @frappe.whitelist()
-    def initialize_doc(self):
-        pass
-        # if self.use_custom_server == 0 or not self.base_url:
-        #     site_url = frappe.utils.get_url()
-        #     if self.base_url != site_url:
-        #         self.base_url = site_url
-        # if not self.tpin:
-        #     default_company = frappe.defaults.get_user_default("Company")
-        #     self.tpin = get_default_company_tpin()
+    def set_company_tax_id(self):
+        company = frappe.get_cached_doc("Company", self.company)
+        if not company.tax_id or company.tax_id != self.tpin:
+            company.db_set({"tax_id": self.tpin})
+            company.reload()
 
     @frappe.whitelist()
     def initialize_virtual_device(self):

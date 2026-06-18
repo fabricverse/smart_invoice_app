@@ -3,7 +3,6 @@
 
 frappe.ui.form.on("Smart Invoice Settings", {
     refresh(frm) {
-        // initialize_doc(frm);
         onboarding(frm);
 
         // add button to test connection
@@ -27,18 +26,6 @@ frappe.ui.form.on("Smart Invoice Settings", {
             //     })
             // }, "Menu");
 
-            // frm.add_custom_button(
-            //     __("1. Initialize Virtual Device"),
-            //     function () {
-            //         frappe.call({
-            //             method: "initialize_virtual_device",
-            //             doc: frm.doc,
-            //             callback: (r) => {},
-            //         });
-            //     },
-            //     "Menu",
-            // );
-
             frm.add_custom_button(
                 __("Load Initialization Data"),
                 function () {
@@ -54,6 +41,18 @@ frappe.ui.form.on("Smart Invoice Settings", {
                         args: {
                             company: frm.doc.company,
                         },
+                    });
+                },
+                "Menu",
+            );
+
+            frm.add_custom_button(
+                __("Re-initialize Device"),
+                function () {
+                    frappe.call({
+                        method: "initialize_virtual_device",
+                        doc: frm.doc,
+                        callback: (r) => {},
                     });
                 },
                 "Menu",
@@ -76,13 +75,10 @@ frappe.ui.form.on("Smart Invoice Settings", {
     use_custom_server: function (frm) {
         set_environment(frm);
     },
-    setup: function (frm) {
-        onboarding(frm);
-    },
     base_url: function (frm) {
         onboarding(frm);
     },
-    tpin(frm) {
+    tpin: function (frm) {
         if (frm.doc.tpin) {
             frm.set_value("vsdc_serial", String(frm.doc.tpin) + "_VSDC");
         } else {
@@ -113,12 +109,12 @@ function onboarding(frm) {
 
     const completed = fully_initialized && doc.branches_setup;
 
+    frm.set_intro("");
+
     if (!doc.status || !doc.tpin) {
         frm.set_value("status", "Setup Company & TPIN");
-        frm.set_intro("");
     } else if (doc.status && doc.tpin && !doc.base_url) {
         frm.set_value("status", "Setup Environment");
-        frm.set_intro("");
     } else if (step_one_done && !initialized) {
         frm.set_value("status", "Save");
         frm.set_intro(
@@ -165,8 +161,6 @@ function onboarding(frm) {
             "yellow",
         );
     }
-
-    console.log(doc.status);
 
     frm.page.set_indicator(
         `${frm.doc.status}`,

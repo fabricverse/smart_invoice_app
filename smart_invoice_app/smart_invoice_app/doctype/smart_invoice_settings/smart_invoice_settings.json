@@ -6,6 +6,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "setup_tab",
   "section_break_tyc0",
   "column_break_tana",
   "status",
@@ -33,6 +34,7 @@
   "packing_unit_code",
   "default_item_tax",
   "item_tax_code",
+  "technical_tab",
   "advanced_settings_section",
   "timeout",
   "column_break_zydw",
@@ -243,12 +245,10 @@
    "show_on_timeline": 1
   },
   {
-   "collapsible": 1,
    "depends_on": "branches_setup",
    "description": "Knowledge users only",
    "fieldname": "advanced_settings_section",
-   "fieldtype": "Section Break",
-   "label": "Advanced Settings"
+   "fieldtype": "Section Break"
   },
   {
    "fieldname": "column_break_zydw",
@@ -257,12 +257,22 @@
   {
    "fieldname": "column_break_tana",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "technical_tab",
+   "fieldtype": "Tab Break",
+   "label": "Technical"
+  },
+  {
+   "fieldname": "setup_tab",
+   "fieldtype": "Tab Break",
+   "label": "Setup"
   }
  ],
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-18 12:16:03.983732",
+ "modified": "2026-06-18 17:51:09.606489",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Smart Invoice Settings",
