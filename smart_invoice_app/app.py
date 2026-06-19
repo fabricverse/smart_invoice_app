@@ -292,11 +292,9 @@ def get_default_company_tpin():
 from smart_invoice_api.api import select_branches as api_select_branches
 
 
-def get_branches(company, initialize=False, doctype="Branch"):
-    """Get all branches for all companies
-    Smart Invoice returns all company branches using branch code 000
-    """
-    company_settings = get_settings(company)
+def get_branches(company_name, initialize=False, doctype="Branch"):
+    """Creates a request to get company branches using its hq branch code - 000"""
+    company_settings = get_settings(company_name)
     function = get_function_name()
 
     # Construct meta dynamically for each iteration
@@ -308,7 +306,7 @@ def get_branches(company, initialize=False, doctype="Branch"):
             {
                 "function": f"{function}_confirm",
                 "doctype": "Smart Invoice Settings",
-                "entry": company,
+                "entry": company_name,
             }
         )
 
@@ -362,13 +360,21 @@ def finish_get_purchase_invoices(request_doc):
         invoices = response.get("data", {"saleList": None}).get("saleList")
         create_purchase_invoices(request_doc, invoices)
     except Exception as e:
-        notify_user(request_doc, str(e), "red")
+        sync_notification(request_doc, str(e), "red")
+
+
+def get_company_name_from_request(sync_request):
+    tpin = json.loads(sync_request.request).get("tpin")
+    return get_company_name_by_tpin(tpin)
 
 
 def create_purchase_invoices(request_doc, invoices):
     count = 0
+    company_name = get_company_name_from_request(request_doc)
+    frappe.get_cached_doc("Company", company_name)
+
     for invoice in invoices:
-        if not frappe.db.exists(
+        if frappe.db.exists(
             "Purchase Invoice",
             {
                 "bill_no": invoice.get("spplrInvcNo"),
@@ -376,23 +382,20 @@ def create_purchase_invoices(request_doc, invoices):
                 "grand_total": invoice.get("totAmt"),
             },
         ):
-            create_invoice(invoice)
+            create_invoice(invoice, company)
             count += 1
     if count == 0:
-        notify_user(request_doc, "No new Purchase Invoices", "blue")
+        sync_notification(request_doc, "No new Purchase Invoices", "blue")
     elif count == 1:
-        notify_user(request_doc, f"Downloaded {count} Purchase Invoice", "green")
+        sync_notification(request_doc, f"Downloaded {count} Purchase Invoice", "green")
     else:
-        notify_user(request_doc, f"Downloaded {count} Purchase Invoices", "green")
+        sync_notification(request_doc, f"Downloaded {count} Purchase Invoices", "green")
 
 
-def create_invoice(invoice):
+def create_invoice(invoice, company):
     tpin = invoice.get("spplrTpin")
     name = invoice.get("spplrNm")
     branch = invoice.get("spplrBhfId")
-
-    default_company = frappe.defaults.get_user_default("Company")
-    company = frappe.get_cached_doc("Company", default_company)
 
     supplier = get_or_create_supplier(tpin, name, branch)
 
@@ -778,7 +781,6 @@ def get_invoice_data(invoice, branch=None):
             title="Not Supported",
         )
 
-    company = frappe.get_cached_doc("Company", invoice.company)
     if invoice.doctype == "Purchase Invoice":
         party = frappe.get_cached_doc("Supplier", invoice.supplier)
     else:
@@ -963,7 +965,7 @@ def get_invoice_data(invoice, branch=None):
         }
     )
     items = []
-    data, items = calculate_item_taxes(company, invoice, data, items, country_code)
+    data, items = calculate_item_taxes(invoice, data, items, country_code)
 
     data.update({"itemList": items})
     data.update(get_doc_user_data(invoice))  # add user info
@@ -971,10 +973,12 @@ def get_invoice_data(invoice, branch=None):
     return data
 
 
-def calculate_item_taxes(company, invoice, data, items, country_code=None):
+def calculate_item_taxes(invoice, data, items, country_code=None):
     items = []
 
-    settings = get_settings(company.name)
+    settings = get_settings(invoice.company)
+    company = frappe.get_cached_doc("Company", invoice.company)
+
     default_item_class_code = settings.item_class_code
 
     for idx, item in enumerate(invoice.items, start=1):
@@ -2706,47 +2710,27 @@ def get_function_name(prev=False):
         return inspect.stack()[2].function
 
 
-def notify_user(doc, msg, indicator):
-    """Pushes a final completion event to trigger form reload on the frontend."""
-    message = {}
-    entry = doc.get("entry")
+def sync_notification(doc, msg, indicator):
+    """Pushes scheduler and normal notifications via socketio"""
 
-    if not doc.entry:
-        modified_by = doc.get("modifier", frappe.session.user)
-        doctype = doc.get("doctype")
-
-        message = {
-            "status": "Success",
-            "message": msg,
-            "indicator": indicator,
-            "name": entry,
-            "doctype": doctype,
-            "type": "progress",
-            "function": doc.get("function"),
-            "user": modified_by,
-        }
-    else:
-        modified_by = doc.modifier
-        doctype = doc.type
-        entry = doc.entry
-
-        message = {
-            "status": doc.status,
-            "message": msg,
-            "indicator": indicator,
-            "name": doc.name,
-            "doctype": doctype,
-            "type": "progress",
-            "function": doc.function,
-            "user": modified_by,
-        }
+    message = {
+        "status": doc.status,
+        "message": msg,
+        "indicator": indicator,
+        "name": doc.entry,
+        "sync_doc_name": doc.name,
+        "doctype": doc.type,
+        "type": "progress",
+        "function": doc.get("function"),
+        "user": doc.modifier,
+    }
 
     frappe.publish_realtime(
         event="smart_invoice_event",
         message=message,
-        user=modified_by,
-        doctype=doctype,
-        docname=doc.name or entry,
+        user=doc.modifier,
+        doctype=doc.type,
+        docname=doc.entry,
     )
 
 
@@ -2772,9 +2756,6 @@ def ep(message):
     frappe.errprint(f"[Smart Invoice] {message}")
 
 
-import re
-
-
 def handle_errors(doc):
     """
     Parses and handles error responses from the Smart Invoice SDK.
@@ -2787,11 +2768,11 @@ def handle_errors(doc):
         try:
             response_json = json.loads(doc.response)
         except Exception as e:
-            notify_user(doc, "Failed to parse SDK response JSON.", "red")
+            sync_notification(doc, "Failed to parse SDK response JSON.", "red")
             return
     else:
         # ep("No response to process or status indicates no error.")
-        notify_user(doc, "No response from VSDC. Contact support.", "red")
+        sync_notification(doc, "No response from VSDC. Contact support.", "red")
 
     # Extract results safely
     result_cd = response_json.get("resultCd", None)
@@ -2862,7 +2843,7 @@ def handle_errors(doc):
     elif result_cd == "899":
         if doc.type == "Branch" and doc.function == "update_user_api":
             if '"bhfId": "000"' not in doc.request:
-                notify_user(
+                sync_notification(
                     doc,
                     "<p>Smart Invoice doesnt yet allow updating users for non-HQ branches. However, you should continue making updates for your users to use related features.</p><p>No further action related to this error is required.</p>",
                     "orange",
@@ -2870,22 +2851,25 @@ def handle_errors(doc):
                 return
         elif doc.type == "Asycuda Verification" and doc.function == "get_import_items":
             if '"bhfId": "000"' not in doc.request:
-                notify_user(doc, "ASYCUDA only supports HQ branch", "orange")
+                sync_notification(doc, "ASYCUDA only supports HQ branch", "orange")
                 return
         elif doc.type == "Branch" and "TPIN" in doc.response:
-            notify_user(
+            sync_notification(
                 doc,
                 "The customer TPIN is invalid, check if the length is correct",
                 "orange",
             )
             return
 
-        frappe.throw(
-            title=f"Smart Invoice Error - {result_cd}",
-            msg="Smart Invoice is likely misconfigured. Contact support.",
+        # frappe.throw(
+        #     title=f"Smart Invoice Error - {result_cd}",
+        #     msg="Smart Invoice is likely misconfigured. Contact support.",
+        # )
+        sync_notification(
+            doc, f"<strong>{result_cd}:</strong> {error_messages.get(result_cd)}", "red"
         )
     elif result_cd == "910" and doc.type == "Branch" and "custNo" in doc.response:
-        notify_user(
+        sync_notification(
             doc,
             "The phone number provided is invalid, make sure its 10 digits",
             "orange",
@@ -2895,13 +2879,13 @@ def handle_errors(doc):
         display_msg = f"<strong>{result_cd}:</strong> {error_messages.get(result_cd)}"
 
         if display_msg:
-            notify_user(doc, display_msg, "red")
+            sync_notification(doc, display_msg, "red")
         else:
             # Fallback for undocumented codes
             fallback_msg = (
                 sdk_msg or "An unexpected response code was returned by the server."
             )
-            notify_user(doc, fallback_msg, "red")
+            sync_notification(doc, fallback_msg, "red")
 
 
 def reload_doc(doc, doctype=None, name=None):
@@ -2939,16 +2923,13 @@ def after_sync_process(request_doc, method=None):
             t_doc = frappe.get_cached_doc(request_doc.type, request_doc.entry)
         except Exception as e:
             prints(e)
-            notify_user(
+            sync_notification(
                 request_doc,
                 f"Cant find doc {request_doc.entry}, check sync logs",
                 "yellow",
             )
 
         if t_doc:
-            tpin = json.loads(request_doc.request).get("tpin")
-            company = get_company_by_tpin(tpin)
-
             if request_doc.type == "Item" and request_doc.function in [
                 "update_item_api",
                 "save_item_api",
@@ -3000,10 +2981,14 @@ def after_sync_process(request_doc, method=None):
                             1,
                         )
                         reload_doc(request_doc)
-                        notify_user(request_doc, "Device is initialized", "green")
-                    else:
-                        notify_user(request_doc, f"{data.get('resultMsg')}", "red")
-                    return
+                        sync_notification(request_doc, "Device is initialized", "green")
+                        return
+
+                    # else:
+                    #     sync_notification(
+                    #         request_doc, f"{data.get('resultMsg')}", "red"
+                    #     )
+
                 elif (
                     request_doc.function == "get_codes"
                     and request_doc.status == "Success"
@@ -3022,33 +3007,38 @@ def after_sync_process(request_doc, method=None):
                 ):
                     if request_doc.function == "get_branches_confirm":
                         update_fields = {"loaded_initialization_data": 1}
-                        if t_doc.status == "Load Initialization Data":
-                            update_fields.update({"status": "Setup Company Defaults"})
+                        if t_doc.status == "Load Parameters":
+                            t_doc.update({"status": "Setup Company Defaults"})
 
-                        frappe.set_value(
-                            "Smart Invoice Settings", request_doc.company, update_fields
-                        )
+                        t_doc.db_set(update_fields)
+                        frappe.db.commit()
+
                         finish_branch_updates(request_doc)
-                        notify_user(
+
+                        sync_notification(
                             request_doc,
-                            f"<b>{company.name}</b> has been initialized",
+                            f"<b>{request_doc.company}</b> parameters loaded",
                             "green",
                         )
+                        reload_doc(request_doc)
+
                     return
                 elif request_doc.function == "get_branches_testing":
                     # Called from Smart Invoice Settings connection test
                     if request_doc.status == "Success":
-                        notify_user(request_doc, "Connected to Smart Invoice", "green")
+                        sync_notification(
+                            request_doc, "Connected to Smart Invoice", "green"
+                        )
                         return
                     else:
-                        notify_user(
+                        sync_notification(
                             request_doc, "Cannot connect to Smart Invoice", "red"
                         )
             elif request_doc.type == "BOM" and request_doc.status == "Success":
                 if request_doc.function == "save_item_composition_notify":
-                    notify_user(
+                    sync_notification(
                         request_doc,
-                        f"BOM synchronised for <b>{company.name}</b>",
+                        f"BOM synchronised for <b>{request_doc.company}</b>",
                         "green",
                     )
                 return
@@ -3062,7 +3052,7 @@ def after_sync_process(request_doc, method=None):
                     reload_doc(request_doc, settings.doctype, settings.name)
                     reload_doc(request_doc)
 
-                    notify_user(
+                    sync_notification(
                         request_doc, "Updated <b>Smart Invoice Settings</b>", "green"
                     )
                     return
@@ -3080,9 +3070,13 @@ def after_sync_process(request_doc, method=None):
             elif request_doc.function == "get_branches_testing":
                 # Called from VSDC connection test
                 if request_doc.status == "Success":
-                    notify_user(request_doc, "Connected to Smart Invoice", "green")
+                    sync_notification(
+                        request_doc, "Connected to Smart Invoice", "green"
+                    )
                 else:
-                    notify_user(request_doc, "Cannot connect to Smart Invoice", "red")
+                    sync_notification(
+                        request_doc, "Cannot connect to Smart Invoice", "red"
+                    )
         elif request_doc.type == "ASYCUDA Verification":
             if request_doc.function == "get_import_items":
                 if request_doc.status == "Success":
@@ -3117,7 +3111,7 @@ def after_sync_process(request_doc, method=None):
         return
 
     elif request_doc.status == "Connection Error":
-        notify_user(
+        sync_notification(
             request_doc,
             "Smart Invoice connection problem, retrying in the background",
             "orange",
@@ -3125,7 +3119,7 @@ def after_sync_process(request_doc, method=None):
         return
 
     elif request_doc.status == "Do not Retry":
-        notify_user(
+        sync_notification(
             request_doc, "Sync permanently halted: Max retries exceeded.", "red"
         )
         return
@@ -3134,11 +3128,12 @@ def after_sync_process(request_doc, method=None):
         try:
             handle_errors(request_doc)
         except Exception as e:
-            notify_user(request_doc, f"Error: {e}", "red")
+            prints(e)
+            sync_notification(request_doc, f"Error: {e}", "red")
 
 
 def sync_success_msg(doc=None):
-    notify_user(doc, "Synchronised with Smart Invoice", "green")
+    sync_notification(doc, "Synchronised with Smart Invoice", "green")
 
 
 from erpnext.stock.stock_ledger import get_stock_balance
@@ -3266,7 +3261,9 @@ def update_item_api(item, method=None, branch=None):
     }
 
     api_update_item(item_data, meta)
-    notify_user(meta, f"Updating <b>{item.name}</b> on Smart Invoice", indicator="blue")
+    sync_notification(
+        meta, f"Updating <b>{item.name}</b> on Smart Invoice", indicator="blue"
+    )
     return True
 
 
@@ -3289,18 +3286,20 @@ def save_invoice_api(invoice, method=None, branch=None):
 
 
 def start_sync_msg(meta):
-    notify_user(meta, "Connecting to Smart Invoice", indicator="blue")
+    sync_notification(meta, "Connecting to Smart Invoice", indicator="blue")
 
 
 def to_json(request):
     if not request:
-        notify_user(request, "Empty response received, contact support.", "orange")
+        sync_notification(
+            request, "Empty response received, contact support.", "orange"
+        )
         return
 
     try:
         return json.loads(request.response)
     except json.JSONDecodeError:
-        notify_user(request, "Invalid JSON response:", "red")
+        sync_notification(request, "Invalid JSON response:", "red")
         return
 
 
@@ -3347,7 +3346,9 @@ def save_item_api(item, method=None, branch=None):
         "modifier": item.modified_by,
     }
     api_save_item(item_data, meta)
-    notify_user(meta, f"Saving <b>{item.name}</b> on Smart Invoice", indicator="blue")
+    sync_notification(
+        meta, f"Saving <b>{item.name}</b> on Smart Invoice", indicator="blue"
+    )
     return True
 
 
@@ -3417,10 +3418,9 @@ def generate_item_code(item, initialize=False):
     )  # Default to "2" for finished product
 
     # Get the packaging unit code and quantity unity code
-    company_name = frappe.defaults.get_user_default(
-        "Company"
-    )  # TODO: company from session
-    unit, pkg_unit = get_unit_code(item, company_name)
+    selected_branch = get_user_branch()
+
+    unit, pkg_unit = get_unit_code(item, selected_branch.get("company"))
 
     # Generate the next value for the item code
     item_code_seed = f"{country_code}{product_type_code}{pkg_unit}{unit}"
@@ -3496,14 +3496,16 @@ def finish_sync_items(request_doc, initialize=False):
             continue
     frappe.flags.skip_failing = False
     if failed > 0:
-        notify_user(
+        sync_notification(
             request_doc,
             f"<p>{failed} items didn't sync: {', '.join([f'<strong>{item}</strong>' for item in failed_items])}.</p><hr/> "
             + "<p>Check the following fields for each item: <ul><li>UOM</li><li>Package UOM</li><li>Item Type (in Item Group)</li></ul></p>",
             indicator="red",
         )
     else:
-        notify_user(request_doc, f"Sync attempted for {count} items", indicator="green")
+        sync_notification(
+            request_doc, f"Sync attempted for {count} items", indicator="green"
+        )
     return True
 
 
@@ -3870,13 +3872,11 @@ def get_user_changes(doc, user_list):
 @frappe.whitelist()
 def initialize(company_name):
 
-    update_branches(
-        company=company_name, initialize=True, doctype="Smart Invoice Settings"
-    )
-    # update_item_classes(company=company_name, initialize=True)
-    # update_codes(company=company_name, initialize=True)
+    update_item_classes(company_name, initialize=True)
+    update_codes(company_name, initialize=True)
+    update_branches(company_name, initialize=True, doctype="Smart Invoice Settings")
 
-    # create_tax_templates(company=company_name)
+    create_tax_templates(company_name)
 
 
 def create_tax_templates(company_name):
@@ -3897,14 +3897,27 @@ def create_tax_templates(company_name):
         tax_template_doc.create_item_tax_template_entry(company_name)
 
 
-def get_company_by_tpin(tpin):
-    companies = {
-        d.tax_id: d for d in frappe.get_all("Company", fields=["name", "tax_id"])
-    }
+def get_company_name_by_tpin(tpin):
+    """
+    Returns company name from tpin
 
-    company = companies.get(tpin)
-    if company:
-        return company
+    Args:
+        tpin (str): tpin of the company
+
+    Returns:
+        company_name (str): name of company
+    """
+    companies = frappe.get_all(
+        "Company",
+        fields=["name", "tax_id"],
+        filters={"tax_id": tpin},
+        pluck="name",
+        limit=1,
+    )
+
+    company_name = companies[0]
+    if company_name:
+        return company_name
     else:
         return None
 
@@ -3925,8 +3938,8 @@ def sync_branches(initialize=True):
         pluck="name",
     )
 
-    for company in fully_setup_companies:
-        update_branches(company, initialize)
+    for company_name in fully_setup_companies:
+        update_branches(company_name, initialize)
     if len(fully_setup_companies) < 1:
         frappe.msgprint(
             "Please ensure Smart Invoice is properly setup",
@@ -3945,9 +3958,9 @@ def get_companies_with_tpin():
     return companies
 
 
-def update_branches(company, initialize=False, doctype="Branch"):
+def update_branches(company_name, initialize=False, doctype="Branch"):
     # TODO: Update all dependant methods
-    get_branches(company, initialize, doctype)
+    get_branches(company_name, initialize, doctype)
 
 
 @frappe.whitelist()
@@ -3971,17 +3984,11 @@ def finish_branch_updates(request_doc):
         for d in frappe.get_all("Code", fields=["name", "cd"], filters={"cd_cls": "09"})
     }
     if not statuses:
-        notify_user(request_doc, "Initialize ZRA data first", "red")
-        frappe.throw("Initialize ZRA data first")
+        sync_notification(request_doc, "Load ZRA Parameters first", "red")
+        frappe.throw("Load ZRA Parameters first")
 
     for branch_data in data["data"]["bhfList"]:
         tpin = branch_data.get("tpin", branch_data.get("tin", None))
-
-        company = get_company_by_tpin(tpin)
-        if company:
-            company = company.name
-        else:
-            frappe.throw(f"There is no company with TPIN {tpin}")
 
         is_hq = 1 if branch_data.get("hqYn", "N") == "Y" else 0
 
@@ -3996,7 +4003,7 @@ def finish_branch_updates(request_doc):
             new_branch = frappe.get_doc(
                 {
                     "doctype": "Branch",
-                    "custom_company": company,
+                    "custom_company": request_doc.company,
                     "branch": full_branch_name,
                     "custom_bhf_id": branch_data["bhfId"],
                     "custom_tpin": tpin,
@@ -4040,7 +4047,7 @@ def finish_branch_updates(request_doc):
                     branch.update(
                         {
                             "custom_bhf_id": branch_data["bhfId"],
-                            "custom_company": company,
+                            "custom_company": request_doc.company,
                             "custom_tpin": tpin,
                             "custom_hq_yn": is_hq,
                             "custom_branch_status": status,
@@ -4060,12 +4067,12 @@ def finish_branch_updates(request_doc):
     return True
 
 
-def update_item_classes(company, initialize=False):
+def update_item_classes(company_name, initialize=False):
     """
     Synchronizes Item Classes from the API.
     Tracks and reports the number of records actually modified.
     """
-    get_item_classes(company, initialize)
+    get_item_classes(company_name, initialize)
 
 
 def finish_updating_item_classes(request_doc):
@@ -4169,9 +4176,9 @@ def finish_updating_item_classes(request_doc):
 from smart_invoice_api.api import select_item_classes as api_select_item_classes
 
 
-def get_item_classes(company, initialize=False):
+def get_item_classes(company_name, initialize=False):
 
-    settings = get_settings(company)
+    settings = get_settings(company_name)
 
     api_select_item_classes(
         {"bhf_id": "000", "tpin": settings.tpin},
@@ -4186,8 +4193,8 @@ def get_item_classes(company, initialize=False):
     )
 
 
-def update_codes(company, initialize=False):
-    get_codes(company, initialize)
+def update_codes(company_name, initialize=False):
+    get_codes(company_name, initialize)
 
 
 def finish_updating_codes(request_doc):
@@ -4248,9 +4255,6 @@ def finish_updating_codes(request_doc):
 
         # --- PHASE 2: CHILD CODES ---
         for code_data in class_data.get("dtlList", []):
-            # prints(
-            #     f"MAPPED {mapped_doctype} Code Class. Length: {len(class_data.get('dtlList', []))}"
-            # )
             api_cd = (code_data.get("cd") or "").strip()
             api_cd_nm = (code_data.get("cdNm") or "").strip()
             api_user_val = (code_data.get("userDfnCd1") or "").strip()
@@ -4264,7 +4268,7 @@ def finish_updating_codes(request_doc):
             )
 
             if not api_cd_nm or not api_cd:
-                notify_user(
+                sync_notification(
                     request_doc,
                     f"Missing name for {api_cd} in class {api_cls_cd} - skipping",
                     "orange",
@@ -4322,10 +4326,10 @@ def update_code_optimized(doc_name, api_nm, api_val, api_map, api_cls, existing_
 from smart_invoice_api.api import select_codes as api_select_codes
 
 
-def get_codes(company, initialize=False):
+def get_codes(company_name, initialize=False):
     """initiates fetching of codes, completed in finish_updating_codes"""
 
-    settings = get_settings(company)
+    settings = get_settings(company_name)
 
     api_select_codes(
         {"bhf_id": "000", "tpin": settings.tpin},

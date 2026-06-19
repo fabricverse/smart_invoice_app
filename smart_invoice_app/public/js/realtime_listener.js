@@ -80,7 +80,11 @@ function initSmartInvoiceGlobalListener() {
                         __("Smart Invoice encountered the following error:"),
                         `${message}<br>`,
                         () => {
-                            frappe.set_route("Form", "Sync Request", data.name);
+                            frappe.set_route(
+                                "Form",
+                                "Sync Request",
+                                data.sync_doc_name,
+                            );
                         },
                         __("Open"),
                     );

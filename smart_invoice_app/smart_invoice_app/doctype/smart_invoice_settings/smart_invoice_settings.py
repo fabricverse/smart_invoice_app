@@ -14,15 +14,106 @@ from smart_invoice_app.app import (
 
 
 class SmartInvoiceSettings(Document):
+    def onload(self):
+        # Always compute the current layout state on load
+        self.compute_onboarding_step()
+
+    def validate(self):
+        # Compute status during manual saves
+        self.compute_onboarding_step()
+        self.set_company_tax_id()
+
     def on_update(self):
-        # Check if the update is triggered by a migration
-        if is_migration() or self.initialized == 1:
+        basics_set = bool(
+            self.tpin and self.environment and self.vsdc_serial and self.base_url
+        )
+
+        if is_migration() or self.initialized == 1 or not basics_set:
             return
 
         self.initialize_virtual_device()
 
-    def validate(self):
-        self.set_company_tax_id()
+    def compute_onboarding_step(self):
+        """Dynamically calculates the setup progress pipeline."""
+        steps = [
+            {
+                "id": 1,
+                "status": "Setup Company & Environment",
+                "is_complete": bool(
+                    self.tpin
+                    and self.base_url
+                    and self.company
+                    and self.environment
+                    and self.vsdc_serial
+                ),
+                "intro": "<b>Step 1 of 4:</b> Please ensure your TPIN, Company, and Environment settings are configured and saved.",
+                "color": "blue",
+                "indicator": "gray",  # standard frappe colors: gray, blue, orange, green, red
+            },
+            {
+                "id": 2,
+                "status": "Load Parameters",
+                "is_complete": frappe.utils.cint(self.loaded_initialization_data) == 1,
+                "intro": "<b>Step 2 of 4:</b> Go to <b>Menu > Load Parameters</b> to load Smart Invoice parameters",
+                "color": "blue",
+                "indicator": "blue",
+            },
+            {
+                "id": 3,
+                "status": "Setup Company Defaults",
+                "is_complete": bool(
+                    self.default_uom
+                    and self.default_packing_unit
+                    and self.default_item_class
+                    and self.default_item_tax
+                ),
+                "intro": "<b>Step 3 of 4:</b> Specify your default UOM, packing units, and tax templates, then save.",
+                "color": "blue",
+                "indicator": "blue",
+            },
+            {
+                "id": 4,
+                "status": "Setup Branches",
+                "is_complete": frappe.utils.cint(self.branches_setup) == 1,
+                "intro": (
+                    "<div style='display: flex; justify-content: space-between; align-items: center;'>"
+                    "<div><b>Step 4 of 4:</b> Almost there! Assign users to your setup branches.</div>"
+                    f"<div style='margin-right: 2%;'><a class='btn btn-success btn-sm' target='_blank' href='/app/branch?custom_company={self.company}'>Branch Setup</a></div>"
+                    "</div>"
+                ),
+                "color": "blue",
+                "indicator": "blue",
+            },
+        ]
+
+        # Find the first incomplete milestone
+        current_step = next((step for step in steps if not step["is_complete"]), None)
+
+        if current_step:
+            self.status = current_step["status"]
+            intro_message = current_step["intro"]
+            intro_color = current_step["color"]
+            indicator_color = current_step["indicator"]
+
+            if current_step["id"] == 4:
+                frappe.enqueue(
+                    "smart_invoice_app.api.auto_check_branches_have_users", doc=self
+                )
+        else:
+            self.status = "Active"
+            intro_message = "Smart Invoice is fully setup. You can test the connection from <b>Menu > Connection Test</b>"
+            intro_color = "green"
+            indicator_color = "green"
+
+        # CRITICAL FIX: Pass data cleanly to the frontend wrapper object
+        self.set_onload(
+            "onboarding",
+            {
+                "intro_message": intro_message,
+                "intro_color": intro_color,
+                "indicator_color": indicator_color,
+            },
+        )
 
     def set_company_tax_id(self):
         company = frappe.get_cached_doc("Company", self.company)

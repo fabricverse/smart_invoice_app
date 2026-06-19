@@ -9,7 +9,6 @@ from frappe.utils import flt, today
 from smart_invoice_api.api import update_import_items as api_update_import_items
 
 from smart_invoice_app.app import (
-    api,
     api_date_format,
     format_date_only,
     get_doc_user_data,
@@ -17,9 +16,8 @@ from smart_invoice_app.app import (
     get_settings,
     get_tax_template_by_tax_code,
     get_uom_by_zra_unit,
-    get_user_branches,
+    get_user_branch,
     set_defaults_exception,
-    validate_api_response,
 )
 
 
@@ -184,7 +182,7 @@ class ASYCUDAVerification(Document):
             # Simulate a successful API response
             data = get_mock_response()
             # We wrap it in a mock response object to mimic the real 'api' return
-            response = {"response": json.dumps(data)}
+            request_doc = {"response": json.dumps(data)}
         if data:
             if data.get("resultCd") == "000":
                 self.verify_item_status(request_doc)

@@ -116,7 +116,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Setup Company & TPIN\nSetup Environment\nSave\nInitialize Virtual Device\nLoad Initialization Data\nSetup Company Defaults\nSetup Branches\nActive\nMisconfigured",
+   "options": "Setup Company & TPIN\nSetup Environment\nSave\nInitialize Virtual Device\nLoad Parameters\nSetup Company Defaults\nSetup Branches\nActive\nMisconfigured",
    "read_only": 1
   },
   {
@@ -134,7 +134,8 @@
   {
    "depends_on": "tpin",
    "fieldname": "section_break_tyc0",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "hidden": 1
   },
   {
    "description": "Recommended: Nos or Each",
@@ -272,7 +273,7 @@
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-18 17:51:09.606489",
+ "modified": "2026-06-19 20:07:42.708315",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Smart Invoice Settings",
@@ -288,10 +289,47 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "All"
   }
  ],
  "sort_field": "modified",
  "sort_order": "DESC",
- "states": [],
+ "states": [
+  {
+   "color": "Gray",
+   "title": "Setup Company & TPIN\""
+  },
+  {
+   "color": "Gray",
+   "title": "Setup Environment"
+  },
+  {
+   "color": "Gray",
+   "title": "Initialize Virtual Device"
+  },
+  {
+   "color": "Blue",
+   "title": "Load Parameters"
+  },
+  {
+   "color": "Blue",
+   "title": "Setup Company Defaults"
+  },
+  {
+   "color": "Blue",
+   "title": "Setup Branches"
+  },
+  {
+   "color": "Green",
+   "title": "Active"
+  },
+  {
+   "color": "Red",
+   "title": "Misconfigured"
+  }
+ ],
  "track_changes": 1
 }

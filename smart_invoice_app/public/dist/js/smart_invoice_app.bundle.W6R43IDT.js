@@ -429,7 +429,11 @@
               __("Smart Invoice encountered the following error:"),
               `${message}<br>`,
               () => {
-                frappe.set_route("Form", "Sync Request", data.name);
+                frappe.set_route(
+                  "Form",
+                  "Sync Request",
+                  data.sync_doc_name
+                );
               },
               __("Open")
             );
@@ -477,4 +481,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.Y2244RGZ.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.W6R43IDT.js.map
