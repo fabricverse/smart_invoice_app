@@ -396,13 +396,14 @@ def create_invoice(invoice, company):
     tpin = invoice.get("spplrTpin")
     name = invoice.get("spplrNm")
     branch = invoice.get("spplrBhfId")
+    settings = get_settings(invoice.company)
 
     supplier = get_or_create_supplier(tpin, name, branch)
 
     items = []
     taxes = []
     for i in invoice.get("itemList"):
-        item = get_or_create_item(i)
+        item = get_or_create_item(settins, i)
         item.update(
             {
                 "rate": i.get("prc"),
@@ -526,11 +527,11 @@ def format_date_time(datetime_str):
         return None, None
 
 
-def get_or_create_item(item_data):
+def get_or_create_item(settings, item_data):
     code = item_data.get("itemCd")
     name = item_data.get("itemNm")
-    custom_industry_tax_type, tax_code = get_industry_tax_type(item_data)
-    itt = get_tax_template_by_tax_code(tax_code)
+    custom_industry_tax_type, tax_code = get_industry_tax_type(settings, item_data)
+    itt = get_tax_template_by_tax_code(settings.company, tax_code)
     uom = get_uom_by_zra_unit(item_data.get("qtyUnitCd"))
     item = frappe.db.sql(
         f"""
@@ -579,9 +580,11 @@ def get_or_create_item(item_data):
         }
 
 
-def get_tax_template_by_tax_code(tax_type):
+def get_tax_template_by_tax_code(company_name, tax_type):
     temp = frappe.get_all(
-        "Item Tax Template", filters={"custom_code": tax_type}, fields=["name", "title"]
+        "Item Tax Template",
+        filters={"custom_code": tax_type, "company": company_name},
+        fields=["name", "title"],
     )
     name = None
     if temp:
@@ -589,10 +592,9 @@ def get_tax_template_by_tax_code(tax_type):
     return name
 
 
-def get_industry_tax_type(item_data=None, tax_code=None):
-
+def get_industry_tax_type(settings, item_data=None, tax_code=None):
+    """returns tax type / category for given tax code or gets tax_code from the item data"""
     if not tax_code:
-        tax_code = "TOT"
         if item_data.get("vatAmt") > 0:
             tax_code = item_data.get("vatCatCd")
         elif item_data.get("exciseTaxblAmt") > 0:
@@ -601,6 +603,8 @@ def get_industry_tax_type(item_data=None, tax_code=None):
             tax_code = item_data.get("iplCatCd")
         elif item_data.get("tlTaxblAmt") > 0:
             tax_code = item_data.get("tlCatCd")
+        else:
+            tax_code = settings.item_tax_code
 
     industry_tax_type_by_tax_code = {
         "TOT": "TOT",
@@ -2965,9 +2969,11 @@ def after_sync_process(request_doc, method=None):
             ):
                 if request_doc.function == "this_update_import_items":
                     t_doc.finish_importing_items(request_doc)
+                    prints("this_update_import_items")
 
                 elif request_doc.function == "update_item_status":
                     t_doc.update_item_status(request_doc)
+                    prints("update_item_status")
                     reload_doc(request_doc)
                 return
             elif request_doc.type == "Smart Invoice Settings":
