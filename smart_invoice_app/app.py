@@ -2969,11 +2969,9 @@ def after_sync_process(request_doc, method=None):
             ):
                 if request_doc.function == "this_update_import_items":
                     t_doc.finish_importing_items(request_doc)
-                    prints("this_update_import_items")
 
                 elif request_doc.function == "update_item_status":
                     t_doc.update_item_status(request_doc)
-                    prints("update_item_status")
                     reload_doc(request_doc)
                 return
             elif request_doc.type == "Smart Invoice Settings":
