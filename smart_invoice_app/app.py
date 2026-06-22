@@ -3887,17 +3887,25 @@ def create_tax_templates(company_name):
     tax_codes = tax_codes = frappe.get_all(
         "Code",
         fields=["name", "cd_nm", "cd"],
-        filters={"cd_cls": ["in", ["04", "400", "62", "60", "61"]]},
+        filters={"cd_cls": ["in", ["04", "400"]]},
     )
 
-    tax_templates = frappe.get_all("Item Tax Template", fields=["name", "custom_code"])
+    tax_templates = frappe.get_all(
+        "Item Tax Template",
+        fields=["name", "custom_code"],
+        filters={"company": company_name},
+    )
     tax_template_codes = [template.custom_code for template in tax_templates]
 
     for code in tax_codes:
         if code.cd in tax_template_codes:
             continue
         tax_template_doc = frappe.get_doc("Code", code.name)
+
+        # create tax categories
         tax_template_doc.attempt_code_mapping(company_name, force=True)
+
+        # create tax templates
         tax_template_doc.create_item_tax_template_entry(company_name)
 
 

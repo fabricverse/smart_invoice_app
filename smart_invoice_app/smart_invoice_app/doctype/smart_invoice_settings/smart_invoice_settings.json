@@ -180,11 +180,10 @@
    "options": "Item Class"
   },
   {
-   "description": "TOT or Standard Rated for VAT",
+   "description": "Recommended: TOT, or Standard Rated (VAT)",
    "fieldname": "default_item_tax",
    "fieldtype": "Link",
    "label": "Default Item Tax",
-   "link_filters": "[]",
    "mandatory_depends_on": "eval: doc.loaded_initialization_data==1",
    "options": "Item Tax Template"
   },
@@ -273,7 +272,7 @@
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-22 16:43:37.303933",
+ "modified": "2026-06-22 18:31:24.424797",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Smart Invoice Settings",

@@ -137,7 +137,10 @@ class Code(Document):
         from smart_invoice_app.app import ensure_tax_accounts
 
         abbr = company.abbr
-        template = frappe.get_all("Item Tax Template", filters={"custom_code": self.cd})
+        template = frappe.get_all(
+            "Item Tax Template",
+            filters={"custom_code": self.cd, "company": company.name},
+        )
         if template:
             return template[0]["name"]
 

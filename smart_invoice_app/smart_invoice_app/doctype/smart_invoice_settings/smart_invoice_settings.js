@@ -8,10 +8,18 @@ frappe.ui.form.on("Smart Invoice Settings", {
         }
         add_buttons(frm);
         onboarding(frm);
+
+        frm.set_query("default_item_tax", function () {
+            return {
+                filters: {
+                    company: frm.doc.company,
+                },
+            };
+        });
     },
 
-    // Explicitly re-render the intro layout right after a successful save payload arrives
     after_save(frm) {
+        // Explicitly re-render the intro layout right after a successful save payload arrives
         onboarding(frm);
     },
 
