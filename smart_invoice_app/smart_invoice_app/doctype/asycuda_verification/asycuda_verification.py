@@ -4,6 +4,7 @@
 import json
 
 import frappe
+from filetype import document_match
 from frappe.model.document import Document
 from frappe.utils import flt, today
 from smart_invoice_api.api import update_import_items as api_update_import_items
@@ -17,13 +18,18 @@ from smart_invoice_app.app import (
     get_tax_template_by_tax_code,
     get_uom_by_zra_unit,
     get_user_branch,
+    prints,
     set_defaults_exception,
+    sync_notification,
 )
 
 
 class ASYCUDAVerification(Document):
+    TESTING = True
+
     def validate(self):
-        self.this_update_import_items()
+        # self.this_update_import_items()
+        create_mock_sync_request()
 
     def on_update(self):
         self.get_purchase_items()
@@ -64,7 +70,7 @@ class ASYCUDAVerification(Document):
 
         currency, conversion_rate = self.get_currency_and_exchange_rate()
 
-        selected_branch = get_selected_branch()
+        selected_branch = get_user_branch()
         branch = selected_branch.get("branch_code") if selected_branch else "000"
 
         doc = frappe.new_doc(doctype)
@@ -165,27 +171,28 @@ class ASYCUDAVerification(Document):
                     "creator": self.owner,
                     "modifier": self.modified_by,
                 }
-                api_update_import_items(request_data, meta)
+                prints(task_items)
+                self.finish_importing_items()
+                # api_update_import_items(request_data, meta) # TEST
 
-    def finish_importing_items(self, request_doc):
+    def finish_importing_items(self, request_doc=None):
         """Initiates update of items.status_code
         Called by Sync Request > app.after_sync_process function
         @params:
             request_doc: The sync request doc that triggered this function
         """
 
-        data = json.loads(request_doc.response)
-
-        # --- TESTING BLOCK ---
-        USE_MOCK = False  # Flip this to False when you have API access
-        if USE_MOCK:
+        if self.TESTING:
+            # --- TESTING ---
             # Simulate a successful API response
-            data = get_mock_response()
-            # We wrap it in a mock response object to mimic the real 'api' return
-            request_doc = {"response": json.dumps(data)}
-        if data:
-            if data.get("resultCd") == "000":
-                self.verify_item_status(request_doc)
+            request_doc = get_mock_sync_request()
+            response_json = json.loads(str(request_doc.response))
+        else:
+            response_json = json.loads(request_doc.response)
+
+        if response_json.get("resultCd") == "000":
+            # self.verify_item_status(request_doc)
+            self.update_item_status(request_doc)
 
     def verify_item_status(self, request_doc):
         """Get import items again and pass them to update_item_status to complete verification and updating of the doc
@@ -193,40 +200,30 @@ class ASYCUDAVerification(Document):
         """
         get_import_items(function="update_item_status", request_doc=request_doc)
 
-    def trigger_reload(self, doc, name=None):
-        frappe.publish_realtime(
-            event="smart_invoice_event",
-            message={
-                "type": "reload",
-                "name": name or doc.name,
-                "doctype": doc.doctype,  # <-- REQUIRED for the list view match check
-            },
-            user=doc.modifier,
-        )
-
     def update_item_status(self, request_doc):
         """Checks whether item has updated on smart invoice and updates it in the doc
         Called by update event in Sync Request -> app.after_sync_process
         """
+        prints("update_item_status")
         rs = json.loads(request_doc.response)
 
-        # Use this to simulate the 'rs' variable in update_item_status
-        # rs = {
-        #     "resultCd": "000",
-        #     "resultMsg": "It is succeeded",
-        #     "data": {
-        #         "itemList": [
-        #             # Record 1 Should be removed from this list because processing is finished
-        #             # {
-        #             #     "taskCd": "810000591",
-        #             #     "hsCd": "58071005",
-        #             #     "itemNm": "EPSON PROJECTOR",
-        #             #     "qty": 100,
-        #             #     "imptItemsttsCd": "2"
-        #             # }
-        #         ]
-        #     }
-        # }
+        # TEST: Use this to simulate the 'rs' variable in update_item_status
+        rs = {
+            "resultCd": "000",
+            "resultMsg": "It is succeeded",
+            "data": {
+                "itemList": [
+                    # Record 1 Should be removed from this list because processing is finished
+                    # {
+                    #     "taskCd": "810000591",
+                    #     "hsCd": "58071005",
+                    #     "itemNm": "EPSON PROJECTOR",
+                    #     "qty": 100,
+                    #     "imptItemsttsCd": "2"
+                    # }
+                ]
+            },
+        }
 
         if not rs or rs.get("resultCd") not in ["000", "001"]:
             return
@@ -307,10 +304,11 @@ class ASYCUDAVerification(Document):
         qty = flt(item.qty) or 1.0
         name = item.item_name
 
-        custom_industry_tax_type, tax_code = get_industry_tax_type(
-            tax_code=settings.item_tax_code
-        )  #
-        itt = get_tax_template_by_tax_code(settings.item_tax_code)  #
+        industry_tax_type, tax_code = get_industry_tax_type(
+            settings, tax_code=settings.item_tax_code
+        )  # TODO: using company default code, should instead add option in items table along with form level default field, (together with item class field)
+
+        itt = get_tax_template_by_tax_code(self.company, settings.item_tax_code)
         uom = get_uom_by_zra_unit(item.qty_unit) or settings.default_uom
 
         # FIX: Parameterized SQL to prevent injection
@@ -356,7 +354,7 @@ class ASYCUDAVerification(Document):
                 get_uom_by_zra_unit(item.package_unit) or settings.default_packing_unit
             )
 
-            new.custom_industry_tax_type = custom_industry_tax_type
+            new.custom_industry_tax_type = industry_tax_type
 
             new.append("taxes", {"doctype": "Item Tax", "item_tax_template": itt})
 
@@ -374,45 +372,88 @@ class ASYCUDAVerification(Document):
             }
 
 
-def get_mock_response(scenario="SUCCESS"):
+def create_mock_sync_request(scenario="SUCCESS"):
+    # add other field data
+    if scenario == "SUCCESS":
+        doc = frappe.get_doc("Sync Request", "SYNC-2606-0209")
+        response = json.dumps(
+            {
+                "resultCd": "000",
+                "resultMsg": "Transaction Successful",
+                "data": {
+                    "itemList": [
+                        {
+                            "taskCd": "TASK-101",
+                            "dclDe": "20240101",
+                            "itemSeq": 1,
+                            "hsCd": "1234",
+                            "itemNm": "MOCK ITEM A",
+                            "imptItemsttsCd": "2",
+                            "qty": 10,
+                            "invcFcurAmt": 1000,
+                            "invcFcurCd": "ZMW",
+                            "invcFcurExcrt": 1.0,
+                        },
+                        {
+                            "taskCd": "TASK-102",
+                            "dclDe": "20240101",
+                            "itemSeq": 1,
+                            "hsCd": "1234",
+                            "itemNm": "MOCK ITEM B",
+                            "imptItemsttsCd": "2",
+                            "qty": 10,
+                            "invcFcurAmt": 1000,
+                            "invcFcurCd": "ZMW",
+                            "invcFcurExcrt": 1.0,
+                        },
+                        {
+                            "taskCd": "TASK-103",
+                            "dclDe": "20240101",
+                            "itemSeq": 1,
+                            "hsCd": "1234",
+                            "itemNm": "MOCK ITEM C",
+                            "imptItemsttsCd": "2",
+                            "qty": 10,
+                            "invcFcurAmt": 1000,
+                            "invcFcurCd": "ZMW",
+                            "invcFcurExcrt": 1.0,
+                        },
+                        {
+                            "taskCd": "810000591",
+                            "dclDe": "20240812",
+                            "itemSeq": 1,
+                            "dclNo": "C 76937-2024-KZU",
+                            "hsCd": "58071005",
+                            "itemNm": "EPSON PROJECTOR",
+                            "imptItemsttsCd": "2",
+                            "orgnNatCd": "ZA",
+                            "exptNatCd": "ZA",
+                            "pkg": 1,
+                            "pkgUnitCd": "PK",
+                            "qty": 100,
+                            "qtyUnitCd": "GRO",
+                            "totWt": 6.7,
+                            "netWt": 6.7,
+                            "spplrNm": None,
+                            "agntNm": "UNI 4",
+                            "invcFcurAmt": 3171.36,
+                            "invcFcurCd": "ZAR",
+                            "invcFcurExcrt": 1.17,
+                            "dclRefNum": None,
+                        },
+                    ]
+                },
+            }
+        )
+        doc.db_set("response", response)
+        frappe.errprint(doc.name)
+        return doc
+
+
+def get_mock_sync_request(scenario="SUCCESS"):
     """Returns a fake API response dictionary"""
     if scenario == "SUCCESS":
-        return {
-            "resultCd": "000",
-            "resultMsg": "Transaction Successful",
-            "data": {
-                "itemList": [
-                    # {
-                    #     "taskCd": "TASK-101", "dclDe": "20240101", "itemSeq": 1,
-                    #     "hsCd": "1234", "itemNm": "MOCK ITEM A", "imptItemsttsCd": "2",
-                    #     "qty": 10, "invcFcurAmt": 1000, "invcFcurCd": "ZMW", "invcFcurExcrt": 1.0
-                    # }
-                    {
-                        "taskCd": "810000591",
-                        "dclDe": "20240812",
-                        "itemSeq": 1,
-                        "dclNo": "C 76937-2024-KZU",
-                        "hsCd": "58071005",
-                        "itemNm": "EPSON PROJECTOR",
-                        "imptItemsttsCd": "2",
-                        "orgnNatCd": "ZA",
-                        "exptNatCd": "ZA",
-                        "pkg": 1,
-                        "pkgUnitCd": "PK",
-                        "qty": 100,
-                        "qtyUnitCd": "GRO",
-                        "totWt": 6.7,
-                        "netWt": 6.7,
-                        "spplrNm": None,
-                        "agntNm": "UNI 4",
-                        "invcFcurAmt": 3171.36,
-                        "invcFcurCd": "ZAR",
-                        "invcFcurExcrt": 1.17,
-                        "dclRefNum": None,
-                    }
-                ]
-            },
-        }
+        return frappe.get_doc("Sync Request", "SYNC-2606-0209")
     else:
         return {
             "resultCd": "999",
@@ -445,29 +486,6 @@ import inspect
 def get_function_name():
     """Returns the name of the caller function."""
     return inspect.stack()[1].function
-
-
-def get_selected_branch():
-    """Returns the selected branch from cache.
-
-    Return:
-       dict: branch, branch_name, tpin
-    """
-    user = frappe.session.user
-    if user:
-        branch_code = frappe.cache.hget(f"session_branch:{user}", "branch_code")
-        branch_doc_name = frappe.cache.hget(f"session_branch:{user}", "branch_doc_name")
-        tpin = frappe.cache.hget(f"session_branch:{user}", "tpin")
-        company = frappe.cache.hget(f"session_branch:{user}", "company")
-
-        return {
-            "branch_code": branch_code,
-            "branch_doc_name": branch_doc_name,
-            "tpin": tpin,
-            "company": company,
-        }
-    else:
-        return None
 
 
 from smart_invoice_api.api import select_import_items as api_select_import_items
@@ -503,7 +521,7 @@ def get_import_items(from_list=False, function=None, request_doc=None):
         )
     else:
         # called by list, getting branch details from user session
-        branch_data = get_selected_branch()
+        branch_data = get_user_branch()
         data.update(
             {"bhf_id": branch_data.get("branch_code"), "tpin": branch_data.get("tpin")}
         )
@@ -513,47 +531,20 @@ def get_import_items(from_list=False, function=None, request_doc=None):
     api_select_import_items(data, initialize=True, meta=meta)
 
 
-def finish_get_import_items(request, from_list=False):
+def finish_get_import_items(request_doc, from_list=False):
     """Completes the process of creating import items from Smart Invoice by processing the API response.
     Called after receiving API response via Sync Request -> app.py -> after_sync_process
     Receives Sync Request doc
     """
     try:
-        data = json.loads(request.response)
-        create_imports(request, data, from_list)
+        if ASYCUDAVerification.TESTING:
+            request_doc = get_mock_sync_request()
+        response = json.loads(request_doc.response)
+        create_imports(request_doc, response, from_list)
     except Exception as e:
-        notify_user(request, f"Failed to parse API response: {str(e)}", indicator="Red")
-
-
-def notify_user(doc, message, indicator):
-    """Pushes a final completion event to trigger form reload on the frontend."""
-    frappe.publish_realtime(
-        event="smart_invoice_event",
-        message={
-            "status": doc.status,
-            "message": message,
-            "indicator": indicator,
-            "name": doc.entry,
-            "doctype": doc.type,
-            "type": "progress",
-        },
-        user=doc.modifier,
-        doctype=doc.type,
-        docname=doc.entry,
-    )
-
-
-def prints(data):
-    frappe.publish_realtime(
-        event="smart_invoice_event",
-        message={
-            "message": data,
-            "indicator": "print",
-            "name": "print",
-            "type": "print",
-        },
-        user=frappe.session.user,
-    )
+        sync_notification(
+            request_doc, f"Failed to parse API response: {str(e)}", indicator="Red"
+        )
 
 
 def clean_branch_name(name, tpin):
@@ -568,7 +559,7 @@ def shorten_company_name(name):
 
 
 def no_new_items_msg(request, company_name, branch_name):
-    notify_user(
+    sync_notification(
         request,
         f"{company_name}'s <b>{branch_name}</b> branch has no imports",
         indicator="blue",
@@ -726,7 +717,7 @@ def create_doc(request, item_data):
         msg = f"Added {len(currency_groups)} new import document"
         if len(currency_groups) > 1:
             msg = f"Added {len(currency_groups)} new import documents"
-        notify_user(request, msg, "green")
+        sync_notification(request, msg, "green")
     else:
         company_short_name = shorten_company_name(branch_details.get("company"))
         no_new_items_msg(request, company_short_name, branch_details.get("branch_name"))
