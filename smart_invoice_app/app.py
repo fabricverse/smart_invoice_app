@@ -2718,23 +2718,23 @@ def sync_notification(doc, msg, indicator):
     """Pushes scheduler and normal notifications via socketio"""
 
     message = {
-        "status": doc.status,
+        "status": doc.get("status"),
         "message": msg,
         "indicator": indicator,
-        "name": doc.entry,
-        "sync_doc_name": doc.name,
-        "doctype": doc.type,
+        "name": doc.get("entry"),
+        "sync_doc_name": doc.get("name"),
+        "doctype": doc.get("type", doc.get("doctype")),
         "type": "progress",
         "function": doc.get("function"),
-        "user": doc.modifier,
+        "user": doc.get("modifier"),
     }
 
     frappe.publish_realtime(
         event="smart_invoice_event",
         message=message,
-        user=doc.modifier,
-        doctype=doc.type,
-        docname=doc.entry,
+        user=doc.get("modifier"),
+        doctype=doc.get("type", doc.get("doctype")),
+        docname=doc.get("entry"),
     )
 
 
