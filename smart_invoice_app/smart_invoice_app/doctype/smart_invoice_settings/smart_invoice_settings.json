@@ -196,7 +196,7 @@
    "no_copy": 1
   },
   {
-   "fetch_from": "default_item_tax.custom_smart_invoice_tax_code",
+   "fetch_from": "default_item_tax.custom_code",
    "fieldname": "item_tax_code",
    "fieldtype": "Read Only",
    "label": "Item Tax Code",
@@ -273,7 +273,7 @@
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-19 20:07:42.708315",
+ "modified": "2026-06-22 16:43:37.303933",
  "modified_by": "Administrator",
  "module": "Smart Invoice App",
  "name": "Smart Invoice Settings",
