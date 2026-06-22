@@ -4,7 +4,6 @@
 import json
 
 import frappe
-from filetype import document_match
 from frappe.model.document import Document
 from frappe.utils import flt, today
 from smart_invoice_api.api import update_import_items as api_update_import_items
@@ -25,11 +24,11 @@ from smart_invoice_app.app import (
 
 
 class ASYCUDAVerification(Document):
-    TESTING = True
+    TESTING = False
 
     def validate(self):
-        # self.this_update_import_items()
-        create_mock_sync_request()
+        self.this_update_import_items()
+        # create_mock_sync_request()
 
     def on_update(self):
         self.get_purchase_items()
@@ -83,6 +82,7 @@ class ASYCUDAVerification(Document):
                 "update_stock": 1,
                 "custom_branch": branch,
                 "items": items,
+                "company": self.company,
             }
         )
         doc.flags.ignore_permissions = True
@@ -118,6 +118,9 @@ class ASYCUDAVerification(Document):
                 frappe.msgprint(
                     f"Failed to create item <strong>{item.item_name}</strong>: {str(e)}"
                 )
+                import traceback
+
+                frappe.errprint(traceback.format_exc())
 
         return items
 
@@ -171,9 +174,11 @@ class ASYCUDAVerification(Document):
                     "creator": self.owner,
                     "modifier": self.modified_by,
                 }
-                prints(task_items)
-                self.finish_importing_items()
-                # api_update_import_items(request_data, meta) # TEST
+                if self.TESTING:
+                    prints("testing in this_update_import")
+                    self.finish_importing_items()
+                else:
+                    api_update_import_items(request_data, meta)
 
     def finish_importing_items(self, request_doc=None):
         """Initiates update of items.status_code
@@ -187,12 +192,16 @@ class ASYCUDAVerification(Document):
             # Simulate a successful API response
             request_doc = get_mock_sync_request()
             response_json = json.loads(str(request_doc.response))
+            prints("testing in finish_importing_items")
+
+            if response_json.get("resultCd") == "000":
+                self.update_item_status(request_doc)
+
         else:
             response_json = json.loads(request_doc.response)
 
-        if response_json.get("resultCd") == "000":
-            # self.verify_item_status(request_doc)
-            self.update_item_status(request_doc)
+            if response_json.get("resultCd") in ["000", "001"]:
+                self.verify_item_status(request_doc)
 
     def verify_item_status(self, request_doc):
         """Get import items again and pass them to update_item_status to complete verification and updating of the doc
@@ -204,26 +213,25 @@ class ASYCUDAVerification(Document):
         """Checks whether item has updated on smart invoice and updates it in the doc
         Called by update event in Sync Request -> app.after_sync_process
         """
-        prints("update_item_status")
-        rs = json.loads(request_doc.response)
-
-        # TEST: Use this to simulate the 'rs' variable in update_item_status
-        rs = {
-            "resultCd": "000",
-            "resultMsg": "It is succeeded",
-            "data": {
-                "itemList": [
-                    # Record 1 Should be removed from this list because processing is finished
-                    # {
-                    #     "taskCd": "810000591",
-                    #     "hsCd": "58071005",
-                    #     "itemNm": "EPSON PROJECTOR",
-                    #     "qty": 100,
-                    #     "imptItemsttsCd": "2"
-                    # }
-                ]
-            },
-        }
+        if not self.TESTING:
+            rs = json.loads(request_doc.response)
+        else:
+            rs = {
+                "resultCd": "000",
+                "resultMsg": "It is succeeded",
+                "data": {
+                    "itemList": [
+                        # Record 1 Should be removed from this list because processing is finished
+                        # {
+                        #     "taskCd": "810000591",
+                        #     "hsCd": "58071005",
+                        #     "itemNm": "EPSON PROJECTOR",
+                        #     "qty": 100,
+                        #     "imptItemsttsCd": "2"
+                        # }
+                    ]
+                },
+            }
 
         if not rs or rs.get("resultCd") not in ["000", "001"]:
             return
@@ -310,6 +318,11 @@ class ASYCUDAVerification(Document):
 
         itt = get_tax_template_by_tax_code(self.company, settings.item_tax_code)
         uom = get_uom_by_zra_unit(item.qty_unit) or settings.default_uom
+
+        if not industry_tax_type or not itt:
+            frappe.throw(
+                "Failed to find appropriate tax settings, try updating tax data in <b>Smart Invoice Settings > Menu > Load Parameters</b>"
+            )
 
         # FIX: Parameterized SQL to prevent injection
         db_item = frappe.db.sql(
@@ -538,6 +551,7 @@ def finish_get_import_items(request_doc, from_list=False):
     """
     try:
         if ASYCUDAVerification.TESTING:
+            prints("testing in finish_get_import_items")
             request_doc = get_mock_sync_request()
         response = json.loads(request_doc.response)
         create_imports(request_doc, response, from_list)
@@ -561,7 +575,7 @@ def shorten_company_name(name):
 def no_new_items_msg(request, company_name, branch_name):
     sync_notification(
         request,
-        f"{company_name}'s <b>{branch_name}</b> branch has no imports",
+        f"<b>{company_name}</b> has no new imports",
         indicator="blue",
     )
 
