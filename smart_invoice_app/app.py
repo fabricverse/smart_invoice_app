@@ -374,7 +374,7 @@ def create_purchase_invoices(request_doc, invoices):
     frappe.get_cached_doc("Company", company_name)
 
     for invoice in invoices:
-        if frappe.db.exists(
+        if not frappe.db.exists(
             "Purchase Invoice",
             {
                 "bill_no": invoice.get("spplrInvcNo"),
@@ -3612,10 +3612,10 @@ from smart_invoice_api.api import save_branche_customer as api_save_branche_cust
 
 @frappe.whitelist()
 def sync_customer(doc, method=None):
-    frappe.db.commit()
     customer = doc.as_dict()
 
     if not customer.tax_id or len(customer.tax_id) != 10:
+        frappe.db.commit()
         frappe.throw(
             f"Smart Invoice requires 10 digit TPIN for {frappe.bold(customer.get('customer_name'))}. {frappe.bold(customer.get('tax_id'))} is not valid."
         )
@@ -3701,7 +3701,7 @@ def sync_customer(doc, method=None):
 
 
 @frappe.whitelist()
-def get_customer_api(customer, branch="Headquarter"):  # incomplete
+def get_customer_api(customer):  # incomplete
     customer = validate_customer(customer)
     frappe.throw(f"Function is incomplete")
 
