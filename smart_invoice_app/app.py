@@ -748,6 +748,9 @@ from smart_invoice_api.api import save_purchase as api_save_purchase
 
 @frappe.whitelist()
 def save_purchase_invoice_api(invoice, method=None, branch=None):
+
+    verify_connection(invoice.company)
+
     if frappe.flags.dont_sync == 1 or invoice.custom_asycuda == 1:
         frappe.flags.dont_sync = 0
         return
@@ -2466,49 +2469,6 @@ def get_item_taxes(item, tax_code):
     return taxes
 
 
-def prepare_tax_data(invoice):  # TODO: Remove - deprecated
-
-    taxes = {}
-    taxable_amounts = {
-        "Rvat": {"taxblAmtRvat": flt(invoice.net_total, 3)},
-        "E": {"taxblAmtE": flt(invoice.net_total, 3)},
-        "F": {"taxblAmtF": flt(invoice.net_total, 3)},
-        "Ipl1": {"taxblAmtIpl1": flt(invoice.net_total, 3)},
-        "Ipl2": {"taxblAmtIpl2": flt(invoice.net_total, 3)},
-        "Tl": {"taxblAmtTl": flt(invoice.net_total, 3)},
-        "Ecm": {"taxblAmtEcm": flt(invoice.net_total, 3)},
-        "Exeeg": {"taxblAmtExeeg": flt(invoice.net_total, 3)},
-    }
-    tax_amounts = {
-        "Rvat": {"taxAmtRvat": flt(invoice.net_total, 3)},
-        "E": {"taxAmtE": 0.0},
-        "F": {"taxAmtF": 0.0},
-        "Ipl1": {"taxAmtIpl1": 0.0},
-        "Ipl2": {"taxAmtIpl2": 0.0},
-        "Tl": {"taxAmtTl": 0.0},
-        "Ecm": {"taxAmtEcm": 0.0},
-        "Exeeg": {"taxAmtExeeg": 0.0},
-    }
-    tax_rates = {
-        "A": {"taxRtA": 16},
-        "B": {"taxRtB": 16},
-        "C1": {"taxRtC1": 0},
-        "C2": {"taxRtC2": 0},
-        "C3": {"taxRtC3": 0},
-        "D": {"taxRtD": 0},
-        "Rvat": {"taxRtRvat": 16},
-        "E": {"taxRtE": 0},
-        "F": {"taxRtF": 10},
-        "Ipl1": {"taxRtIpl1": 5},
-        "Ipl2": {"taxRtIpl2": 0},
-        "Tl": {"taxRtTl": 1.5},
-        "Ecm": {"taxRtEcm": 5},
-        "Exeeg": {"taxRtExeeg": 3},
-    }
-
-    return taxes
-
-
 def get_doc_user_data(doc):
     owner_name = frappe.get_cached_value("User", doc.owner, "full_name")
     last_modified_by_name = frappe.get_cached_value(
@@ -3271,11 +3231,46 @@ def update_item_api(item, method=None, branch=None):
     return True
 
 
+def verify_connection(company_name):
+    """Quickly checks if the VSDC service is actively running and responsive without using a standard request"""
+
+    settings = get_settings(company_name)
+    base_url = settings.base_url
+
+    if not base_url:
+        frappe.throw(_(f"Check Smart Invoice Settings for {frappe.bold(company_name)}"))
+
+    try:
+        # Test if the endpoint is actually alive (Simulating the curl behavior)
+        # We use a short timeout (e.g., 3 seconds) so the UI doesn't hang if it's completely down.
+        response = requests.get(base_url, timeout=3)
+
+        # If the server responds with a 200 OK (even if it's the sandbox HTML page), it is ONLINE
+        if response.status_code == 200:
+            return True
+
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+        # Catch service downs, wrong IPs, ports being closed, or firewall blockages
+        pass
+    except Exception as e:
+        frappe.log_error(f"Unexpected error checking VSDC connection: {str(e)}")
+
+    # 3. If it didn't return True, it's offline.
+    # Throw the exception to halt 'on_submit'
+    frappe.throw(
+        _(
+            "VSDC is offline. Try again shortly, or contact support if this keeps happening"
+        )
+    )
+
+
 from smart_invoice_api.api import save_sales as api_save_sales
 
 
 @frappe.whitelist()
 def save_invoice_api(invoice, method=None, branch=None):
+    verify_connection(invoice.company)
+
     invoice_data = get_invoice_data(invoice, branch=branch)
     meta = {
         "function": get_function_name(),
