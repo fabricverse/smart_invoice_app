@@ -147,7 +147,7 @@
   "length": 0,
   "link_filters": null,
   "mandatory_depends_on": null,
-  "modified": "2026-06-02 15:31:01.194370",
+  "modified": "2026-06-25 19:28:02.966819",
   "module": "Smart Invoice App",
   "name": "Sales Invoice-invoice_qr_code",
   "no_copy": 1,
