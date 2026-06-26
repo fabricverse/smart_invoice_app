@@ -3538,8 +3538,8 @@ def prepare_item_data(item):
     elif not item.stock_uom or not item.custom_pkg_unit:
         unit, pkg_unit = get_unit_code(item, branch.get("company"))
 
-    default_price = get_item_price(item, branch.get("branch"))
-    unit, pkg_unit = get_unit_code(item, branch.get("branch"))
+    default_price = get_item_price(item, branch.get("company"))
+    unit, pkg_unit = get_unit_code(item, branch.get("company"))
     gen_item_code = item.custom_generated_item_code or generate_item_code(item)
     if not item.custom_generated_item_code:
         frappe.db.set_value(
