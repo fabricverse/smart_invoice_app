@@ -97,7 +97,8 @@ class SmartInvoiceSettings(Document):
 
             if current_step["id"] == 4:
                 frappe.enqueue(
-                    "smart_invoice_app.api.auto_check_branches_have_users", doc=self
+                    "smart_invoice_app.smart_invoice_app.doctype.smart_invoice_settings.smart_invoice_settings.SmartInvoiceSettings.auto_check_branches_have_users",
+                    doc=self,
                 )
         else:
             self.status = "Active"
