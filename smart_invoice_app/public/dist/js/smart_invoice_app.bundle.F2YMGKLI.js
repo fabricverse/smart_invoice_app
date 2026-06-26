@@ -347,6 +347,11 @@
           return;
         }
         let status = r.message;
+        if (status.settings_setup_pending) {
+          is_fetching_branch_context = false;
+          render_navbar_branch_switcher(false);
+          return;
+        }
         if (status.branch_code && !is_manual) {
           frappe.session.company = status.company;
           frappe.session.branch_doc_name = status.branch_doc_name;
@@ -582,4 +587,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.IHYCTPX2.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.F2YMGKLI.js.map

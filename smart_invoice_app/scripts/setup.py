@@ -1,4 +1,5 @@
 import frappe
+from frappe import _
 
 from smart_invoice_app.scripts.branch import (
     check_branches_setup,
@@ -14,13 +15,19 @@ def check_setup():
     return {"system_is_setup": fully_setup, "branches_setup": branches_setup}
 
 
-from frappe import _
-
-
 @frappe.whitelist()
 def get_initial_session_status():
     user = frappe.session.user
     hash_key = f"session_branch:{user}"
+
+    # 0. PRE-FLIGHT CONFIG CHECK: If no settings exist yet, bypass enforcement entirely
+    if not frappe.db.count(
+        "Smart Invoice Settings",
+        filters={
+            "status": ["in", ["Active", "Setup Company Defaults", "Setup Branches"]]
+        },
+    ):
+        return {"settings_setup_pending": True, "branches_setup": False}
 
     # 1. Gather all operational branches first based on authorization permissions
     if user == "Administrator":
@@ -58,13 +65,13 @@ def get_initial_session_status():
     if not allowed_branches:
         return {"branches_setup": False}
 
-    # 2. PRE-FLIGHT CHECK: Return the active cache state, but ALWAYS include the populated branch choices array!
+    # 2. PRE-FLIGHT CHECK: Return the active cache state
     branch_code = frappe.cache().hget(hash_key, "branch_code")
     if branch_code:
         return {
             "branches_setup": True,
             "auto_selected": False,
-            "branches": allowed_branches,  # FIX: Now populated with real options for manual click dialogs
+            "branches": allowed_branches,
             "branch_doc_name": frappe.cache().hget(hash_key, "branch_doc_name"),
             "branch_code": branch_code,
             "tpin": frappe.cache().hget(hash_key, "tpin"),
@@ -74,7 +81,6 @@ def get_initial_session_status():
     # 3. Rule: If user only has one branch total, select it by default instantly
     if len(allowed_branches) == 1:
         single_branch = allowed_branches[0]
-        # FIX: single_branch.name was throwing an error here because the SQL field mapping was aliased as branch_doc_name!
         set_branch(
             branch_doc_name=single_branch.branch_doc_name,
             branch_code=single_branch.branch_code,

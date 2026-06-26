@@ -326,9 +326,8 @@ function show_branch_success_alert(branch_doc_name, is_auto = false) {
     frappe.show_alert({ message: alert_message, indicator: "green" });
 }
 
-/**
- * REMOTE DISPATCHER: Fetch Permission Records
- */
+// REMOTE DISPATCHER: Fetch Permission Records
+
 function initialize_session_context(is_manual = false) {
     is_fetching_branch_context = true;
 
@@ -346,12 +345,19 @@ function initialize_session_context(is_manual = false) {
 
             let status = r.message;
 
+            // Catch early pre-flight configuration bypass flag
+            if (status.settings_setup_pending) {
+                is_fetching_branch_context = false;
+                render_navbar_branch_switcher(false);
+                return; // Exit out silently without prompting alerts or freezing UI panels
+            }
+
             if (status.branch_code && !is_manual) {
                 frappe.session.company = status.company;
                 frappe.session.branch_doc_name = status.branch_doc_name;
                 frappe.session.tpin = status.tpin;
                 frappe.session.branch_code = status.branch_code;
-                update_company_defaults(status.company); // Set active default company
+                update_company_defaults(status.company);
 
                 render_navbar_branch_switcher(true);
                 is_fetching_branch_context = false;
@@ -406,7 +412,7 @@ function initialize_session_context(is_manual = false) {
                 frappe.session.branch_doc_name = status.branch_doc_name;
                 frappe.session.tpin = status.tpin;
                 frappe.session.branch_code = status.branch_code;
-                update_company_defaults(status.company); // Set active default company
+                update_company_defaults(status.company);
 
                 render_navbar_branch_switcher(true);
                 show_branch_success_alert(status.branch_doc_name, true);
