@@ -130,9 +130,17 @@
   function update_company_defaults(company) {
     if (!frappe.user_defaults)
       frappe.user_defaults = {};
-    frappe.user_defaults.company = company;
+    if (company) {
+      frappe.user_defaults.company = company;
+    } else {
+      delete frappe.user_defaults.company;
+    }
     if (frappe.boot && frappe.boot.user && frappe.boot.user.defaults) {
-      frappe.boot.user.defaults.company = company;
+      if (company) {
+        frappe.boot.user.defaults.company = company;
+      } else {
+        delete frappe.boot.user.defaults.company;
+      }
     }
   }
   function enforce_branch_context() {
@@ -151,10 +159,10 @@
         }
       }, 2300);
     } else if (frappe.session.branch_doc_name) {
-      render_navbar_branch_switcher(true, frappe.session.branch_doc_name);
+      render_navbar_branch_switcher(true);
     }
   }
-  function render_navbar_branch_switcher(show_switcher, forced_label = null) {
+  function render_navbar_branch_switcher(show_switcher) {
     let $notifications_nav = $(".dropdown-notifications").closest("li");
     if (!$notifications_nav.length)
       return;
@@ -166,7 +174,14 @@
       return;
     }
     let is_set = !!frappe.session.branch_doc_name;
-    let label_text = forced_label || (is_set ? frappe.session.branch_doc_name || __("Branch Active") : __("Set Branch"));
+    let label_text = __("Set Branch");
+    if (is_set) {
+      let company = frappe.session.company || "";
+      let company_initials = company.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").toUpperCase();
+      let branch = frappe.session.branch_doc_name || "";
+      let clean_branch = branch.replace(/ - \d+$/, "");
+      label_text = company_initials ? `${company_initials} - ${clean_branch}` : clean_branch;
+    }
     let icon_color = is_set ? "#17a2b8" : "pink";
     let switcher_html = `
         <li class="nav-item d-flex align-items-center" id="navbar-branch-switcher">
@@ -192,13 +207,23 @@
     }
   }
   $(document).ready(function() {
+    document.documentElement.style.scrollbarGutter = "stable";
     enforce_branch_context();
     if (frappe.ui && frappe.ui.form && frappe.ui.form.Form) {
       const original_form_save = frappe.ui.form.Form.prototype.save;
       frappe.ui.form.Form.prototype.save = function(action, callback, btn, on_error) {
         let frm = this;
         let default_company = frappe.user_defaults ? frappe.user_defaults.company : null;
-        let active_branch = frappe.session.branch_doc_name || __("Active Branch");
+        let active_branch = __("Active Branch");
+        if (frappe.session.branch_doc_name) {
+          let company = frappe.session.company || "";
+          let company_initials = company.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").toUpperCase();
+          let clean_branch = frappe.session.branch_doc_name.replace(
+            / - \d+$/,
+            ""
+          );
+          active_branch = company_initials ? `${company_initials} - ${clean_branch}` : clean_branch;
+        }
         const exclusions = [
           "Smart Invoice Settings",
           "Branch",
@@ -216,12 +241,11 @@
               on_error
             );
           }
-          if (btn)
-            $(btn).prop("disabled", false);
+          $("body").css("overflow-y", "scroll");
           frappe.warn(
             __("Did you select the right company?"),
             __(
-              "You are currently on branch <b>{1}</b> which is not from the company (<b>{0}</b>) you have set on for document. Continue anyway?",
+              "You are currently on branch <b>{1}</b> which isn't from the company (<b>{0}</b>) you've used on this document. Continue anyway?",
               [frm.doc.company, active_branch]
             ),
             () => {
@@ -234,7 +258,7 @@
                 on_error
               );
             },
-            __("Continue Anyway"),
+            __("Continue"),
             false
           );
           return;
@@ -302,7 +326,11 @@
     }
   }
   function show_branch_success_alert(branch_doc_name, is_auto = false) {
-    let alert_message = is_auto ? __(`Auto-assigned sole branch: <b>${branch_doc_name}</b>`) : __(`Branch set to: <b>${branch_doc_name}</b>`);
+    let company = frappe.session.company || "";
+    let company_initials = company.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").toUpperCase();
+    let clean_branch = branch_doc_name.replace(/ - \d+$/, "");
+    let formatted_label = company_initials ? `${company_initials} - ${clean_branch}` : clean_branch;
+    let alert_message = is_auto ? __(`Auto-assigned sole branch: <b>${formatted_label}</b>`) : __(`Branch set to: <b>${formatted_label}</b>`);
     frappe.show_alert({ message: alert_message, indicator: "green" });
   }
   function initialize_session_context(is_manual = false) {
@@ -325,7 +353,7 @@
           frappe.session.tpin = status.tpin;
           frappe.session.branch_code = status.branch_code;
           update_company_defaults(status.company);
-          render_navbar_branch_switcher(true, status.branch_doc_name);
+          render_navbar_branch_switcher(true);
           is_fetching_branch_context = false;
           return;
         }
@@ -361,7 +389,7 @@
           frappe.session.tpin = status.tpin;
           frappe.session.branch_code = status.branch_code;
           update_company_defaults(status.company);
-          render_navbar_branch_switcher(true, status.branch_doc_name);
+          render_navbar_branch_switcher(true);
           show_branch_success_alert(status.branch_doc_name, true);
           is_fetching_branch_context = false;
           return;
@@ -377,10 +405,15 @@
   function show_branch_selection_dialog(branches) {
     if (active_branch_dialog && active_branch_dialog.display)
       return;
-    let branch_options = branches.filter((b) => b && b.branch_doc_name).map((branch) => ({
-      label: branch.branch_doc_name,
-      value: branch.branch_doc_name
-    }));
+    let branch_options = branches.filter((b) => b && b.branch_doc_name).map((branch) => {
+      let company = branch.company || "";
+      let company_initials = company.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").toUpperCase();
+      let clean_branch = branch.branch_doc_name.replace(/ - \d+$/, "");
+      return {
+        label: company_initials ? `${company_initials} - ${clean_branch}` : clean_branch,
+        value: branch.branch_doc_name
+      };
+    });
     if (branch_options.length === 0)
       return;
     active_branch_dialog = new frappe.ui.Dialog({
@@ -443,7 +476,7 @@
           }
           dialog.hide();
           active_branch_dialog = null;
-          render_navbar_branch_switcher(true, r.message.branch_doc_name);
+          render_navbar_branch_switcher(true);
         }
       }
     });
@@ -549,4 +582,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.5WE4WRCR.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.IHYCTPX2.js.map
