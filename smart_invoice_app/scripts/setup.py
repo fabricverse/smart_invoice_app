@@ -1,4 +1,5 @@
 import frappe
+
 from smart_invoice_app.scripts.branch import (
     check_branches_setup,
     get_branch_code_by_name,
@@ -107,6 +108,9 @@ def set_branch(branch_doc_name, branch_code, tpin, company):
     user_id = frappe.session.user  # Dynamic user name (e.g., 'api@x.com')
     hash_key = f"session_branch:{user_id}"
 
+    # Force Frappe's global fallback handler to recognize the newly selected company
+    frappe.defaults.set_user_default("company", company, frappe.session.user)
+
     # Store variables cleanly as sub-fields inside the user's dedicated hash key map
     frappe.cache.hset(hash_key, "branch_code", branch_code)
     frappe.cache.hset(hash_key, "branch_doc_name", branch_doc_name)
@@ -120,12 +124,6 @@ def set_branch(branch_doc_name, branch_code, tpin, company):
         "company": company,
     }
 
-    return {
-        "branch_code": branch_code,
-        "branch_doc_name": branch_doc_name,
-        "tpin": tpin,
-        "company": company
-    }
 
 @frappe.whitelist()
 def clear_session_branch_cache(login_manager=None):

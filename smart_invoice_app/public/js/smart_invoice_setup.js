@@ -18,6 +18,19 @@ let is_fetching_branch_context = false; // Mutex flag preventing concurrent para
 let initiation_timeout = null; // Debounce timer ID controlling initial modal rendering delay
 
 /**
+ * HELPER: Synchronizes selected company across client-side defaults for form rendering
+ */
+function update_company_defaults(company) {
+    if (!frappe.user_defaults) frappe.user_defaults = {};
+    frappe.user_defaults.company = company;
+
+    // Also update standard boot defaults to ensure core Frappe link fields auto-populate correctly
+    if (frappe.boot && frappe.boot.user && frappe.boot.user.defaults) {
+        frappe.boot.user.defaults.company = company;
+    }
+}
+
+/**
  * Core middleware synchronization logic.
  */
 function enforce_branch_context() {
@@ -109,6 +122,87 @@ function render_navbar_branch_switcher(show_switcher, forced_label = null) {
 $(document).ready(function () {
     enforce_branch_context();
 
+    // --- NEW: Global Form Save Interceptor for Company Default Mismatches ---
+    // --- Global Form Save Interceptor for Company Default Mismatches ---
+    if (frappe.ui && frappe.ui.form && frappe.ui.form.Form) {
+        const original_form_save = frappe.ui.form.Form.prototype.save;
+
+        frappe.ui.form.Form.prototype.save = function (
+            action,
+            callback,
+            btn,
+            on_error,
+        ) {
+            let frm = this;
+            let default_company = frappe.user_defaults
+                ? frappe.user_defaults.company
+                : null;
+            let active_branch =
+                frappe.session.branch_doc_name || __("Active Branch");
+
+            const exclusions = [
+                "Smart Invoice Settings",
+                "Branch",
+                "Company",
+                "System Defaults",
+            ];
+            // Trigger prompt only if the form handles a company and it differs from the workspace branch default
+            if (
+                !exclusions.includes(frm.doctype) &&
+                frm.doc &&
+                frm.doc.company &&
+                default_company &&
+                frm.doc.company !== default_company
+            ) {
+                // Break recursive loop if user has already accepted the pop-up prompt
+                if (frm.__company_warning_confirmed) {
+                    delete frm.__company_warning_confirmed;
+                    return original_form_save.call(
+                        this,
+                        action,
+                        callback,
+                        btn,
+                        on_error,
+                    );
+                }
+
+                // Unfreeze Frappe's save state immediately so the form doesn't lock up
+                if (btn) $(btn).prop("disabled", false);
+
+                // Execute the native warning dialog with the correct argument layout
+                frappe.warn(
+                    __("Did you select the right company?"), // 1. Title
+                    __(
+                        "You are currently on branch <b>{1}</b> which is not from the company (<b>{0}</b>) you have set on for document. Continue anyway?",
+                        [frm.doc.company, active_branch],
+                    ), // 2. Message Body
+                    () => {
+                        // 3. Proceed Action (Runs when primary button is clicked)
+                        frm.__company_warning_confirmed = true;
+                        original_form_save.call(
+                            frm,
+                            action,
+                            callback,
+                            btn,
+                            on_error,
+                        );
+                    },
+                    __("Continue Anyway"), // 4. Primary Button Text Label
+                    false, // 5. Minimizable window toggle
+                );
+                return; // Halt current execution thread to await modal click
+            }
+
+            return original_form_save.call(
+                this,
+                action,
+                callback,
+                btn,
+                on_error,
+            );
+        };
+    }
+
     $(document).on("page-change", function () {
         enforce_branch_context();
     });
@@ -121,6 +215,7 @@ $(document).ready(function () {
             frappe.session.branch_doc_name = null;
             frappe.session.tpin = null;
             frappe.session.branch_code = null;
+            update_company_defaults(null); // Clear defaults on logout/cache reset
 
             frappe.call({
                 method: "smart_invoice_app.scripts.setup.clear_session_branch_cache",
@@ -139,6 +234,7 @@ $(document).ready(function () {
     });
     window.addEventListener("focus", verify_server_session_integrity);
 });
+
 /**
  * UNIFIED WATCHDOG: Checks server state but honors the active mutex flag
  */
@@ -162,6 +258,7 @@ function verify_server_session_integrity() {
                     frappe.session.branch_doc_name = null;
                     frappe.session.tpin = null;
                     frappe.session.branch_code = null;
+                    update_company_defaults(null); // Clear defaults if integrity check fails
 
                     enforce_branch_context();
                 }
@@ -206,6 +303,7 @@ function initialize_session_context(is_manual = false) {
                 frappe.session.branch_doc_name = status.branch_doc_name;
                 frappe.session.tpin = status.tpin;
                 frappe.session.branch_code = status.branch_code;
+                update_company_defaults(status.company); // Set active default company
 
                 render_navbar_branch_switcher(true, status.branch_doc_name);
                 is_fetching_branch_context = false;
@@ -260,6 +358,7 @@ function initialize_session_context(is_manual = false) {
                 frappe.session.branch_doc_name = status.branch_doc_name;
                 frappe.session.tpin = status.tpin;
                 frappe.session.branch_code = status.branch_code;
+                update_company_defaults(status.company); // Set active default company
 
                 render_navbar_branch_switcher(true, status.branch_doc_name);
                 show_branch_success_alert(status.branch_doc_name, true);
@@ -355,6 +454,7 @@ function set_session_branch(branch_data, dialog) {
                 frappe.session.branch_doc_name = r.message.branch_doc_name;
                 frappe.session.tpin = r.message.tpin;
                 frappe.session.branch_code = r.message.branch_code;
+                update_company_defaults(r.message.company); // Set active default company
 
                 show_branch_success_alert(r.message.branch_doc_name);
 

@@ -127,6 +127,14 @@
   var active_branch_dialog = null;
   var is_fetching_branch_context = false;
   var initiation_timeout = null;
+  function update_company_defaults(company) {
+    if (!frappe.user_defaults)
+      frappe.user_defaults = {};
+    frappe.user_defaults.company = company;
+    if (frappe.boot && frappe.boot.user && frappe.boot.user.defaults) {
+      frappe.boot.user.defaults.company = company;
+    }
+  }
   function enforce_branch_context() {
     if (initiation_timeout) {
       clearTimeout(initiation_timeout);
@@ -185,6 +193,61 @@
   }
   $(document).ready(function() {
     enforce_branch_context();
+    if (frappe.ui && frappe.ui.form && frappe.ui.form.Form) {
+      const original_form_save = frappe.ui.form.Form.prototype.save;
+      frappe.ui.form.Form.prototype.save = function(action, callback, btn, on_error) {
+        let frm = this;
+        let default_company = frappe.user_defaults ? frappe.user_defaults.company : null;
+        let active_branch = frappe.session.branch_doc_name || __("Active Branch");
+        const exclusions = [
+          "Smart Invoice Settings",
+          "Branch",
+          "Company",
+          "System Defaults"
+        ];
+        if (!exclusions.includes(frm.doctype) && frm.doc && frm.doc.company && default_company && frm.doc.company !== default_company) {
+          if (frm.__company_warning_confirmed) {
+            delete frm.__company_warning_confirmed;
+            return original_form_save.call(
+              this,
+              action,
+              callback,
+              btn,
+              on_error
+            );
+          }
+          if (btn)
+            $(btn).prop("disabled", false);
+          frappe.warn(
+            __("Did you select the right company?"),
+            __(
+              "You are currently on branch <b>{1}</b> which is not from the company (<b>{0}</b>) you have set on for document. Continue anyway?",
+              [frm.doc.company, active_branch]
+            ),
+            () => {
+              frm.__company_warning_confirmed = true;
+              original_form_save.call(
+                frm,
+                action,
+                callback,
+                btn,
+                on_error
+              );
+            },
+            __("Continue Anyway"),
+            false
+          );
+          return;
+        }
+        return original_form_save.call(
+          this,
+          action,
+          callback,
+          btn,
+          on_error
+        );
+      };
+    }
     $(document).on("page-change", function() {
       enforce_branch_context();
     });
@@ -196,6 +259,7 @@
         frappe.session.branch_doc_name = null;
         frappe.session.tpin = null;
         frappe.session.branch_code = null;
+        update_company_defaults(null);
         frappe.call({
           method: "smart_invoice_app.scripts.setup.clear_session_branch_cache",
           async: false,
@@ -227,6 +291,7 @@
             frappe.session.branch_doc_name = null;
             frappe.session.tpin = null;
             frappe.session.branch_code = null;
+            update_company_defaults(null);
             enforce_branch_context();
           }
         },
@@ -259,6 +324,7 @@
           frappe.session.branch_doc_name = status.branch_doc_name;
           frappe.session.tpin = status.tpin;
           frappe.session.branch_code = status.branch_code;
+          update_company_defaults(status.company);
           render_navbar_branch_switcher(true, status.branch_doc_name);
           is_fetching_branch_context = false;
           return;
@@ -294,6 +360,7 @@
           frappe.session.branch_doc_name = status.branch_doc_name;
           frappe.session.tpin = status.tpin;
           frappe.session.branch_code = status.branch_code;
+          update_company_defaults(status.company);
           render_navbar_branch_switcher(true, status.branch_doc_name);
           show_branch_success_alert(status.branch_doc_name, true);
           is_fetching_branch_context = false;
@@ -369,6 +436,7 @@
           frappe.session.branch_doc_name = r.message.branch_doc_name;
           frappe.session.tpin = r.message.tpin;
           frappe.session.branch_code = r.message.branch_code;
+          update_company_defaults(r.message.company);
           show_branch_success_alert(r.message.branch_doc_name);
           if (active_branch_dialog) {
             active_branch_dialog.$wrapper.off("hide.bs.modal");
@@ -481,4 +549,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.W6R43IDT.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.5WE4WRCR.js.map
