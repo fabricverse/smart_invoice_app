@@ -2,6 +2,17 @@
  {
   "docstatus": 0,
   "doctype": "Client Script",
+  "dt": "Company",
+  "enabled": 1,
+  "modified": "2026-06-29 15:50:34.039839",
+  "module": "Smart Invoice App",
+  "name": "Smart Invoice - Company",
+  "script": "frappe.ui.form.on('Company', {\n\trefresh(frm) {\n\t\tcoa_warning(frm);\n\t},\n\tchart_of_accounts(frm){\n\t    coa_warning(frm);\n\t},\n\tcreate_chart_of_accounts_based_on(frm){\n\t    coa_warning(frm);\n\t}\n});\n\nfunction coa_warning(frm){\n    frm.set_intro(\"\");\n    if ((frm.doc.chart_of_accounts && frm.doc.chart_of_accounts != \"Standard with Numbers\") || (frm.doc.create_chart_of_accounts_based_on && frm.doc.create_chart_of_accounts_based_on != \"Standard Template\")){\n\t    frm.set_intro(\"<strong>WARNING:</strong> Smart Invoice is only compatible with the <strong>Standard with Numbers</strong> Chart Of Accounts Template\", \"red\");\n\t}\n}",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
   "dt": "Item Group",
   "enabled": 1,
   "modified": "2024-12-24 15:27:42.632819",
