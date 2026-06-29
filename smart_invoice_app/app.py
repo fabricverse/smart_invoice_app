@@ -2957,14 +2957,21 @@ def after_sync_process(request_doc, method=None):
                     request_doc.function == "get_codes"
                     and request_doc.status == "Success"
                 ):
+                    update_branches(
+                        request_doc.company,
+                        initialize=True,
+                        doctype="Smart Invoice Settings",
+                    )
+
                     finish_updating_codes(request_doc)
-                    create_tax_templates(request_doc.company)
+
                     return
                 elif (
                     request_doc.function == "get_item_classes"
                     and request_doc.status == "Success"
                 ):
                     finish_updating_item_classes(request_doc)
+                    update_codes(request_doc.company, initialize=True)
                     return
                 elif (
                     request_doc.function in ["get_branches", "get_branches_confirm"]
@@ -2986,6 +2993,7 @@ def after_sync_process(request_doc, method=None):
                             "green",
                         )
                         reload_doc(request_doc)
+                        create_tax_templates(request_doc.company)
 
                     return
                 elif request_doc.function == "get_branches_testing":
@@ -3871,10 +3879,11 @@ def get_user_changes(doc, user_list):
 
 @frappe.whitelist()
 def initialize(company_name):
+    """chained functions so that they complete in sequence
+    update_item_classes > update_codes > update_branches > create_tax_templates
+    """
 
     update_item_classes(company_name, initialize=True)
-    update_codes(company_name, initialize=True)
-    update_branches(company_name, initialize=True, doctype="Smart Invoice Settings")
 
 
 def create_tax_templates(company_name):
