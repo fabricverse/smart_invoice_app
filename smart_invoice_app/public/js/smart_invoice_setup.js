@@ -204,8 +204,6 @@ $(document).ready(function () {
                     );
                 }
 
-                $("body").css("overflow-y", "scroll");
-
                 // Execute the native warning dialog with the correct argument layout
                 frappe.warn(
                     __("Did you select the right company?"), // 1. Title

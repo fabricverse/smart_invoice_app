@@ -241,7 +241,6 @@
               on_error
             );
           }
-          $("body").css("overflow-y", "scroll");
           frappe.warn(
             __("Did you select the right company?"),
             __(
@@ -587,4 +586,4 @@
     });
   }
 })();
-//# sourceMappingURL=smart_invoice_app.bundle.F2YMGKLI.js.map
+//# sourceMappingURL=smart_invoice_app.bundle.ASWYAHUV.js.map
