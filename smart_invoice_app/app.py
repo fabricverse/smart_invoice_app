@@ -2958,6 +2958,7 @@ def after_sync_process(request_doc, method=None):
                     and request_doc.status == "Success"
                 ):
                     finish_updating_codes(request_doc)
+                    create_tax_templates(request_doc.company)
                     return
                 elif (
                     request_doc.function == "get_item_classes"
@@ -3874,8 +3875,6 @@ def initialize(company_name):
     update_item_classes(company_name, initialize=True)
     update_codes(company_name, initialize=True)
     update_branches(company_name, initialize=True, doctype="Smart Invoice Settings")
-
-    create_tax_templates(company_name)
 
 
 def create_tax_templates(company_name):
